@@ -24,12 +24,16 @@ export interface WithCloudflareOptions extends CloudflarePluginOptions {
     /**
      * D1 database for primary storage, if that's what you're using.
      */
-    d1?: D1Database;
-
-    /**
-     * Drizzle adapter options for primary storage, if you're using D1.
-     */
-    d1Options?: Omit<DrizzleAdapterConfig, "provider">;
+    d1?: {
+        /**
+         * D1 database for primary storage, if that's what you're using.
+         */
+        db: D1Database;
+        /**
+         * Drizzle adapter options for primary storage, if you're using D1.
+         */
+        options?: Omit<DrizzleAdapterConfig, "provider">;
+    };
 
     /**
      * KV namespace for secondary storage, if you want to use that.

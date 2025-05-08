@@ -8,6 +8,7 @@ import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOpti
 export * from "./client";
 export * from "./schema";
 export * from "./types";
+import { drizzle } from "drizzle-orm/d1";
 
 /**
  * Cloudflare integration for Better Auth
@@ -61,7 +62,7 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                     {
                         matcher: context => {
                             // On completion of the OAuth flow, the session is updated
-                            return context.path.startsWith("callback/");
+                            return context.path === "/get-session";
                         },
                         handler: createAuthMiddleware(async ctx => {
                             if (!ctx.context.session) {
@@ -87,7 +88,7 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                     {
                         matcher: context => {
                             // On completion of the OAuth flow, the session is updated
-                            return context.path.startsWith("callback/");
+                            return context.path === "/get-session";
                         },
                         handler: createAuthMiddleware(async ctx => {
                             if (!ctx.context.session) {
@@ -129,7 +130,7 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                     {
                         matcher: context => {
                             // On completion of the OAuth flow, the session is updated
-                            return context.path.startsWith("callback/");
+                            return context.path === "/get-session";
                         },
                         handler: createAuthMiddleware(async ctx => {
                             if (!ctx.context.session) {
@@ -222,11 +223,14 @@ export const withCloudflare = (
         ...options,
         ...{
             database: cloudFlareOptions.d1
-                ? drizzleAdapter(cloudFlareOptions.d1, {
+                ? drizzleAdapter(drizzle(cloudFlareOptions.d1.db, {
+                    logger: true,
+                    schema: cloudFlareOptions.d1.options?.schema,
+                }), {
                       ...{
                           provider: "sqlite",
                       },
-                      ...cloudFlareOptions.d1Options,
+                      ...cloudFlareOptions.d1.options,
                   })
                 : undefined,
             plugins: [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])],
