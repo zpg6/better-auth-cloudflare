@@ -1,6 +1,7 @@
 import type { KVNamespace } from "@cloudflare/workers-types";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { type BetterAuthOptions, type BetterAuthPlugin, type SecondaryStorage } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/api";
 import { schema } from "./schema";
 import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types";
@@ -220,6 +221,14 @@ export const withCloudflare = (
     return {
         ...options,
         ...{
+            database: cloudFlareOptions.d1
+                ? drizzleAdapter(cloudFlareOptions.d1, {
+                      ...{
+                          provider: "sqlite",
+                      },
+                      ...cloudFlareOptions.d1Options,
+                  })
+                : undefined,
             plugins: [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])],
             advanced: {
                 ipAddress: {

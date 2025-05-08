@@ -35,7 +35,12 @@ const auth = betterAuth(
         {
             autoDetectIpAddress: true,
             enableUserGeolocationTracking: "user_table",
-            kv: env.USER_SESSIONS,
+            kv: process.env.USER_SESSIONS as KVNamespace<string>,
+            d1: process.env.DATABASE as D1Database,
+            d1Options: {
+                usePlural: true,
+                debugLogs: true,
+            },
         },
         {
             // ... your Better Auth config

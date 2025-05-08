@@ -1,4 +1,5 @@
 import type { KVNamespace } from "@cloudflare/workers-types";
+import type { DrizzleAdapterConfig } from "better-auth/adapters/drizzle";
 
 /**
  * Storage location for user geolocation data
@@ -21,7 +22,17 @@ export interface CloudflarePluginOptions {
 
 export interface WithCloudflareOptions extends CloudflarePluginOptions {
     /**
-     * KV namespace for secondary storage
+     * D1 database for primary storage, if that's what you're using.
+     */
+    d1?: D1Database;
+
+    /**
+     * Drizzle adapter options for primary storage, if you're using D1.
+     */
+    d1Options?: Omit<DrizzleAdapterConfig, "provider">;
+
+    /**
+     * KV namespace for secondary storage, if you want to use that.
      */
     kv?: KVNamespace<string>;
 }
