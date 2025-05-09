@@ -3,12 +3,12 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { type BetterAuthOptions, type BetterAuthPlugin, type SecondaryStorage } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/api";
+import { drizzle } from "drizzle-orm/d1";
 import { schema } from "./schema";
 import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types";
 export * from "./client";
 export * from "./schema";
 export * from "./types";
-import { drizzle } from "drizzle-orm/d1";
 
 /**
  * Cloudflare integration for Better Auth
@@ -40,13 +40,13 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
 
                     // Extract and validate Cloudflare geolocation data
                     const context: CloudflareGeolocation = {
-                        ipAddress: (cf.ipAddress as string) || "",
-                        timezone: (cf.timezone as string) || "",
-                        city: (cf.city as string) || "",
-                        country: (cf.country as string) || "",
-                        region: (cf.region as string) || "",
-                        regionCode: (cf.regionCode as string) || "",
-                        colo: (cf.colo as string) || "",
+                        ipAddress: cf.ipAddress as string,
+                        timezone: cf.timezone as string,
+                        city: cf.city as string,
+                        country: cf.country as string,
+                        region: cf.region as string,
+                        regionCode: cf.regionCode as string,
+                        colo: cf.colo as string,
                         latitude: cf.latitude,
                         longitude: cf.longitude,
                     };
@@ -62,10 +62,10 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                     {
                         matcher: context => {
                             // On completion of the OAuth flow, the session is updated
-                            return context.path === "/get-session";
+                            return !!context.context.newSession;
                         },
                         handler: createAuthMiddleware(async ctx => {
-                            if (!ctx.context.session) {
+                            if (!ctx.context.newSession || !ctx.context.session) {
                                 return;
                             }
                             const cf = getCloudflareContext().cf;
@@ -88,15 +88,29 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                     {
                         matcher: context => {
                             // On completion of the OAuth flow, the session is updated
-                            return context.path === "/get-session";
+                            return !!context.context.newSession;
                         },
                         handler: createAuthMiddleware(async ctx => {
-                            if (!ctx.context.session) {
+                            if (!ctx.context.newSession || !ctx.context.session) {
                                 return;
                             }
                             const cf = getCloudflareContext().cf;
                             if (!cf) {
                                 throw new Error("Cloudflare context is not available");
+                            }
+                            if (
+                                !cf.ipAddress ||
+                                !cf.timezone ||
+                                !cf.city ||
+                                !cf.country ||
+                                !cf.region ||
+                                !cf.regionCode ||
+                                !cf.colo ||
+                                !cf.latitude ||
+                                !cf.longitude
+                            ) {
+                                // Most requests will have this data, so worth waiting for it
+                                return;
                             }
                             await ctx.context.adapter.update({
                                 model: "user",
@@ -130,15 +144,29 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                     {
                         matcher: context => {
                             // On completion of the OAuth flow, the session is updated
-                            return context.path === "/get-session";
+                            return !!context.context.newSession;
                         },
                         handler: createAuthMiddleware(async ctx => {
-                            if (!ctx.context.session) {
+                            if (!ctx.context.newSession || !ctx.context.session) {
                                 return;
                             }
                             const cf = getCloudflareContext().cf;
                             if (!cf) {
                                 throw new Error("Cloudflare context is not available");
+                            }
+                            if (
+                                !cf.ipAddress ||
+                                !cf.timezone ||
+                                !cf.city ||
+                                !cf.country ||
+                                !cf.region ||
+                                !cf.regionCode ||
+                                !cf.colo ||
+                                !cf.latitude ||
+                                !cf.longitude
+                            ) {
+                                // Most requests will have this data, so worth waiting for it
+                                return;
                             }
                             await ctx.context.adapter.update({
                                 model: "session",
@@ -149,15 +177,63 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                                     },
                                 ],
                                 update: {
-                                    ipAddress: (cf.ipAddress as string) || "",
-                                    timezone: (cf.timezone as string) || "",
-                                    city: (cf.city as string) || "",
-                                    country: (cf.country as string) || "",
-                                    region: (cf.region as string) || "",
-                                    regionCode: (cf.regionCode as string) || "",
-                                    colo: (cf.colo as string) || "",
+                                    ipAddress: cf.ipAddress as string,
+                                    timezone: cf.timezone as string,
+                                    city: cf.city as string,
+                                    country: cf.country as string,
+                                    region: cf.region as string,
+                                    regionCode: cf.regionCode as string,
+                                    colo: cf.colo as string,
                                     latitude: cf.latitude,
                                     longitude: cf.longitude,
+                                },
+                            });
+                        }),
+                    },
+                ],
+            },
+        }),
+
+        ...(opts.enableUserGeolocationTracking === "geolocation_table" && {
+            hooks: {
+                after: [
+                    {
+                        matcher: context => {
+                            return !!context.context.newSession;
+                        },
+                        handler: createAuthMiddleware(async ctx => {
+                            if (!ctx.context.newSession || !ctx.context.session) {
+                                return;
+                            }
+                            const cf = getCloudflareContext().cf;
+                            if (!cf) {
+                                throw new Error("Cloudflare context is not available");
+                            }
+                            if (
+                                !cf.ipAddress ||
+                                !cf.timezone ||
+                                !cf.city ||
+                                !cf.country ||
+                                !cf.region ||
+                                !cf.regionCode ||
+                                !cf.colo ||
+                                !cf.latitude ||
+                                !cf.longitude
+                            ) {
+                                // Most requests will have this data, so worth waiting for it
+                                return;
+                            }
+                            await ctx.context.adapter.create({
+                                model: "geolocation",
+                                data: {
+                                    userId: ctx.context.session.user.id,
+                                    ipAddress: cf.ipAddress as string,
+                                    timezone: cf.timezone as string,
+                                    city: cf.city as string,
+                                    country: cf.country as string,
+                                    region: cf.region as string,
+                                    regionCode: cf.regionCode as string,
+                                    colo: cf.colo as string,
                                 },
                             });
                         }),
@@ -197,19 +273,33 @@ export const createKVStorage = (kv: KVNamespace<string>): SecondaryStorage => {
  * @returns Cloudflare geolocation data
  * @throws Error if Cloudflare context is not available
  */
-export const getGeolocation = (): CloudflareGeolocation => {
+export const getGeolocation = (): CloudflareGeolocation | undefined => {
     const cf = getCloudflareContext().cf;
     if (!cf) {
         throw new Error("Cloudflare context is not available");
     }
+    if (
+        !cf.ipAddress ||
+        !cf.timezone ||
+        !cf.city ||
+        !cf.country ||
+        !cf.region ||
+        !cf.regionCode ||
+        !cf.colo ||
+        !cf.latitude ||
+        !cf.longitude
+    ) {
+        // Most requests will have this data, so worth waiting for it
+        return undefined;
+    }
     return {
-        ipAddress: (cf.ipAddress as string) || "",
-        timezone: (cf.timezone as string) || "",
-        city: (cf.city as string) || "",
-        country: (cf.country as string) || "",
-        region: (cf.region as string) || "",
-        regionCode: (cf.regionCode as string) || "",
-        colo: (cf.colo as string) || "",
+        ipAddress: cf.ipAddress as string,
+        timezone: cf.timezone as string,
+        city: cf.city as string,
+        country: cf.country as string,
+        region: cf.region as string,
+        regionCode: cf.regionCode as string,
+        colo: cf.colo as string,
         latitude: cf.latitude,
         longitude: cf.longitude,
     };
@@ -223,15 +313,18 @@ export const withCloudflare = (
         ...options,
         ...{
             database: cloudFlareOptions.d1
-                ? drizzleAdapter(drizzle(cloudFlareOptions.d1.db, {
-                    logger: true,
-                    schema: cloudFlareOptions.d1.options?.schema,
-                }), {
-                      ...{
-                          provider: "sqlite",
-                      },
-                      ...cloudFlareOptions.d1.options,
-                  })
+                ? drizzleAdapter(
+                      drizzle(cloudFlareOptions.d1.db, {
+                          logger: true,
+                          schema: cloudFlareOptions.d1.options?.schema,
+                      }),
+                      {
+                          ...{
+                              provider: "sqlite",
+                          },
+                          ...cloudFlareOptions.d1.options,
+                      }
+                  )
                 : undefined,
             plugins: [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])],
             advanced: {
@@ -241,12 +334,15 @@ export const withCloudflare = (
                         "x-real-ip",
                         ...(options.advanced?.ipAddress?.ipAddressHeaders ?? []),
                     ],
+                    ...(options.advanced?.ipAddress ?? {}),
                 },
+                ...(options.advanced ?? {}),
             },
             secondaryStorage: cloudFlareOptions.kv ? createKVStorage(cloudFlareOptions.kv) : undefined,
             session: {
                 preserveSessionInDatabase:
                     cloudFlareOptions.enableUserGeolocationTracking === "session_table" ? true : undefined,
+                ...(options.session ?? {}),
             },
         },
     };

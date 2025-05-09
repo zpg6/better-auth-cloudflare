@@ -1,14 +1,14 @@
-# Better Auth Cloudflare Plugin
+# better-auth-cloudflare
 
 This plugin makes it easy to integrate [Better Auth](https://github.com/better-auth/better-auth) with Cloudflare Workers and other Cloudflare services.
 
 ## Features
 
-- 🔌 **Easy KV integration** - Use Cloudflare KV for Better Auth Secondary Storage
-- 🌐 **Automatic geolocation** - Track user location data with multiple storage options
-- 🔍 **IP detection** - Automatically extract client IP from Cloudflare headers for the IP tracking features (like rate limiting)
+- 🗄️ **D1 integration** - Seamlessly use Cloudflare D1 as the primary database for Better Auth
+- 🔌 **KV integration** - Easily use Cloudflare KV for Better Auth Secondary Storage
+- 🔍 **IP detection** - Extract from Cloudflare headers for IP tracking features like rate limiting
 - 📍 **Rich geolocation context data** - Access timezone, country, city, and other Cloudflare request context
-- 🛠️ **Flexible storage options** - Store geolocation in user table, session table, separate table, or KV
+- 🌐 **Automatic geolocation** - Track user location data with multiple storage options
 
 ## Installation
 
@@ -32,6 +32,7 @@ import { withCloudflare } from "better-auth-cloudflare";
 
 const auth = betterAuth(
     withCloudflare(
+        // Cloudflare-specific options
         {
             autoDetectIpAddress: true,
             enableUserGeolocationTracking: "user_table",
@@ -42,8 +43,8 @@ const auth = betterAuth(
                 debugLogs: true,
             },
         },
+        // ... your Better Auth config
         {
-            // ... your Better Auth config
             socialProviders: {
                 github: {
                     clientId: process.env.GITHUB_CLIENT_ID!,
@@ -58,6 +59,12 @@ const auth = betterAuth(
     )
 );
 ```
+
+#### D1 as Primary Database
+
+D1 will be configured with Drizzle ORM adapter, allowing you to leverage [schema generation and migrations](https://www.better-auth.com/docs/adapters/drizzle#schema-generation--migration) for your database. Be sure to run `@better-auth/cli generate` to regenerate the auth schema. The [Better Auth CLI](https://www.better-auth.com/docs/adapters/drizzle#schema-generation--migration) allows you to generate or migrate your database schema based on your Better Auth configuration and plugins. To easily merge with the rest of your drizzle schema, read more about [managing schema across multiple files](https://orm.drizzle.team/docs/sql-schema-declaration#schema-in-multiple-files).
+
+#### KV as Secondary Storage
 
 If provided, your KV will be configured as [Secondary Storage](https://www.better-auth.com/docs/concepts/database#secondary-storage).
 
@@ -114,8 +121,6 @@ This plugin supports four different ways to track user geolocation:
 2. **Session Table** (`session_table`): Stores geolocation data in the session table
 3. **Geolocation Table** (`geolocation_table`): Creates a separate table for geolocation data
 4. **KV Storage** (`kv`): Lightweight option that stores only IP address in KV storage
-
-Be sure to run `@better-auth/cli generate` to regenerate the auth schema. The [Better Auth CLI](https://www.better-auth.com/docs/adapters/drizzle#schema-generation--migration) allows you to generate or migrate your database schema based on your Better Auth configuration and plugins.
 
 ## License
 

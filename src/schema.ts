@@ -15,37 +15,37 @@ type GeolocationFields = {
 const geolocationFields: GeolocationFields = {
     ipAddress: {
         type: "string",
-        required: true,
+        required: false,
         input: false,
     },
     timezone: {
         type: "string",
-        required: true,
+        required: false,
         input: false,
     },
     city: {
         type: "string",
-        required: true,
+        required: false,
         input: false,
     },
     country: {
         type: "string",
-        required: true,
+        required: false,
         input: false,
     },
     region: {
         type: "string",
-        required: true,
+        required: false,
         input: false,
     },
     regionCode: {
         type: "string",
-        required: true,
+        required: false,
         input: false,
     },
     colo: {
         type: "string",
-        required: true,
+        required: false,
         input: false,
     },
     latitude: {
