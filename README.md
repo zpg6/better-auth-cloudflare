@@ -1,8 +1,10 @@
 # better-auth-cloudflare
 
-This plugin makes it easy to integrate [Better Auth](https://github.com/better-auth/better-auth) with Cloudflare Workers and other Cloudflare services.
+[![NPM Version](https://img.shields.io/npm/v/better-auth-cloudflare)](https://www.npmjs.com/package/better-auth-cloudflare)
+[![NPM Downloads](https://img.shields.io/npm/dt/better-auth-cloudflare)](https://www.npmjs.com/package/better-auth-cloudflare)
+[![License: MIT](https://img.shields.io/npm/l/better-auth-cloudflare)](https://opensource.org/licenses/MIT)
 
-For now, this focuses OpenNext for connecting context to Cloudflare Workers and Drizzle for connecting to D1 Database.
+This plugin makes it easy to integrate [Better Auth](https://github.com/better-auth/better-auth) with Cloudflare Workers and other Cloudflare services. For now, this focuses OpenNext for connecting context to Cloudflare Workers and Drizzle for connecting to D1 Database.
 
 ## Features
 
@@ -88,7 +90,7 @@ D1 integrates with Better Auth through the Drizzle ORM adapter, providing automa
 npx @better-auth/cli@latest generate
 ```
 
-This command creates the necessary database tables based oØn your Better Auth configuration and enabled plugins. For integrating with your existing Drizzle schema, see [managing schema across multiple files](https://orm.drizzle.team/docs/sql-schema-declaration#schema-in-multiple-files) in the Drizzle documentation. More details on schema generation and migration are available in the [Better Auth docs](https://www.better-auth.com/docs/adapters/drizzle#schema-generation--migration).
+This command creates the necessary database tables based on your Better Auth configuration and enabled plugins. For integrating with your existing Drizzle schema, see [managing schema across multiple files](https://orm.drizzle.team/docs/sql-schema-declaration#schema-in-multiple-files) in the Drizzle documentation. More details on schema generation and migration are available in the [Better Auth docs](https://www.better-auth.com/docs/adapters/drizzle#schema-generation--migration).
 
 ### KV as Secondary Storage
 
@@ -135,3 +137,23 @@ console.log(locationData.country, locationData.city);
 ## License
 
 [MIT](./LICENSE)
+
+## Contributing
+
+Contributions are welcome! Whether it's bug fixes, feature additions, or documentation improvements, we appreciate your help in making this project better.
+
+Please feel free to:
+
+- Open an issue to report bugs or suggest new features
+- Submit a pull request with improvements
+- Help improve the documentation
+
+When submitting a pull request:
+
+1. Fork the repository
+2. Create a new branch for your changes
+3. Add tests if applicable
+4. Update documentation as needed
+5. Submit the PR with a clear description of the changes
+
+For major changes or new features, please open an issue first to discuss what you would like to change.
