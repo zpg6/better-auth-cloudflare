@@ -305,6 +305,16 @@ export const getGeolocation = (): CloudflareGeolocation | undefined => {
     };
 };
 
+/**
+ * Enhances BetterAuthOptions with Cloudflare-specific configurations.
+ *
+ * This function integrates Cloudflare services like D1 for database and KV for secondary storage,
+ * and sets up IP address detection and geolocation tracking based on the provided Cloudflare options.
+ *
+ * @param cloudFlareOptions - Options for configuring Cloudflare integration.
+ * @param options - The base BetterAuthOptions to be enhanced.
+ * @returns BetterAuthOptions configured for use with Cloudflare.
+ */
 export const withCloudflare = (
     cloudFlareOptions: WithCloudflareOptions,
     options: BetterAuthOptions
