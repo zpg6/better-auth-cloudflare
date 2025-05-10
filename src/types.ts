@@ -1,10 +1,6 @@
 import type { KVNamespace } from "@cloudflare/workers-types";
 import type { DrizzleAdapterConfig } from "better-auth/adapters/drizzle";
-
-/**
- * Storage location for user geolocation data
- */
-export type UserGeolocationMode = "user_table" | "session_table" | "geolocation_table" | "kv";
+import type { drizzle } from "drizzle-orm/d1";
 
 export interface CloudflarePluginOptions {
     /**
@@ -14,10 +10,10 @@ export interface CloudflarePluginOptions {
     autoDetectIpAddress?: boolean;
 
     /**
-     * How to track geolocation data
-     * @default "user_table"
+     * Track geolocation data in the session table
+     * @default true
      */
-    enableUserGeolocationTracking?: UserGeolocationMode;
+    geolocationTracking?: boolean;
 }
 
 export interface WithCloudflareOptions extends CloudflarePluginOptions {
@@ -28,7 +24,7 @@ export interface WithCloudflareOptions extends CloudflarePluginOptions {
         /**
          * D1 database for primary storage, if that's what you're using.
          */
-        db: D1Database;
+        db: ReturnType<typeof drizzle>;
         /**
          * Drizzle adapter options for primary storage, if you're using D1.
          */
@@ -45,7 +41,6 @@ export interface WithCloudflareOptions extends CloudflarePluginOptions {
  * Cloudflare geolocation data
  */
 export interface CloudflareGeolocation {
-    ipAddress: string;
     timezone: string;
     city: string;
     country: string;

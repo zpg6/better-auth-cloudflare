@@ -2,8 +2,7 @@ import type { KVNamespace } from "@cloudflare/workers-types";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { type BetterAuthOptions, type BetterAuthPlugin, type SecondaryStorage } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { createAuthEndpoint, createAuthMiddleware } from "better-auth/api";
-import { drizzle } from "drizzle-orm/d1";
+import { createAuthEndpoint } from "better-auth/api";
 import { schema } from "./schema";
 import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types";
 export * from "./client";
@@ -19,9 +18,12 @@ export * from "./types";
 export const cloudflare = (options?: CloudflarePluginOptions) => {
     const opts = options ?? {};
 
+    // Default geolocationTracking to true if not specified
+    const geolocationTrackingEnabled = opts.geolocationTracking === undefined || opts.geolocationTracking === true;
+
     return {
         id: "cloudflare",
-        schema: schema(opts),
+        schema: schema(opts), // schema function will also default geolocationTracking to true
         endpoints: {
             getGeolocation: createAuthEndpoint(
                 "/cloudflare/geolocation",
@@ -29,18 +31,24 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                     method: "GET",
                 },
                 async ctx => {
+                    const session = ctx.context?.session;
+                    if (!session) {
+                        return ctx.json({ error: "Unauthorized" }, { status: 401 });
+                    }
+
+                    // Original code threw an error if ctx.request was not available.
+                    // Retaining similar logic but returning a 500 status code.
                     if (!ctx.request) {
-                        throw new Error("Request is not available");
+                        return ctx.json({ error: "Request is not available" }, { status: 500 });
                     }
 
                     const cf = getCloudflareContext().cf;
                     if (!cf) {
-                        throw new Error("Cloudflare context is not available");
+                        return ctx.json({ error: "Cloudflare context is not available" }, { status: 404 });
                     }
 
                     // Extract and validate Cloudflare geolocation data
                     const context: CloudflareGeolocation = {
-                        ipAddress: cf.ipAddress as string,
                         timezone: cf.timezone as string,
                         city: cf.city as string,
                         country: cf.country as string,
@@ -56,191 +64,34 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
             ),
         },
 
-        ...(opts.enableUserGeolocationTracking === "kv" && {
-            hooks: {
-                after: [
-                    {
-                        matcher: context => {
-                            // On completion of the OAuth flow, the session is updated
-                            return !!context.context.newSession;
-                        },
-                        handler: createAuthMiddleware(async ctx => {
-                            if (!ctx.context.newSession || !ctx.context.session) {
-                                return;
-                            }
-                            const cf = getCloudflareContext().cf;
-                            if (!cf) {
-                                throw new Error("Cloudflare context is not available");
-                            }
-                            await ctx.context.secondaryStorage?.set(
-                                `ip-address:${ctx.context.session.user.id}`,
-                                cf.ipAddress as string
-                            );
-                        }),
-                    },
-                ],
-            },
-        }),
+        init(init_ctx) {
+            return {
+                options: {
+                    databaseHooks: {
+                        session: {
+                            create: {
+                                before: async (s: any) => {
+                                    if (!geolocationTrackingEnabled) {
+                                        return s;
+                                    }
+                                    const cf = (await getCloudflareContext({ async: true })).cf;
+                                    s.timezone = cf?.timezone;
+                                    s.city = cf?.city;
+                                    s.country = cf?.country;
+                                    s.region = cf?.region;
+                                    s.regionCode = cf?.regionCode;
+                                    s.colo = cf?.colo;
+                                    s.latitude = cf?.latitude;
+                                    s.longitude = cf?.longitude;
 
-        ...(opts.enableUserGeolocationTracking === "user_table" && {
-            hooks: {
-                after: [
-                    {
-                        matcher: context => {
-                            // On completion of the OAuth flow, the session is updated
-                            return !!context.context.newSession;
-                        },
-                        handler: createAuthMiddleware(async ctx => {
-                            if (!ctx.context.newSession || !ctx.context.session) {
-                                return;
-                            }
-                            const cf = getCloudflareContext().cf;
-                            if (!cf) {
-                                throw new Error("Cloudflare context is not available");
-                            }
-                            if (
-                                !cf.ipAddress ||
-                                !cf.timezone ||
-                                !cf.city ||
-                                !cf.country ||
-                                !cf.region ||
-                                !cf.regionCode ||
-                                !cf.colo ||
-                                !cf.latitude ||
-                                !cf.longitude
-                            ) {
-                                // Most requests will have this data, so worth waiting for it
-                                return;
-                            }
-                            await ctx.context.adapter.update({
-                                model: "user",
-                                where: [
-                                    {
-                                        field: "id",
-                                        value: ctx.context.session.user.id,
-                                    },
-                                ],
-                                update: {
-                                    ipAddress: (cf.ipAddress as string) || "",
-                                    timezone: cf.timezone || "",
-                                    city: cf.city || "",
-                                    country: cf.country || "",
-                                    region: cf.region || "",
-                                    regionCode: cf.regionCode || "",
-                                    colo: cf.colo || "",
-                                    latitude: cf.latitude,
-                                    longitude: cf.longitude,
+                                    return s;
                                 },
-                            });
-                        }),
-                    },
-                ],
-            },
-        }),
-
-        ...(opts.enableUserGeolocationTracking === "session_table" && {
-            hooks: {
-                after: [
-                    {
-                        matcher: context => {
-                            // On completion of the OAuth flow, the session is updated
-                            return !!context.context.newSession;
+                            },
                         },
-                        handler: createAuthMiddleware(async ctx => {
-                            if (!ctx.context.newSession || !ctx.context.session) {
-                                return;
-                            }
-                            const cf = getCloudflareContext().cf;
-                            if (!cf) {
-                                throw new Error("Cloudflare context is not available");
-                            }
-                            if (
-                                !cf.ipAddress ||
-                                !cf.timezone ||
-                                !cf.city ||
-                                !cf.country ||
-                                !cf.region ||
-                                !cf.regionCode ||
-                                !cf.colo ||
-                                !cf.latitude ||
-                                !cf.longitude
-                            ) {
-                                // Most requests will have this data, so worth waiting for it
-                                return;
-                            }
-                            await ctx.context.adapter.update({
-                                model: "session",
-                                where: [
-                                    {
-                                        field: "id",
-                                        value: ctx.context.session.session.id,
-                                    },
-                                ],
-                                update: {
-                                    ipAddress: cf.ipAddress as string,
-                                    timezone: cf.timezone,
-                                    city: cf.city,
-                                    country: cf.country as string,
-                                    region: cf.region,
-                                    regionCode: cf.regionCode,
-                                    colo: cf.colo,
-                                    latitude: cf.latitude,
-                                    longitude: cf.longitude,
-                                },
-                            });
-                        }),
                     },
-                ],
-            },
-        }),
-
-        ...(opts.enableUserGeolocationTracking === "geolocation_table" && {
-            hooks: {
-                after: [
-                    {
-                        matcher: context => {
-                            return !!context.context.newSession;
-                        },
-                        handler: createAuthMiddleware(async ctx => {
-                            if (!ctx.context.newSession || !ctx.context.session) {
-                                return;
-                            }
-                            const cf = getCloudflareContext().cf;
-                            if (!cf) {
-                                throw new Error("Cloudflare context is not available");
-                            }
-                            if (
-                                !cf.ipAddress ||
-                                !cf.timezone ||
-                                !cf.city ||
-                                !cf.country ||
-                                !cf.region ||
-                                !cf.regionCode ||
-                                !cf.colo ||
-                                !cf.latitude ||
-                                !cf.longitude
-                            ) {
-                                // Most requests will have this data, so worth waiting for it
-                                return;
-                            }
-                            await ctx.context.adapter.create({
-                                model: "geolocation",
-                                data: {
-                                    userId: ctx.context.session.user.id,
-                                    ipAddress: cf.ipAddress as string,
-                                    timezone: cf.timezone,
-                                    city: cf.city,
-                                    country: cf.country as string,
-                                    region: cf.region,
-                                    regionCode: cf.regionCode,
-                                    colo: cf.colo,
-                                },
-                            });
-                        }),
-                    },
-                ],
-            },
-        }),
+                },
+            };
+        },
     } satisfies BetterAuthPlugin;
 };
 
@@ -278,30 +129,15 @@ export const getGeolocation = (): CloudflareGeolocation | undefined => {
     if (!cf) {
         throw new Error("Cloudflare context is not available");
     }
-    if (
-        !cf.ipAddress ||
-        !cf.timezone ||
-        !cf.city ||
-        !cf.country ||
-        !cf.region ||
-        !cf.regionCode ||
-        !cf.colo ||
-        !cf.latitude ||
-        !cf.longitude
-    ) {
-        // Most requests will have this data, so worth waiting for it
-        return undefined;
-    }
     return {
-        ipAddress: cf.ipAddress as string,
-        timezone: cf.timezone,
-        city: cf.city,
-        country: cf.country as string,
-        region: cf.region,
-        regionCode: cf.regionCode,
-        colo: cf.colo,
-        latitude: cf.latitude,
-        longitude: cf.longitude,
+        timezone: cf.timezone || "Unknown",
+        city: cf.city || "Unknown",
+        country: cf.country || "Unknown",
+        region: cf.region || "Unknown",
+        regionCode: cf.regionCode || "Unknown",
+        colo: cf.colo || "Unknown",
+        latitude: cf.latitude || "Unknown",
+        longitude: cf.longitude || "Unknown",
     };
 };
 
@@ -319,41 +155,44 @@ export const withCloudflare = (
     cloudFlareOptions: WithCloudflareOptions,
     options: BetterAuthOptions
 ): BetterAuthOptions => {
+    const autoDetectIpEnabled =
+        cloudFlareOptions.autoDetectIpAddress === undefined || cloudFlareOptions.autoDetectIpAddress === true;
+    const geolocationTrackingForSession =
+        cloudFlareOptions.geolocationTracking === undefined || cloudFlareOptions.geolocationTracking === true;
+
+    let updatedAdvanced = { ...options.advanced };
+    if (autoDetectIpEnabled) {
+        updatedAdvanced.ipAddress = {
+            ...(updatedAdvanced.ipAddress ?? {}),
+            ipAddressHeaders: ["cf-connecting-ip", "x-real-ip", ...(updatedAdvanced.ipAddress?.ipAddressHeaders ?? [])],
+        };
+    } else if (updatedAdvanced.ipAddress?.ipAddressHeaders) {
+        // If autoDetectIp is disabled, ensure our headers are not in the list if they were added by default elsewhere
+        // This part is tricky as we don't know if they were from the user or our default.
+        // A safer approach might be to just rely on the user to not list them if they disable this flag.
+        // For now, let's assume if autoDetectIpEnabled is false, the user manages headers explicitly.
+    }
+
+    let updatedSession = { ...options.session };
+    if (geolocationTrackingForSession) {
+        updatedSession.storeSessionInDatabase = true;
+    } else if (options.session?.storeSessionInDatabase === undefined) {
+        // If geolocationTracking is false, and the user hasn't set a preference for storeSessionInDatabase,
+        // it will remain undefined (i.e., Better Auth core default behavior).
+        // If user explicitly set it to true/false, that will be respected.
+    }
+
     return {
         ...options,
-        ...{
-            database: cloudFlareOptions.d1
-                ? drizzleAdapter(
-                      drizzle(cloudFlareOptions.d1.db, {
-                          logger: true,
-                          schema: cloudFlareOptions.d1.options?.schema,
-                      }),
-                      {
-                          ...{
-                              provider: "sqlite",
-                          },
-                          ...cloudFlareOptions.d1.options,
-                      }
-                  )
-                : undefined,
-            plugins: [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])],
-            advanced: {
-                ipAddress: {
-                    ipAddressHeaders: [
-                        "cf-connecting-ip",
-                        "x-real-ip",
-                        ...(options.advanced?.ipAddress?.ipAddressHeaders ?? []),
-                    ],
-                    ...(options.advanced?.ipAddress ?? {}),
-                },
-                ...(options.advanced ?? {}),
-            },
-            secondaryStorage: cloudFlareOptions.kv ? createKVStorage(cloudFlareOptions.kv) : undefined,
-            session: {
-                preserveSessionInDatabase:
-                    cloudFlareOptions.enableUserGeolocationTracking === "session_table" ? true : undefined,
-                ...(options.session ?? {}),
-            },
-        },
+        database: cloudFlareOptions.d1
+            ? drizzleAdapter(cloudFlareOptions.d1.db, {
+                  provider: "sqlite",
+                  ...cloudFlareOptions.d1.options,
+              })
+            : undefined,
+        secondaryStorage: cloudFlareOptions.kv ? createKVStorage(cloudFlareOptions.kv) : undefined,
+        plugins: [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])],
+        advanced: updatedAdvanced,
+        session: updatedSession,
     };
 };

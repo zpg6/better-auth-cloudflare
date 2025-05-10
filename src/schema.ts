@@ -13,11 +13,6 @@ type GeolocationFields = {
  * Database fields for Cloudflare geolocation
  */
 const geolocationFields: GeolocationFields = {
-    ipAddress: {
-        type: "string",
-        required: false,
-        input: false,
-    },
     timezone: {
         type: "string",
         required: false,
@@ -69,22 +64,10 @@ const geolocationFields: GeolocationFields = {
 export const schema = (options: CloudflarePluginOptions) => {
     return {
         session: {
-            fields: options.enableUserGeolocationTracking === "session_table" ? geolocationFields : {},
+            fields:
+                options.geolocationTracking === undefined || options.geolocationTracking === true
+                    ? geolocationFields
+                    : {},
         },
-        user: {
-            fields: options.enableUserGeolocationTracking === "user_table" ? geolocationFields : {},
-        },
-        ...(options.enableUserGeolocationTracking === "geolocation_table" && {
-            geolocation: {
-                fields: {
-                    userId: {
-                        type: "string",
-                        required: true,
-                        input: false,
-                    },
-                    ...geolocationFields,
-                },
-            },
-        }),
     } satisfies AuthPluginSchema;
 };

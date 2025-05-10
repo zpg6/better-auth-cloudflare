@@ -9,21 +9,21 @@ importers:
   .:
     dependencies:
       '@opennextjs/cloudflare':
-        specifier: 1.0.1
-        version: 1.0.1(wrangler@4.14.3(@cloudflare/workers-types@4.20250507.0))
+        specifier: ^1.0.1
+        version: 1.0.1(wrangler@4.14.3(@cloudflare/workers-types@4.20250510.0))
       better-auth:
-        specifier: ^1.2.8-beta.4
-        version: 1.2.8-beta.4
+        specifier: ^1.1.21
+        version: 1.2.7
       drizzle-orm:
         specifier: ^0.43.1
-        version: 0.43.1(@cloudflare/workers-types@4.20250507.0)(kysely@0.28.2)
+        version: 0.43.1(@cloudflare/workers-types@4.20250510.0)(kysely@0.28.2)
       zod:
         specifier: ^3.24.2
         version: 3.24.4
     devDependencies:
       '@cloudflare/workers-types':
-        specifier: 4.20250507.0
-        version: 4.20250507.0
+        specifier: 4.20250510.0
+        version: 4.20250510.0
       '@jest/globals':
         specifier: ^29.7.0
         version: 29.7.0
@@ -595,8 +595,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@cloudflare/workers-types@4.20250507.0':
-    resolution: {integrity: sha512-fkrq7A6XWgPEmXJDwu9TS/Zw7qho3eGlrOlicKue32Bdul0Ma4Mym4sh7ZeGbayBXxkOx/fHpm5GfhVEtngRWQ==}
+  '@cloudflare/workers-types@4.20250510.0':
+    resolution: {integrity: sha512-VLdSYUooX2QhdlzyBnnLAqa5B3xWyr5vdvya9NZk2BJNmRt2iblSLunj7iBKiW9J+SIBHz7c+kUzUJKoFLKRjg==}
 
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
@@ -1670,8 +1670,8 @@ packages:
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
 
-  better-auth@1.2.8-beta.4:
-    resolution: {integrity: sha512-edf6CYa907zZYy+QPA3Kj98pCfD14lWO5YTDmdr3XSl4sSKQt7Kr5i0anY2VUL0qA2TIpJKXFrxGPi6irMYd+Q==}
+  better-auth@1.2.7:
+    resolution: {integrity: sha512-2hCB263GSrgetsMUZw8vv9O1e4S4AlYJW3P4e8bX9u3Q3idv4u9BzDFCblpTLuL4YjYovghMCN0vurAsctXOAQ==}
 
   better-call@1.0.9:
     resolution: {integrity: sha512-Qfm0gjk0XQz0oI7qvTK1hbqTsBY4xV2hsHAxF8LZfUYl3RaECCIifXuVqtPpZJWvlCCMlQSvkvhhyuApGUba6g==}
@@ -2473,6 +2473,10 @@ packages:
   kleur@3.0.3:
     resolution: {integrity: sha512-eTIzlVOSUR+JxdDFepEYcBMtZ9Qqdef+rnzWdRZuMbOywu5tO2w2N7rqjoANZ5k9vywhL6Br1VRjUIgTQx4E8w==}
     engines: {node: '>=6'}
+
+  kysely@0.27.6:
+    resolution: {integrity: sha512-FIyV/64EkKhJmjgC0g2hygpBv5RNWVPyNCqSAD7eTCv6eFWNIi4PN1UvdSJGicN/o35bnevgis4Y0UDC0qi8jQ==}
+    engines: {node: '>=14.0.0'}
 
   kysely@0.28.2:
     resolution: {integrity: sha512-4YAVLoF0Sf0UTqlhgQMFU9iQECdah7n+13ANkiuVfRvlK+uI0Etbgd7bVP36dKlG+NXWbhGua8vnGt+sdhvT7A==}
@@ -4387,7 +4391,7 @@ snapshots:
   '@cloudflare/workerd-windows-64@1.20250507.0':
     optional: true
 
-  '@cloudflare/workers-types@4.20250507.0': {}
+  '@cloudflare/workers-types@4.20250510.0': {}
 
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
@@ -4891,14 +4895,14 @@ snapshots:
       - aws-crt
       - supports-color
 
-  '@opennextjs/cloudflare@1.0.1(wrangler@4.14.3(@cloudflare/workers-types@4.20250507.0))':
+  '@opennextjs/cloudflare@1.0.1(wrangler@4.14.3(@cloudflare/workers-types@4.20250510.0))':
     dependencies:
       '@dotenvx/dotenvx': 1.31.0
       '@opennextjs/aws': 3.6.0
       enquirer: 2.4.1
       glob: 11.0.2
       ts-tqdm: 0.8.6
-      wrangler: 4.14.3(@cloudflare/workers-types@4.20250507.0)
+      wrangler: 4.14.3(@cloudflare/workers-types@4.20250510.0)
     transitivePeerDependencies:
       - aws-crt
       - supports-color
@@ -5679,7 +5683,7 @@ snapshots:
 
   balanced-match@1.0.2: {}
 
-  better-auth@1.2.8-beta.4:
+  better-auth@1.2.7:
     dependencies:
       '@better-auth/utils': 0.2.4
       '@better-fetch/fetch': 1.1.18
@@ -5690,7 +5694,7 @@ snapshots:
       better-call: 1.0.9
       defu: 6.1.4
       jose: 5.10.0
-      kysely: 0.28.2
+      kysely: 0.27.6
       nanostores: 0.11.4
       zod: 3.24.4
 
@@ -5878,9 +5882,9 @@ snapshots:
 
   dotenv@16.5.0: {}
 
-  drizzle-orm@0.43.1(@cloudflare/workers-types@4.20250507.0)(kysely@0.28.2):
+  drizzle-orm@0.43.1(@cloudflare/workers-types@4.20250510.0)(kysely@0.28.2):
     optionalDependencies:
-      '@cloudflare/workers-types': 4.20250507.0
+      '@cloudflare/workers-types': 4.20250510.0
       kysely: 0.28.2
 
   dunder-proto@1.0.1:
@@ -6627,7 +6631,10 @@ snapshots:
 
   kleur@3.0.3: {}
 
-  kysely@0.28.2: {}
+  kysely@0.27.6: {}
+
+  kysely@0.28.2:
+    optional: true
 
   leven@3.1.0: {}
 
@@ -7205,7 +7212,7 @@ snapshots:
       '@cloudflare/workerd-linux-arm64': 1.20250507.0
       '@cloudflare/workerd-windows-64': 1.20250507.0
 
-  wrangler@4.14.3(@cloudflare/workers-types@4.20250507.0):
+  wrangler@4.14.3(@cloudflare/workers-types@4.20250510.0):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.4.0
       '@cloudflare/unenv-preset': 2.3.1(unenv@2.0.0-rc.15)(workerd@1.20250507.0)
@@ -7216,7 +7223,7 @@ snapshots:
       unenv: 2.0.0-rc.15
       workerd: 1.20250507.0
     optionalDependencies:
-      '@cloudflare/workers-types': 4.20250507.0
+      '@cloudflare/workers-types': 4.20250510.0
       fsevents: 2.3.3
       sharp: 0.33.5
     transitivePeerDependencies:

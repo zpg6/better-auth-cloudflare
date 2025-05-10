@@ -4,15 +4,15 @@
 [![NPM Downloads](https://img.shields.io/npm/dt/better-auth-cloudflare)](https://www.npmjs.com/package/better-auth-cloudflare)
 [![License: MIT](https://img.shields.io/npm/l/better-auth-cloudflare)](https://opensource.org/licenses/MIT)
 
-This plugin makes it easy to integrate [Better Auth](https://github.com/better-auth/better-auth) with Cloudflare Workers and other Cloudflare services. For now, this focuses OpenNext for connecting context to Cloudflare Workers and Drizzle for connecting to D1 Database.
+This plugin makes it easy to integrate [Better Auth](https://github.com/better-auth/better-auth) with Cloudflare Workers and other Cloudflare services. It provides seamless integration with Cloudflare's D1 database, KV storage, and geolocation features.
 
 ## Features
 
-- 🗄️ **D1 integration** - Seamlessly use Cloudflare D1 as the primary database for Better Auth
-- 🔌 **KV integration** - Easily use Cloudflare KV for Better Auth Secondary Storage
-- 🔍 **IP detection** - Extract from Cloudflare headers for IP tracking features like rate limiting
-- 📍 **Rich geolocation context data** - Access timezone, country, city, and other Cloudflare request context
-- 🌐 **Automatic geolocation** - Track user location data with multiple storage options
+- 🗄️ **D1 Database Integration** - Use Cloudflare D1 as your primary database through Drizzle ORM
+- 🔌 **KV Storage** - Configure Cloudflare KV as secondary storage
+- 📍 **Geolocation Tracking** - Automatically track user location data in sessions
+- 🌐 **IP Detection** - Built-in support for Cloudflare's IP detection headers
+- 🔍 **Rich Context Data** - Access timezone, city, country, region, and more from Cloudflare's request context on client
 
 ## Installation
 
@@ -28,55 +28,112 @@ bun add better-auth-cloudflare
 
 ## Configuration Options
 
-| Option                          | Type    | Default   | Description                                                                                                                 |
-| ------------------------------- | ------- | --------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `autoDetectIpAddress`           | boolean | `true`    | Auto-detect IP address from Cloudflare headers                                                                              |
-| `enableUserGeolocationTracking` | string  | undefined | How to store geolocation data (`"user_table"`, `"session_table"`, `"geolocation_table"`, or `"kv"`). By default not stored. |
-
-#### Geolocation Tracking Options
-
-This plugin supports four different ways to track user geolocation:
-
-1. **User Table** (`user_table`): Stores all geolocation data directly in the user table
-2. **Session Table** (`session_table`): Stores geolocation data in the session table
-3. **Geolocation Table** (`geolocation_table`): Creates a separate table for geolocation data
-4. **KV Storage** (`kv`): Lightweight option that stores only IP address in KV storage
-
-Geolocation is updated when new sessions are created.
+| Option                | Type    | Default | Description                                    |
+| --------------------- | ------- | ------- | ---------------------------------------------- |
+| `autoDetectIpAddress` | boolean | `true`  | Auto-detect IP address from Cloudflare headers |
+| `geolocationTracking` | boolean | `true`  | Track geolocation data in the session table    |
 
 ## Setup
 
 ### Server
 
 ```typescript
+// src/db/schema.ts
+
+import * as authSchema from "./auth.schema";
+
+// Combine all schemas here for migrations
+export const schema = {
+    ...authSchema,
+    // ... more
+} as const;
+```
+
+<br>
+
+```typescript
+// src/db/index.ts
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { drizzle } from "drizzle-orm/d1";
+import { schema } from "./schema";
+
+export async function getDb() {
+    const { env } = await getCloudflareContext({ async: true });
+
+    // Where "DATABASE" is my binding in my wrangler.toml file
+    return drizzle(env.DATABASE, {
+        schema,
+        logger: true,
+    });
+}
+```
+
+<br>
+
+```typescript
+// src/auth/index.ts
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
+import { getDb } from "../db";
 
+async function authBuilder() {
+    return betterAuth(
+        withCloudflare(
+            // Cloudflare-specific options
+            {
+                autoDetectIpAddress: true,
+                geolocationTracking: true,
+                d1: {
+                    db: await getDb(),
+                    options: {
+                        usePlural: true,
+                        debugLogs: true,
+                    },
+                },
+                kv: process.env.USER_SESSIONS as KVNamespace<string>,
+            },
+            // Your Better Auth config
+            {
+                socialProviders: {
+                    github: {
+                        clientId: process.env.GITHUB_CLIENT_ID!,
+                        clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+                    },
+                },
+                rateLimit: {
+                    enabled: true,
+                    //...other options
+                },
+            }
+        )
+    );
+}
+
+// Shared instance
+let authInstance: ReturnType<typeof authBuilder> | null = null;
+
+// Use this to retrieve the shared instance
+export async function initAuth() {
+    if (!authInstance) {
+        authInstance = authBuilder();
+    }
+    return authInstance;
+}
+
+/* ======================================================================= */
+
+// Used by the generator, not for production use
 const auth = betterAuth(
     withCloudflare(
         // Cloudflare-specific options
         {
             autoDetectIpAddress: true,
-            enableUserGeolocationTracking: "user_table",
-            kv: process.env.USER_SESSIONS as KVNamespace<string>,
-            d1: process.env.DATABASE as D1Database,
-            d1Options: {
-                usePlural: true,
-                debugLogs: true,
-            },
+            geolocationTracking: true,
+            // no database/kv
         },
-        // ... your Better Auth config
+        // Your Better Auth config
         {
-            socialProviders: {
-                github: {
-                    clientId: process.env.GITHUB_CLIENT_ID!,
-                    clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-                },
-            },
-            rateLimit: {
-                enabled: true,
-                //...other options
-            },
+            // ... just what affects the schema
         }
     )
 );
@@ -92,9 +149,33 @@ npx @better-auth/cli@latest generate
 
 This command creates the necessary database tables based on your Better Auth configuration and enabled plugins. For integrating with your existing Drizzle schema, see [managing schema across multiple files](https://orm.drizzle.team/docs/sql-schema-declaration#schema-in-multiple-files) in the Drizzle documentation. More details on schema generation and migration are available in the [Better Auth docs](https://www.better-auth.com/docs/adapters/drizzle#schema-generation--migration).
 
+I like to run it as:
+
+```bash
+npx @better-auth/cli@latest generate --config src/auth/index.ts --output src/db/auth.schema.ts -y
+```
+
 ### KV as Secondary Storage
 
 If provided, your KV will be configured as [Secondary Storage](https://www.better-auth.com/docs/concepts/database#secondary-storage).
+
+### Routes
+
+```typescript
+// src/app/api/auth/[...all]/route.ts
+
+import { initAuth } from "@/auth";
+
+export async function POST(req: Request) {
+    const auth = await initAuth();
+    return auth.handler(req);
+}
+
+export async function GET(req: Request) {
+    const auth = await initAuth();
+    return auth.handler(req);
+}
+```
 
 ### Client
 
@@ -116,15 +197,9 @@ const authClient = createAuthClient({
 const getLocationInfo = async () => {
     const { data } = await authClient.cloudflare.getGeolocation();
     console.log(`Detected location: ${data.city}, ${data.country}`);
-
-    // Use timezone to display a local timestamp
-    const localTime = new Intl.DateTimeFormat("en-US", {
-        timeZone: data.timezone,
-        dateStyle: "full",
-        timeStyle: "long",
-    }).format(new Date());
-    console.log(`Local time: ${localTime}`);
-    // Example: "Local time: Friday, May 9, 2025 at 7:06:30 PM EDT"
+    console.log(`Timezone: ${data.timezone}`);
+    console.log(`Region: ${data.region} (${data.regionCode})`);
+    console.log(`Coordinates: ${data.latitude}, ${data.longitude}`);
 };
 
 // Server-side direct access
@@ -140,20 +215,4 @@ console.log(locationData.country, locationData.city);
 
 ## Contributing
 
-Contributions are welcome! Whether it's bug fixes, feature additions, or documentation improvements, we appreciate your help in making this project better.
-
-Please feel free to:
-
-- Open an issue to report bugs or suggest new features
-- Submit a pull request with improvements
-- Help improve the documentation
-
-When submitting a pull request:
-
-1. Fork the repository
-2. Create a new branch for your changes
-3. Add tests if applicable
-4. Update documentation as needed
-5. Submit the PR with a clear description of the changes
-
-For major changes or new features, please open an issue first to discuss what you would like to change.
+Contributions are welcome! Whether it's bug fixes, feature additions, or documentation improvements, we appreciate your help in making this project better. For major changes or new features, please open an issue first to discuss what you would like to change.
