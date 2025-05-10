@@ -155,6 +155,11 @@ I like to run it as:
 npx @better-auth/cli@latest generate --config src/auth/index.ts --output src/db/auth.schema.ts -y
 ```
 
+#### WHY DO WE NEED THIS "Used by the generator, not for production use"?
+
+See from the BetterAuth maintainers why two configs are necessary:
+https://www.answeroverflow.com/m/1362463260636479488
+
 ### KV as Secondary Storage
 
 If provided, your KV will be configured as [Secondary Storage](https://www.better-auth.com/docs/concepts/database#secondary-storage).
