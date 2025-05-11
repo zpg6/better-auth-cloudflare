@@ -8,6 +8,12 @@ Seamlessly integrate [Better Auth](https://github.com/better-auth/better-auth) w
 
 This library makes it easy to integrate [Better Auth](https://github.com/better-auth/better-auth) with Cloudflare Workers and other Cloudflare services. It provides seamless integration with Cloudflare's D1 database, KV storage, and geolocation features.
 
+## **VIEW DEMO**
+
+[https://better-auth-cloudflare.zpg6.workers.dev/](https://better-auth-cloudflare.zpg6.workers.dev/)
+
+Check out the `examples/opennextjs` directory for the demo implementation along with recommended scripts for generating database schema, migrating, and more.
+
 ## Table of Contents
 
 - [Features](#features)

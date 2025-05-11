@@ -1,0 +1,53 @@
+{
+    "name": "opennextjs",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "clean": "rm -rf .open-next && rm -rf .wrangler && rm -rf node_modules && rm -rf .next",
+        "clean-deploy": "pnpm clean && pnpm i && pnpm run deploy",
+        "dev": "next dev",
+        "build": "next build",
+        "build:cf": "opennextjs-cloudflare build",
+        "start": "next start",
+        "format": "prettier --write .",
+        "lint": "next lint",
+        "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+        "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+        "auth:generate": "npx @better-auth/cli@latest generate --config src/auth/index.ts --output src/db/auth.schema.ts -y",
+        "auth:format": "npx prettier --write src/db/auth.schema.ts",
+        "auth:update": "pnpm run auth:generate && pnpm run auth:format",
+        "db:generate": "drizzle-kit generate",
+        "db:migrate:dev": "wrangler d1 migrations apply DATABASE --local",
+        "db:migrate:prod": "wrangler d1 migrations apply DATABASE --remote",
+        "db:studio:dev": "drizzle-kit studio",
+        "db:studio:prod": "NODE_ENV=production drizzle-kit studio"
+    },
+    "dependencies": {
+        "@radix-ui/react-label": "^2.1.6",
+        "@radix-ui/react-slot": "^1.2.2",
+        "better-auth": "^1.2.7",
+        "better-auth-cloudflare": "0.1.1",
+        "class-variance-authority": "^0.7.1",
+        "clsx": "^2.1.1",
+        "drizzle-orm": "^0.43.1",
+        "lucide-react": "^0.509.0",
+        "next": "15.3.1",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+        "tailwind-merge": "^3.2.0"
+    },
+    "devDependencies": {
+        "@cloudflare/workers-types": "4.20250510.0",
+        "@opennextjs/cloudflare": "^1.0.1",
+        "@tailwindcss/postcss": "^4",
+        "@types/node": "^20",
+        "@types/react": "^19",
+        "@types/react-dom": "^19",
+        "drizzle-kit": "^0.31.0",
+        "prettier": "^3.5.3",
+        "tailwindcss": "^4",
+        "tw-animate-css": "^1.2.9",
+        "typescript": "^5",
+        "wrangler": "^4.13.2"
+    }
+}

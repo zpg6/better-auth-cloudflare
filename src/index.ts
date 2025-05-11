@@ -1,6 +1,6 @@
 import type { KVNamespace } from "@cloudflare/workers-types";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { type BetterAuthOptions, type BetterAuthPlugin, type SecondaryStorage } from "better-auth";
+import { type BetterAuthOptions, type BetterAuthPlugin, type SecondaryStorage, type Session } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthEndpoint } from "better-auth/api";
 import { schema } from "./schema";
@@ -196,3 +196,5 @@ export const withCloudflare = (
         session: updatedSession,
     };
 };
+
+export type SessionWithGeolocation = Session & CloudflareGeolocation;
