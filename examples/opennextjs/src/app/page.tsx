@@ -131,9 +131,24 @@ export default function Home() {
                 </CardFooter>
             </Card>
             <footer className="absolute bottom-0 w-full text-center text-sm text-gray-500 py-4">
-                Powered by <a href="https://github.com/zpg6/better-auth-cloudflare" target="_blank" rel="noopener noreferrer" className="underline">better-auth-cloudflare</a>
-                {' | '}
-                <a href="https://www.npmjs.com/package/better-auth-cloudflare" target="_blank" rel="noopener noreferrer" className="underline">npm package</a>
+                Powered by{" "}
+                <a
+                    href="https://github.com/zpg6/better-auth-cloudflare"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                >
+                    better-auth-cloudflare
+                </a>
+                {" | "}
+                <a
+                    href="https://www.npmjs.com/package/better-auth-cloudflare"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                >
+                    npm package
+                </a>
             </footer>
         </div>
     );

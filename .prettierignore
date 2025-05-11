@@ -1,1 +1,4 @@
 pnpm-lock.yaml
+.next
+.open-next
+node_modules

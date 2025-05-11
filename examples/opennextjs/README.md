@@ -68,5 +68,6 @@ Deploy your Next.js application with Better Auth to Cloudflare:
 To learn more about Better Auth and its features, visit [our documentation](https://github.com/better-auth/better-auth).
 
 For Next.js resources:
+
 - [Next.js Documentation](https://nextjs.org/docs)
 - [Learn Next.js](https://nextjs.org/learn)
