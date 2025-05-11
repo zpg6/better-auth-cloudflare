@@ -6,17 +6,20 @@ Seamlessly integrate [Better Auth](https://github.com/better-auth/better-auth) w
 [![NPM Downloads](https://img.shields.io/npm/dt/better-auth-cloudflare)](https://www.npmjs.com/package/better-auth-cloudflare)
 [![License: MIT](https://img.shields.io/npm/l/better-auth-cloudflare)](https://opensource.org/licenses/MIT)
 
-This library makes it easy to integrate [Better Auth](https://github.com/better-auth/better-auth) with Cloudflare Workers and other Cloudflare services. It provides seamless integration with Cloudflare's D1 database, KV storage, and geolocation features.
+**DEMO**: [https://better-auth-cloudflare.zpg6.workers.dev/](https://better-auth-cloudflare.zpg6.workers.dev/)
 
-## **VIEW DEMO**
+The demo implementation is in [`examples/opennextjs`](./examples/opennextjs) directory along with recommended scripts for generating database schema, migrating, and more.
 
-[https://better-auth-cloudflare.zpg6.workers.dev/](https://better-auth-cloudflare.zpg6.workers.dev/)
+## Features
 
-Check out the `examples/opennextjs` directory for the demo implementation along with recommended scripts for generating database schema, migrating, and more.
+- 🗄️ **D1 Database Integration**: Leverage Cloudflare D1 as your primary database via Drizzle ORM.
+- 🔌 **KV Storage Integration**: Optionally use Cloudflare KV for secondary storage (e.g., session caching).
+- 📍 **Automatic Geolocation Tracking**: Enrich user sessions with location data derived from Cloudflare.
+- 🌐 **Cloudflare IP Detection**: Utilize Cloudflare's IP detection headers out-of-the-box.
+- 🔍 **Rich Client-Side Context**: Access timezone, city, country, region, and more via the client plugin.
 
 ## Table of Contents
 
-- [Features](#features)
 - [Installation](#installation)
 - [Configuration Options](#configuration-options)
 - [Setup](#setup)
@@ -31,14 +34,6 @@ Check out the `examples/opennextjs` directory for the demo implementation along 
     - [Accessing Geolocation Data](#accessing-geolocation-data)
 - [License](#license)
 - [Contributing](#contributing)
-
-## Features
-
-- 🗄️ **D1 Database Integration**: Leverage Cloudflare D1 as your primary database via Drizzle ORM.
-- 🔌 **KV Storage Integration**: Optionally use Cloudflare KV for secondary storage (e.g., session caching).
-- 📍 **Automatic Geolocation Tracking**: Enrich user sessions with location data derived from Cloudflare.
-- 🌐 **Cloudflare IP Detection**: Utilize Cloudflare's IP detection headers out-of-the-box.
-- 🔍 **Rich Client-Side Context**: Access timezone, city, country, region, and more via the client plugin.
 
 ## Installation
 
