@@ -14,6 +14,11 @@ export interface CloudflarePluginOptions {
      * @default true
      */
     geolocationTracking?: boolean;
+
+    /**
+     * Cloudflare geolocation context
+     */
+    cf?: CloudflareGeolocation | Promise<CloudflareGeolocation | null> | null;
 }
 
 export interface WithCloudflareOptions extends CloudflarePluginOptions {

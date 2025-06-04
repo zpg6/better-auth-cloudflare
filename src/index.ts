@@ -1,5 +1,4 @@
 import type { KVNamespace } from "@cloudflare/workers-types";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { type BetterAuthOptions, type BetterAuthPlugin, type SecondaryStorage, type Session } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthEndpoint } from "better-auth/api";
@@ -19,7 +18,8 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
     const opts = options ?? {};
 
     // Default geolocationTracking to true if not specified
-    const geolocationTrackingEnabled = opts.geolocationTracking === undefined || opts.geolocationTracking === true;
+    const geolocationTrackingEnabled =
+        opts.geolocationTracking === undefined || opts.geolocationTracking;
 
     return {
         id: "cloudflare",
@@ -42,7 +42,7 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                         return ctx.json({ error: "Request is not available" }, { status: 500 });
                     }
 
-                    const cf = getCloudflareContext().cf;
+                    const cf = await Promise.resolve(opts.cf || undefined);
                     if (!cf) {
                         return ctx.json({ error: "Cloudflare context is not available" }, { status: 404 });
                     }
@@ -74,7 +74,7 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                                     if (!geolocationTrackingEnabled) {
                                         return s;
                                     }
-                                    const cf = (await getCloudflareContext({ async: true })).cf;
+                                    const cf = await Promise.resolve(opts.cf || undefined);
                                     s.timezone = cf?.timezone;
                                     s.city = cf?.city;
                                     s.country = cf?.country;
@@ -112,32 +112,6 @@ export const createKVStorage = (kv: KVNamespace<string>): SecondaryStorage => {
         delete: async (key: string) => {
             return kv.delete(key);
         },
-    };
-};
-
-/**
- * Get geolocation data from Cloudflare context
- *
- * Includes: ipAddress, timezone, city, country, region, regionCode, colo,
- * latitude, longitude
- *
- * @returns Cloudflare geolocation data
- * @throws Error if Cloudflare context is not available
- */
-export const getGeolocation = (): CloudflareGeolocation | undefined => {
-    const cf = getCloudflareContext().cf;
-    if (!cf) {
-        throw new Error("Cloudflare context is not available");
-    }
-    return {
-        timezone: cf.timezone || "Unknown",
-        city: cf.city || "Unknown",
-        country: cf.country || "Unknown",
-        region: cf.region || "Unknown",
-        regionCode: cf.regionCode || "Unknown",
-        colo: cf.colo || "Unknown",
-        latitude: cf.latitude || "Unknown",
-        longitude: cf.longitude || "Unknown",
     };
 };
 
@@ -186,9 +160,9 @@ export const withCloudflare = (
         ...options,
         database: cloudFlareOptions.d1
             ? drizzleAdapter(cloudFlareOptions.d1.db, {
-                  provider: "sqlite",
-                  ...cloudFlareOptions.d1.options,
-              })
+                provider: "sqlite",
+                ...cloudFlareOptions.d1.options,
+            })
             : undefined,
         secondaryStorage: cloudFlareOptions.kv ? createKVStorage(cloudFlareOptions.kv) : undefined,
         plugins: [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])],
