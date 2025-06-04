@@ -42,7 +42,7 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                         return ctx.json({ error: "Request is not available" }, { status: 500 });
                     }
 
-                    const cf = await Promise.resolve(opts.cf || undefined);
+                    const cf = await Promise.resolve(opts.cf);
                     if (!cf) {
                         return ctx.json({ error: "Cloudflare context is not available" }, { status: 404 });
                     }
@@ -74,7 +74,7 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                                     if (!geolocationTrackingEnabled) {
                                         return s;
                                     }
-                                    const cf = await Promise.resolve(opts.cf || undefined);
+                                    const cf = await Promise.resolve(opts.cf);
                                     s.timezone = cf?.timezone;
                                     s.city = cf?.city;
                                     s.country = cf?.country;
