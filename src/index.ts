@@ -2,7 +2,7 @@ import type { KVNamespace } from "@cloudflare/workers-types";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { type BetterAuthOptions, type BetterAuthPlugin, type SecondaryStorage, type Session } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { createAuthEndpoint } from "better-auth/api";
+import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
 import { schema } from "./schema";
 import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types";
 export * from "./client";
@@ -31,15 +31,9 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                     method: "GET",
                 },
                 async ctx => {
-                    const session = ctx.context?.session;
+                    const session = await getSessionFromCtx(ctx);
                     if (!session) {
                         return ctx.json({ error: "Unauthorized" }, { status: 401 });
-                    }
-
-                    // Original code threw an error if ctx.request was not available.
-                    // Retaining similar logic but returning a 500 status code.
-                    if (!ctx.request) {
-                        return ctx.json({ error: "Request is not available" }, { status: 500 });
                     }
 
                     const cf = getCloudflareContext().cf;
