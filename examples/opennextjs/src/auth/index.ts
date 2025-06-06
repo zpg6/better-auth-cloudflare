@@ -71,6 +71,7 @@ export const auth = betterAuth({
         {
             autoDetectIpAddress: true,
             geolocationTracking: true,
+            cf: {},
             // No actual database or KV instance is needed here, only schema-affecting options
         },
         {
