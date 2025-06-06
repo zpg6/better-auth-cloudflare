@@ -1,9 +1,12 @@
 {
     "name": "better-auth-cloudflare",
-    "version": "0.1.3",
+    "version": "0.1.4",
     "description": "Cloudflare integration plugin for Better Auth",
     "author": "Zach Grimaldi",
-    "repository": "https://github.com/zpg6/better-auth-cloudflare",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/zpg6/better-auth-cloudflare.git"
+    },
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "keywords": [
