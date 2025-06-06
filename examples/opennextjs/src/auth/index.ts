@@ -2,6 +2,7 @@ import { KVNamespace } from "@cloudflare/workers-types";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { openAPI } from "better-auth/plugins";
 import { getDb } from "../db";
 
 // Define an asynchronous function to build your auth configuration
@@ -38,6 +39,7 @@ async function authBuilder() {
                     enabled: true,
                     // ... other rate limiting options
                 },
+                plugins: [openAPI()],
                 // ... other Better Auth options
             }
         )

@@ -1,6 +1,7 @@
 import { initAuth } from "@/auth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { headers } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import SignOutButton from "./SignOutButton"; // Import the client component
 
@@ -13,8 +14,11 @@ export default async function DashboardPage() {
         redirect("/"); // Redirect to home if no session
     }
 
-    // Access Cloudflare data from session.session?.cloudflare or session.session?.geo
+    // Get geolocation data from our plugin's endpoint
     const cloudflareGeolocationData = await authInstance.api.getGeolocation({ headers: await headers() });
+
+    // Access another plugin's endpoint to demonstrate plugin type inference is still intact
+    const openAPISpec = await authInstance.api.generateOpenAPISchema();
 
     return (
         <div className="flex flex-col items-center justify-center min-h-screen p-8 font-[family-name:var(--font-geist-sans)]">
@@ -77,6 +81,11 @@ export default async function DashboardPage() {
                     )}
                     <SignOutButton /> {/* Use the client component for sign out */}
                 </CardContent>
+                <CardFooter>
+                    <Link href="/api/auth/reference#tag/cloudflare/get/cloudflare/geolocation" className="underline">
+                        View OpenAPI v{openAPISpec.openapi} Schema for Cloudflare Geolocation
+                    </Link>
+                </CardFooter>
             </Card>
             <footer className="absolute bottom-0 w-full text-center text-sm text-gray-500 py-4">
                 Powered by{" "}
