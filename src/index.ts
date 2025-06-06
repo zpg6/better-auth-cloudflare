@@ -123,32 +123,6 @@ export const createKVStorage = (kv: KVNamespace<string>): SecondaryStorage => {
 };
 
 /**
- * Get geolocation data from Cloudflare context
- *
- * Includes: ipAddress, timezone, city, country, region, regionCode, colo,
- * latitude, longitude
- *
- * @returns Cloudflare geolocation data
- * @throws Error if Cloudflare context is not available
- */
-export const getGeolocation = (): CloudflareGeolocation | undefined => {
-    const cf = getCloudflareContext().cf;
-    if (!cf) {
-        throw new Error("Cloudflare context is not available");
-    }
-    return {
-        timezone: cf.timezone || "Unknown",
-        city: cf.city || "Unknown",
-        country: cf.country || "Unknown",
-        region: cf.region || "Unknown",
-        regionCode: cf.regionCode || "Unknown",
-        colo: cf.colo || "Unknown",
-        latitude: cf.latitude || "Unknown",
-        longitude: cf.longitude || "Unknown",
-    };
-};
-
-/**
  * Type helper to infer the enhanced auth type with Cloudflare plugin
  */
 type WithCloudflareAuth<T extends BetterAuthOptions> = T & {
