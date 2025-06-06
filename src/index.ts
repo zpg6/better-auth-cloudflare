@@ -1,7 +1,7 @@
 import type { KVNamespace } from "@cloudflare/workers-types";
 import { type BetterAuthOptions, type BetterAuthPlugin, type SecondaryStorage, type Session } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { createAuthEndpoint } from "better-auth/api";
+import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
 import { schema } from "./schema";
 import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types";
 export * from "./client";
@@ -30,15 +30,9 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                     method: "GET",
                 },
                 async ctx => {
-                    const session = ctx.context?.session;
+                    const session = await getSessionFromCtx(ctx);
                     if (!session) {
                         return ctx.json({ error: "Unauthorized" }, { status: 401 });
-                    }
-
-                    // Original code threw an error if ctx.request was not available.
-                    // Retaining similar logic but returning a 500 status code.
-                    if (!ctx.request) {
-                        return ctx.json({ error: "Request is not available" }, { status: 500 });
                     }
 
                     const cf = await Promise.resolve(opts.cf);
@@ -129,6 +123,39 @@ export const createKVStorage = (kv: KVNamespace<string>): SecondaryStorage => {
 };
 
 /**
+ * Get geolocation data from Cloudflare context
+ *
+ * Includes: ipAddress, timezone, city, country, region, regionCode, colo,
+ * latitude, longitude
+ *
+ * @returns Cloudflare geolocation data
+ * @throws Error if Cloudflare context is not available
+ */
+export const getGeolocation = (): CloudflareGeolocation | undefined => {
+    const cf = getCloudflareContext().cf;
+    if (!cf) {
+        throw new Error("Cloudflare context is not available");
+    }
+    return {
+        timezone: cf.timezone || "Unknown",
+        city: cf.city || "Unknown",
+        country: cf.country || "Unknown",
+        region: cf.region || "Unknown",
+        regionCode: cf.regionCode || "Unknown",
+        colo: cf.colo || "Unknown",
+        latitude: cf.latitude || "Unknown",
+        longitude: cf.longitude || "Unknown",
+    };
+};
+
+/**
+ * Type helper to infer the enhanced auth type with Cloudflare plugin
+ */
+type WithCloudflareAuth<T extends BetterAuthOptions> = T & {
+    plugins: [ReturnType<typeof cloudflare>, ...(T["plugins"] extends readonly any[] ? T["plugins"] : [])];
+};
+
+/**
  * Enhances BetterAuthOptions with Cloudflare-specific configurations.
  *
  * This function integrates Cloudflare services like D1 for database and KV for secondary storage,
@@ -138,7 +165,10 @@ export const createKVStorage = (kv: KVNamespace<string>): SecondaryStorage => {
  * @param options - The base BetterAuthOptions to be enhanced.
  * @returns BetterAuthOptions configured for use with Cloudflare.
  */
-export const withCloudflare = <T extends BetterAuthOptions>(cloudFlareOptions: WithCloudflareOptions, options: T) => {
+export const withCloudflare = <T extends BetterAuthOptions>(
+    cloudFlareOptions: WithCloudflareOptions,
+    options: T
+): WithCloudflareAuth<T> => {
     const autoDetectIpEnabled =
         cloudFlareOptions.autoDetectIpAddress === undefined || cloudFlareOptions.autoDetectIpAddress === true;
     const geolocationTrackingForSession =
@@ -186,7 +216,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(cloudFlareOptions: W
         plugins: [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])],
         advanced: updatedAdvanced,
         session: updatedSession,
-    } as T;
+    } as WithCloudflareAuth<T>;
 };
 
 export type SessionWithGeolocation = Session & CloudflareGeolocation;

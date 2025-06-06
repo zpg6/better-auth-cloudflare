@@ -1,7 +1,7 @@
 import { initAuth } from "@/auth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { SessionWithGeolocation } from "better-auth-cloudflare";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { headers } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import SignOutButton from "./SignOutButton"; // Import the client component
 
@@ -14,8 +14,11 @@ export default async function DashboardPage() {
         redirect("/"); // Redirect to home if no session
     }
 
-    // Access Cloudflare data from session.session?.cloudflare or session.session?.geo
-    const cloudflareGeolocationData = session.session as SessionWithGeolocation;
+    // Get geolocation data from our plugin's endpoint
+    const cloudflareGeolocationData = await authInstance.api.getGeolocation({ headers: await headers() });
+
+    // Access another plugin's endpoint to demonstrate plugin type inference is still intact
+    const openAPISpec = await authInstance.api.generateOpenAPISchema();
 
     return (
         <div className="flex flex-col items-center justify-center min-h-screen p-8 font-[family-name:var(--font-geist-sans)]">
@@ -39,40 +42,50 @@ export default async function DashboardPage() {
                             <strong>User ID:</strong> {session.user.id}
                         </p>
                     )}
-                    {cloudflareGeolocationData && (
+                    {cloudflareGeolocationData && "error" in cloudflareGeolocationData && (
+                        <p className="text-md">
+                            <strong>Error:</strong> {cloudflareGeolocationData.error}
+                        </p>
+                    )}
+                    {cloudflareGeolocationData && !("error" in cloudflareGeolocationData) && (
                         <>
                             <p className="text-md">
-                                <strong>Timezone:</strong> {cloudflareGeolocationData.timezone}
+                                <strong>Timezone:</strong> {cloudflareGeolocationData.timezone || "Unknown"}
                             </p>
                             <p className="text-md">
-                                <strong>City:</strong> {cloudflareGeolocationData.city}
+                                <strong>City:</strong> {cloudflareGeolocationData.city || "Unknown"}
                             </p>
                             <p className="text-md">
-                                <strong>Country:</strong> {cloudflareGeolocationData.country}
+                                <strong>Country:</strong> {cloudflareGeolocationData.country || "Unknown"}
                             </p>
                             <p className="text-md">
-                                <strong>Region:</strong> {cloudflareGeolocationData.region}
+                                <strong>Region:</strong> {cloudflareGeolocationData.region || "Unknown"}
                             </p>
                             <p className="text-md">
-                                <strong>Region Code:</strong> {cloudflareGeolocationData.regionCode}
+                                <strong>Region Code:</strong> {cloudflareGeolocationData.regionCode || "Unknown"}
                             </p>
                             <p className="text-md">
-                                <strong>Data Center:</strong> {cloudflareGeolocationData.colo}
+                                <strong>Data Center:</strong> {cloudflareGeolocationData.colo || "Unknown"}
                             </p>
                             {cloudflareGeolocationData.latitude && (
                                 <p className="text-md">
-                                    <strong>Latitude:</strong> {cloudflareGeolocationData.latitude}
+                                    <strong>Latitude:</strong> {cloudflareGeolocationData.latitude || "Unknown"}
                                 </p>
                             )}
                             {cloudflareGeolocationData.longitude && (
                                 <p className="text-md">
-                                    <strong>Longitude:</strong> {cloudflareGeolocationData.longitude}
+                                    <strong>Longitude:</strong> {cloudflareGeolocationData.longitude || "Unknown"}
                                 </p>
                             )}
                         </>
                     )}
                     <SignOutButton /> {/* Use the client component for sign out */}
                 </CardContent>
+                <CardFooter>
+                    <Link href="/api/auth/reference#tag/cloudflare/get/cloudflare/geolocation" className="underline">
+                        View OpenAPI v{openAPISpec.openapi} Schema for Cloudflare Geolocation
+                    </Link>
+                </CardFooter>
             </Card>
             <footer className="absolute bottom-0 w-full text-center text-sm text-gray-500 py-4">
                 Powered by{" "}
