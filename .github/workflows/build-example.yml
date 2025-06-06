@@ -4,19 +4,20 @@ on:
     push:
         branches: [main]
         paths:
+            - "package.json"
+            - "src/**"
             - "examples/opennextjs/**"
     pull_request:
         branches: [main]
         paths:
+            - "package.json"
+            - "src/**"
             - "examples/opennextjs/**"
     workflow_dispatch:
 
 jobs:
     build:
         runs-on: ubuntu-latest
-        defaults:
-            run:
-                working-directory: examples/opennextjs
 
         steps:
             - uses: actions/checkout@v4
@@ -45,8 +46,16 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-pnpm-store-
 
-            - name: Install dependencies
+            - name: Install root dependencies
+              run: pnpm install
+
+            - name: Build root package
+              run: pnpm build
+
+            - name: Install example dependencies
+              working-directory: examples/opennextjs
               run: pnpm install
 
             - name: Build Example (OpenNextJS)
+              working-directory: examples/opennextjs
               run: pnpm build:cf
