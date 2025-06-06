@@ -138,10 +138,7 @@ export const createKVStorage = (kv: KVNamespace<string>): SecondaryStorage => {
  * @param options - The base BetterAuthOptions to be enhanced.
  * @returns BetterAuthOptions configured for use with Cloudflare.
  */
-export const withCloudflare = (
-    cloudFlareOptions: WithCloudflareOptions,
-    options: BetterAuthOptions
-): BetterAuthOptions => {
+export const withCloudflare = <T extends BetterAuthOptions>(cloudFlareOptions: WithCloudflareOptions, options: T) => {
     const autoDetectIpEnabled =
         cloudFlareOptions.autoDetectIpAddress === undefined || cloudFlareOptions.autoDetectIpAddress === true;
     const geolocationTrackingForSession =
@@ -189,7 +186,7 @@ export const withCloudflare = (
         plugins: [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])],
         advanced: updatedAdvanced,
         session: updatedSession,
-    };
+    } as T;
 };
 
 export type SessionWithGeolocation = Session & CloudflareGeolocation;
