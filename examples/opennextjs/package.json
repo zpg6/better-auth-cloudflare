@@ -37,7 +37,7 @@
         "tailwind-merge": "^3.2.0"
     },
     "devDependencies": {
-        "@cloudflare/workers-types": "4.20250510.0",
+        "@cloudflare/workers-types": "4.20250606.0",
         "@opennextjs/cloudflare": "^1.0.1",
         "@tailwindcss/postcss": "^4",
         "@types/node": "^20",

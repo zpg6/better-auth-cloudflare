@@ -37,7 +37,7 @@
         "better-auth": "^1.1.21"
     },
     "devDependencies": {
-        "@cloudflare/workers-types": "4.20250510.0",
+        "@cloudflare/workers-types": "4.20250606.0",
         "@jest/globals": "^29.7.0",
         "jest": "^29.7.0",
         "prettier": "^3.2.5",
