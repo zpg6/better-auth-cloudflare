@@ -19,7 +19,7 @@ importers:
         version: 1.2.7
       better-auth-cloudflare:
         specifier: file:../../
-        version: file:../..(@cloudflare/workers-types@4.20250510.0)(better-auth@1.2.7)(kysely@0.27.6)(wrangler@4.14.4(@cloudflare/workers-types@4.20250510.0))
+        version: file:../..(@cloudflare/workers-types@4.20250606.0)(better-auth@1.2.7)(kysely@0.27.6)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -28,7 +28,7 @@ importers:
         version: 2.1.1
       drizzle-orm:
         specifier: ^0.43.1
-        version: 0.43.1(@cloudflare/workers-types@4.20250510.0)(kysely@0.27.6)
+        version: 0.43.1(@cloudflare/workers-types@4.20250606.0)(kysely@0.27.6)
       lucide-react:
         specifier: ^0.509.0
         version: 0.509.0(react@19.1.0)
@@ -46,11 +46,11 @@ importers:
         version: 3.2.0
     devDependencies:
       '@cloudflare/workers-types':
-        specifier: 4.20250510.0
-        version: 4.20250510.0
+        specifier: 4.20250606.0
+        version: 4.20250606.0
       '@opennextjs/cloudflare':
         specifier: ^1.0.1
-        version: 1.0.2(wrangler@4.14.4(@cloudflare/workers-types@4.20250510.0))
+        version: 1.0.2(wrangler@4.14.4(@cloudflare/workers-types@4.20250606.0))
       '@tailwindcss/postcss':
         specifier: ^4
         version: 4.1.6
@@ -80,7 +80,7 @@ importers:
         version: 5.8.3
       wrangler:
         specifier: ^4.13.2
-        version: 4.14.4(@cloudflare/workers-types@4.20250510.0)
+        version: 4.14.4(@cloudflare/workers-types@4.20250606.0)
 
 packages:
 
@@ -480,8 +480,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@cloudflare/workers-types@4.20250510.0':
-    resolution: {integrity: sha512-VLdSYUooX2QhdlzyBnnLAqa5B3xWyr5vdvya9NZk2BJNmRt2iblSLunj7iBKiW9J+SIBHz7c+kUzUJKoFLKRjg==}
+  '@cloudflare/workers-types@4.20250606.0':
+    resolution: {integrity: sha512-9T/Y/Mxe57UVzqgfjJKheiMplnStj/3CmCHlgoZNLU8JW2waRbXvpY3EEeliiYAJfeHZTjeAaKO2pCabxAoyCw==}
 
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
@@ -3974,7 +3974,7 @@ snapshots:
   '@cloudflare/workerd-windows-64@1.20250507.0':
     optional: true
 
-  '@cloudflare/workers-types@4.20250510.0': {}
+  '@cloudflare/workers-types@4.20250606.0': {}
 
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
@@ -4492,14 +4492,14 @@ snapshots:
       - aws-crt
       - supports-color
 
-  '@opennextjs/cloudflare@1.0.2(wrangler@4.14.4(@cloudflare/workers-types@4.20250510.0))':
+  '@opennextjs/cloudflare@1.0.2(wrangler@4.14.4(@cloudflare/workers-types@4.20250606.0))':
     dependencies:
       '@dotenvx/dotenvx': 1.31.0
       '@opennextjs/aws': 3.6.1
       enquirer: 2.4.1
       glob: 11.0.2
       ts-tqdm: 0.8.6
-      wrangler: 4.14.4(@cloudflare/workers-types@4.20250510.0)
+      wrangler: 4.14.4(@cloudflare/workers-types@4.20250606.0)
     transitivePeerDependencies:
       - aws-crt
       - supports-color
@@ -5272,11 +5272,10 @@ snapshots:
 
   balanced-match@1.0.2: {}
 
-  better-auth-cloudflare@file:../..(@cloudflare/workers-types@4.20250510.0)(better-auth@1.2.7)(kysely@0.27.6)(wrangler@4.14.4(@cloudflare/workers-types@4.20250510.0)):
+  better-auth-cloudflare@file:../..(@cloudflare/workers-types@4.20250606.0)(better-auth@1.2.7)(kysely@0.27.6):
     dependencies:
-      '@opennextjs/cloudflare': 1.0.2(wrangler@4.14.4(@cloudflare/workers-types@4.20250510.0))
       better-auth: 1.2.7
-      drizzle-orm: 0.43.1(@cloudflare/workers-types@4.20250510.0)(kysely@0.27.6)
+      drizzle-orm: 0.43.1(@cloudflare/workers-types@4.20250606.0)(kysely@0.27.6)
       zod: 3.24.4
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
@@ -5295,7 +5294,6 @@ snapshots:
       - '@types/sql.js'
       - '@vercel/postgres'
       - '@xata.io/client'
-      - aws-crt
       - better-sqlite3
       - bun-types
       - expo-sqlite
@@ -5308,8 +5306,6 @@ snapshots:
       - prisma
       - sql.js
       - sqlite3
-      - supports-color
-      - wrangler
 
   better-auth@1.2.7:
     dependencies:
@@ -5456,9 +5452,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.43.1(@cloudflare/workers-types@4.20250510.0)(kysely@0.27.6):
+  drizzle-orm@0.43.1(@cloudflare/workers-types@4.20250606.0)(kysely@0.27.6):
     optionalDependencies:
-      '@cloudflare/workers-types': 4.20250510.0
+      '@cloudflare/workers-types': 4.20250606.0
       kysely: 0.27.6
 
   dunder-proto@1.0.1:
@@ -6328,7 +6324,7 @@ snapshots:
       '@cloudflare/workerd-linux-arm64': 1.20250507.0
       '@cloudflare/workerd-windows-64': 1.20250507.0
 
-  wrangler@4.14.4(@cloudflare/workers-types@4.20250510.0):
+  wrangler@4.14.4(@cloudflare/workers-types@4.20250606.0):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.4.0
       '@cloudflare/unenv-preset': 2.3.1(unenv@2.0.0-rc.15)(workerd@1.20250507.0)
@@ -6339,7 +6335,7 @@ snapshots:
       unenv: 2.0.0-rc.15
       workerd: 1.20250507.0
     optionalDependencies:
-      '@cloudflare/workers-types': 4.20250510.0
+      '@cloudflare/workers-types': 4.20250606.0
       fsevents: 2.3.3
       sharp: 0.33.5
     transitivePeerDependencies:
