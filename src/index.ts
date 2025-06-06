@@ -142,6 +142,13 @@ export const getGeolocation = (): CloudflareGeolocation | undefined => {
 };
 
 /**
+ * Type helper to infer the enhanced auth type with Cloudflare plugin
+ */
+type WithCloudflareAuth<T extends BetterAuthOptions> = T & {
+    plugins: [ReturnType<typeof cloudflare>, ...(T["plugins"] extends readonly any[] ? T["plugins"] : [])];
+};
+
+/**
  * Enhances BetterAuthOptions with Cloudflare-specific configurations.
  *
  * This function integrates Cloudflare services like D1 for database and KV for secondary storage,
@@ -151,7 +158,10 @@ export const getGeolocation = (): CloudflareGeolocation | undefined => {
  * @param options - The base BetterAuthOptions to be enhanced.
  * @returns BetterAuthOptions configured for use with Cloudflare.
  */
-export const withCloudflare = <T extends BetterAuthOptions>(cloudFlareOptions: WithCloudflareOptions, options: T) => {
+export const withCloudflare = <T extends BetterAuthOptions>(
+    cloudFlareOptions: WithCloudflareOptions,
+    options: T
+): WithCloudflareAuth<T> => {
     const autoDetectIpEnabled =
         cloudFlareOptions.autoDetectIpAddress === undefined || cloudFlareOptions.autoDetectIpAddress === true;
     const geolocationTrackingForSession =
@@ -191,7 +201,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(cloudFlareOptions: W
         plugins: [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])],
         advanced: updatedAdvanced,
         session: updatedSession,
-    } as T;
+    } as WithCloudflareAuth<T>;
 };
 
 export type SessionWithGeolocation = Session & CloudflareGeolocation;
