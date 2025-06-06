@@ -1,5 +1,4 @@
 import type { KVNamespace } from "@cloudflare/workers-types";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { type BetterAuthOptions, type BetterAuthPlugin, type SecondaryStorage, type Session } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
@@ -19,7 +18,7 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
     const opts = options ?? {};
 
     // Default geolocationTracking to true if not specified
-    const geolocationTrackingEnabled = opts.geolocationTracking === undefined || opts.geolocationTracking === true;
+    const geolocationTrackingEnabled = opts.geolocationTracking === undefined || opts.geolocationTracking;
 
     return {
         id: "cloudflare",
@@ -36,22 +35,13 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                         return ctx.json({ error: "Unauthorized" }, { status: 401 });
                     }
 
-                    const cf = getCloudflareContext().cf;
+                    const cf = await Promise.resolve(opts.cf);
                     if (!cf) {
                         return ctx.json({ error: "Cloudflare context is not available" }, { status: 404 });
                     }
 
                     // Extract and validate Cloudflare geolocation data
-                    const context: CloudflareGeolocation = {
-                        timezone: cf.timezone as string,
-                        city: cf.city as string,
-                        country: cf.country as string,
-                        region: cf.region as string,
-                        regionCode: cf.regionCode as string,
-                        colo: cf.colo,
-                        latitude: cf.latitude,
-                        longitude: cf.longitude,
-                    };
+                    const context = extractGeolocationData(cf);
 
                     return ctx.json(context);
                 }
@@ -68,16 +58,19 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                                     if (!geolocationTrackingEnabled) {
                                         return s;
                                     }
-                                    const cf = (await getCloudflareContext({ async: true })).cf;
-                                    s.timezone = cf?.timezone;
-                                    s.city = cf?.city;
-                                    s.country = cf?.country;
-                                    s.region = cf?.region;
-                                    s.regionCode = cf?.regionCode;
-                                    s.colo = cf?.colo;
-                                    s.latitude = cf?.latitude;
-                                    s.longitude = cf?.longitude;
-
+                                    const cf = await Promise.resolve(opts.cf);
+                                    if (!cf) {
+                                        return s;
+                                    }
+                                    const geoData = extractGeolocationData(cf);
+                                    s.timezone = geoData.timezone;
+                                    s.city = geoData.city;
+                                    s.country = geoData.country;
+                                    s.region = geoData.region;
+                                    s.regionCode = geoData.regionCode;
+                                    s.colo = geoData.colo;
+                                    s.latitude = geoData.latitude;
+                                    s.longitude = geoData.longitude;
                                     return s;
                                 },
                             },
@@ -88,6 +81,26 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
         },
     } satisfies BetterAuthPlugin;
 };
+
+/**
+ * Safely extracts CloudflareGeolocation data, ignoring undefined values or other fields
+ */
+function extractGeolocationData(input: CloudflareGeolocation): CloudflareGeolocation {
+    if (!input || typeof input !== "object") {
+        return {};
+    }
+
+    return {
+        timezone: input.timezone || undefined,
+        city: input.city || undefined,
+        country: input.country || undefined,
+        region: input.region || undefined,
+        regionCode: input.regionCode || undefined,
+        colo: input.colo || undefined,
+        latitude: input.latitude || undefined,
+        longitude: input.longitude || undefined,
+    };
+}
 
 /**
  * Creates secondary storage using Cloudflare KV
@@ -106,32 +119,6 @@ export const createKVStorage = (kv: KVNamespace<string>): SecondaryStorage => {
         delete: async (key: string) => {
             return kv.delete(key);
         },
-    };
-};
-
-/**
- * Get geolocation data from Cloudflare context
- *
- * Includes: ipAddress, timezone, city, country, region, regionCode, colo,
- * latitude, longitude
- *
- * @returns Cloudflare geolocation data
- * @throws Error if Cloudflare context is not available
- */
-export const getGeolocation = (): CloudflareGeolocation | undefined => {
-    const cf = getCloudflareContext().cf;
-    if (!cf) {
-        throw new Error("Cloudflare context is not available");
-    }
-    return {
-        timezone: cf.timezone || "Unknown",
-        city: cf.city || "Unknown",
-        country: cf.country || "Unknown",
-        region: cf.region || "Unknown",
-        regionCode: cf.regionCode || "Unknown",
-        colo: cf.colo || "Unknown",
-        latitude: cf.latitude || "Unknown",
-        longitude: cf.longitude || "Unknown",
     };
 };
 
@@ -160,6 +147,14 @@ export const withCloudflare = <T extends BetterAuthOptions>(
         cloudFlareOptions.autoDetectIpAddress === undefined || cloudFlareOptions.autoDetectIpAddress === true;
     const geolocationTrackingForSession =
         cloudFlareOptions.geolocationTracking === undefined || cloudFlareOptions.geolocationTracking === true;
+
+    if (autoDetectIpEnabled || geolocationTrackingForSession) {
+        if (!cloudFlareOptions.cf) {
+            throw new Error(
+                "Cloudflare context is required for geolocation or IP detection features. Be sure to pass the `cf` option to the withCloudflare function."
+            );
+        }
+    }
 
     let updatedAdvanced = { ...options.advanced };
     if (autoDetectIpEnabled) {

@@ -4,6 +4,7 @@ import { withCloudflare } from "better-auth-cloudflare";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { openAPI } from "better-auth/plugins";
 import { getDb } from "../db";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 // Define an asynchronous function to build your auth configuration
 async function authBuilder() {
@@ -13,6 +14,7 @@ async function authBuilder() {
             {
                 autoDetectIpAddress: true,
                 geolocationTracking: true,
+                cf: getCloudflareContext().cf,
                 d1: {
                     db: dbInstance as any, // to-do: fix this type mismatch
                     options: {
@@ -71,6 +73,7 @@ export const auth = betterAuth({
         {
             autoDetectIpAddress: true,
             geolocationTracking: true,
+            cf: {},
             // No actual database or KV instance is needed here, only schema-affecting options
         },
         {

@@ -120,6 +120,7 @@ async function authBuilder() {
             {
                 autoDetectIpAddress: true,
                 geolocationTracking: true,
+                cf: getCloudflareContext().cf, // Replace with how your framework accesses the Cloudflare context
                 d1: {
                     db: dbInstance, // Provide the D1 database instance
                     options: {
@@ -176,6 +177,7 @@ export const auth = betterAuth({
         {
             autoDetectIpAddress: true,
             geolocationTracking: true,
+            cf: {},
             // No actual database or KV instance is needed here, only schema-affecting options
         },
         {

@@ -14,6 +14,11 @@ export interface CloudflarePluginOptions {
      * @default true
      */
     geolocationTracking?: boolean;
+
+    /**
+     * Cloudflare geolocation context
+     */
+    cf?: CloudflareGeolocation | Promise<CloudflareGeolocation | null> | null;
 }
 
 export interface WithCloudflareOptions extends CloudflarePluginOptions {
@@ -41,12 +46,12 @@ export interface WithCloudflareOptions extends CloudflarePluginOptions {
  * Cloudflare geolocation data
  */
 export interface CloudflareGeolocation {
-    timezone: string;
-    city: string;
-    country: string;
-    region: string;
-    regionCode: string;
-    colo: string;
-    latitude?: string;
-    longitude?: string;
+    timezone?: string | null;
+    city?: string | null;
+    country?: string | null;
+    region?: string | null;
+    regionCode?: string | null;
+    colo?: string | null;
+    latitude?: string | null;
+    longitude?: string | null;
 }
