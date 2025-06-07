@@ -6,9 +6,11 @@ Seamlessly integrate [Better Auth](https://github.com/better-auth/better-auth) w
 [![NPM Downloads](https://img.shields.io/npm/dt/better-auth-cloudflare)](https://www.npmjs.com/package/better-auth-cloudflare)
 [![License: MIT](https://img.shields.io/npm/l/better-auth-cloudflare)](https://opensource.org/licenses/MIT)
 
-**DEMO**: [https://better-auth-cloudflare.zpg6.workers.dev/](https://better-auth-cloudflare.zpg6.workers.dev/)
+**LIVE DEMOS**:
+- **OpenNextJS**: [https://better-auth-cloudflare.zpg6.workers.dev/](https://better-auth-cloudflare.zpg6.workers.dev/)
+- **Hono**: [https://better-auth-cloudflare-hono.zpg6.workers.dev/](https://better-auth-cloudflare-hono.zpg6.workers.dev/)
 
-The demo implementation is in [`examples/opennextjs`](./examples/opennextjs) directory along with recommended scripts for generating database schema, migrating, and more.
+Demo implementations are available in the [`examples/`](./examples/) directory for **OpenNextJS ◆** and **Hono 🔥**, along with recommended scripts for generating database schema, migrating, and more. The library is compatible with any framework that runs on Cloudflare Workers.
 
 ## Features
 
@@ -104,97 +106,70 @@ export async function getDb() {
 
 ### 3. Configure Better Auth (`src/auth/index.ts`)
 
-Set up your Better Auth configuration, wrapping it with `withCloudflare` to enable Cloudflare-specific features. This is where you'll define how Better Auth interacts with D1, KV, and other services.
+Set up your Better Auth configuration, wrapping it with `withCloudflare` to enable Cloudflare-specific features. The exact configuration depends on your framework:
 
+**For most frameworks (Hono, etc.):**
 ```typescript
+import type { D1Database, IncomingRequestCfProperties } from "@cloudflare/workers-types";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
-import { getDb } from "../db";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { drizzle } from "drizzle-orm/d1";
+import { schema } from "../db";
 
-// Define an asynchronous function to build your auth configuration
-async function authBuilder() {
-    const dbInstance = await getDb(); // Get your D1 database instance
-
-    return betterAuth(
-        withCloudflare(
+// Single auth configuration that handles both CLI and runtime scenarios
+function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties) {
+    // Use actual DB for runtime, empty object for CLI
+    const db = env ? drizzle(env.DATABASE, { schema, logger: true }) : ({} as any);
+    
+    return betterAuth({
+        ...withCloudflare(
             {
                 autoDetectIpAddress: true,
                 geolocationTracking: true,
-                cf: getCloudflareContext().cf, // Replace with how your framework accesses the Cloudflare context
-                d1: {
-                    db: dbInstance, // Provide the D1 database instance
-                    options: {
-                        usePlural: true, // Optional: Use plural table names (e.g., "users" instead of "user")
-                        debugLogs: true, // Optional
-                    },
-                },
-                // Optionally, configure KV for session storage or other secondary storage purposes
-                // Make sure "KV" is the binding in your wrangler.toml
-                kv: process.env.KV as KVNamespace<string>,
+                cf: cf || {},
+                d1: env
+                    ? {
+                        db,
+                        options: {
+                            usePlural: true,
+                            debugLogs: true,
+                        },
+                    }
+                    : undefined,
+                kv: env?.KV,
             },
-            // Your core Better Auth configuration (see Better Auth docs for all options)
             {
-                socialProviders: {
-                    github: {
-                        // Example: GitHub social login
-                        clientId: process.env.GITHUB_CLIENT_ID!,
-                        clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-                    },
-                    // Add other social providers as needed
+                emailAndPassword: {
+                    enabled: true,
                 },
                 rateLimit: {
                     enabled: true,
-                    // ... other rate limiting options
                 },
-                // ... other Better Auth options
             }
-        )
-    );
+        ),
+        // Only add database adapter for CLI schema generation
+        ...(env
+            ? {}
+            : {
+                database: drizzleAdapter({} as D1Database, {
+                    provider: "sqlite",
+                    usePlural: true,
+                    debugLogs: true,
+                }),
+            }),
+    });
 }
 
-// Singleton pattern to ensure a single auth instance
-let authInstance: Awaited<ReturnType<typeof authBuilder>> | null = null;
+// Export for CLI schema generation
+export const auth = createAuth();
 
-// Asynchronously initializes and retrieves the shared auth instance
-export async function initAuth() {
-    if (!authInstance) {
-        authInstance = await authBuilder();
-    }
-    return authInstance;
-}
-
-/* ======================================================================= */
-/* Configuration for Schema Generation                                     */
-/* ======================================================================= */
-
-// This simplified configuration is used by the Better Auth CLI for schema generation.
-// It includes only the options that affect the database schema.
-// It's necessary because the main `authBuilder` performs operations (like `getDb()`)
-// which use `getCloudflareContext` (not available in a CLI context only on Cloudflare).
-// For more details, see: https://www.answeroverflow.com/m/1362463260636479488
-export const auth = betterAuth({
-    ...withCloudflare(
-        {
-            autoDetectIpAddress: true,
-            geolocationTracking: true,
-            cf: {},
-            // No actual database or KV instance is needed here, only schema-affecting options
-        },
-        {
-            // Include only configurations that influence the Drizzle schema,
-            // e.g., if certain features add tables or columns.
-            // socialProviders: { /* ... */ } // If they add specific tables/columns
-        }
-    ),
-
-    // Used by the Better Auth CLI for schema generation.
-    database: drizzleAdapter(process.env.DATABASE, {
-        provider: "sqlite",
-        usePlural: true,
-        debugLogs: true,
-    }),
-});
+// Export for runtime usage
+export { createAuth };
 ```
+
+**For OpenNext.js with complex async requirements:**
+See the [OpenNext.js example](./examples/opennextjs/README.md) for a more complex configuration that handles async database initialization and singleton patterns.
 
 ### 4. Generate and Manage Auth Schema with D1
 

@@ -63,6 +63,111 @@ Deploy your Next.js application with Better Auth to Cloudflare:
 - `pnpm format`: Formats all project files using Prettier.
 - `pnpm lint`: Lints the project using Next.js's built-in ESLint configuration.
 
+## Authentication Configuration
+
+OpenNext.js requires a more complex auth configuration due to its async database initialization and singleton requirements. The configuration in `src/auth/index.ts` uses the following pattern:
+
+### Async Database Initialization
+
+```typescript
+import { KVNamespace } from "@cloudflare/workers-types";
+import { betterAuth } from "better-auth";
+import { withCloudflare } from "better-auth-cloudflare";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { openAPI } from "better-auth/plugins";
+import { getDb } from "../db";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+
+// Define an asynchronous function to build your auth configuration
+async function authBuilder() {
+    const dbInstance = await getDb(); // Get your D1 database instance
+    return betterAuth(
+        withCloudflare(
+            {
+                autoDetectIpAddress: true,
+                geolocationTracking: true,
+                cf: getCloudflareContext().cf, // OpenNext.js context access
+                d1: {
+                    db: dbInstance, // Async database instance
+                    options: {
+                        usePlural: true,
+                        debugLogs: true,
+                    },
+                },
+                kv: process.env.KV as KVNamespace<string>,
+            },
+            {
+                emailAndPassword: {
+                    enabled: true,
+                },
+                socialProviders: {
+                    // Configure social providers as needed
+                },
+                rateLimit: {
+                    enabled: true,
+                },
+                plugins: [openAPI()],
+            }
+        )
+    );
+}
+
+// Singleton pattern to ensure a single auth instance
+let authInstance: Awaited<ReturnType<typeof authBuilder>> | null = null;
+
+// Asynchronously initializes and retrieves the shared auth instance
+export async function initAuth() {
+    if (!authInstance) {
+        authInstance = await authBuilder();
+    }
+    return authInstance;
+}
+```
+
+### CLI Schema Generation Configuration
+
+For the Better Auth CLI to generate schemas, a separate static configuration is required:
+
+```typescript
+// This simplified configuration is used by the Better Auth CLI for schema generation.
+// It's necessary because the main `authBuilder` performs async operations like `getDb()`
+// which use `getCloudflareContext` (not available in CLI context).
+export const auth = betterAuth({
+    ...withCloudflare(
+        {
+            autoDetectIpAddress: true,
+            geolocationTracking: true,
+            cf: {},
+            // No actual database or KV instance needed, only schema-affecting options
+        },
+        {
+            // Include only configurations that influence the Drizzle schema
+            emailAndPassword: {
+                enabled: true,
+            },
+            plugins: [openAPI()],
+        }
+    ),
+
+    // Used by the Better Auth CLI for schema generation
+    database: drizzleAdapter(process.env.DATABASE as any, {
+        provider: "sqlite",
+        usePlural: true,
+        debugLogs: true,
+    }),
+});
+```
+
+### Why This Pattern is Needed
+
+Unlike simpler frameworks, OpenNext.js requires this dual configuration because:
+
+1. **Async Database Access**: `getCloudflareContext()` and `getDb()` are async operations not available during CLI execution
+2. **Singleton Pattern**: Ensures single auth instance across serverless functions
+3. **CLI Compatibility**: The static `auth` export allows schema generation to work
+
+For simpler frameworks like Hono, see the [Hono example](../hono/README.md) for a more streamlined single-configuration approach.
+
 ## Learn More
 
 To learn more about Better Auth and its features, visit [our documentation](https://github.com/better-auth/better-auth).

@@ -1,0 +1,30 @@
+# For more details on how to configure Wrangler, refer to:
+# https://developers.cloudflare.com/workers/wrangler/configuration/
+
+name = "better-auth-cloudflare-hono"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+[placement]
+mode = "smart"
+
+[[d1_databases]]
+binding = "DATABASE"
+database_name = "your-d1-database-name"
+database_id = "YOUR_D1_DATABASE_ID"
+migrations_dir = "drizzle"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "YOUR_KV_NAMESPACE_ID"
+
+# To protect the database id and kv id, we ignore this
+# file when committing to the repo by running once:
+# git update-index --assume-unchanged wrangler.toml
+#
+# Put back in git if you need to commit this file:
+# git update-index --no-assume-unchanged wrangler.toml
