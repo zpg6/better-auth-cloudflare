@@ -2,6 +2,7 @@
     "name": "better-auth-cloudflare-hono",
     "scripts": {
         "dev": "wrangler dev",
+        "build": "npx tsc --noEmit",
         "deploy": "wrangler deploy --minify",
         "cf-typegen": "wrangler types --env-interface CloudflareBindings",
         "auth:generate": "npx @better-auth/cli@latest generate --config src/auth/index.ts --output src/db/auth.schema.ts -y",

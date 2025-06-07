@@ -1,0 +1,52 @@
+name: Build Example (Hono)
+
+on:
+    push:
+        branches: [main]
+        paths:
+            - "package.json"
+            - "src/**"
+            - "tsconfig.json"
+            - "examples/hono/**"
+            - ".github/workflows/build-hono-example.yml" # This file
+    pull_request:
+        branches: [main]
+        paths:
+            - "package.json"
+            - "src/**"
+            - "tsconfig.json"
+            - "examples/hono/**"
+            - ".github/workflows/build-hono-example.yml" # This file
+    workflow_dispatch:
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 10.10.0
+                  run_install: false
+
+            - name: Install root dependencies
+              run: pnpm install
+
+            - name: Build root package
+              run: pnpm build
+
+            - name: Install example dependencies
+              working-directory: examples/hono
+              run: pnpm install
+
+            - name: Build Hono example
+              working-directory: examples/hono
+              run: pnpm build
