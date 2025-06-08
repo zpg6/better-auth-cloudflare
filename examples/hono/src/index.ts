@@ -233,8 +233,7 @@ app.get("/", async c => {
                 
                 document.getElementById('user-info').innerHTML = 
                     '<div class="info-row"><strong>Email:</strong> ' + (currentUser.email || 'Anonymous') + '</div>' +
-                    '<div class="info-row"><strong>User ID:</strong> ' + currentUser.id + '</div>' +
-                    '<div class="info-row"><strong>Is Anonymous:</strong> ' + (currentUser.isAnonymous ? 'Yes' : 'No') + '</div>';
+                    '<div class="info-row"><strong>User ID:</strong> ' + currentUser.id + '</div>';
                 
                 // Fetch geolocation data
                 try {
@@ -292,7 +291,6 @@ app.get("/protected", async c => {
                 <p>Welcome to the protected area!</p>
                 <p><strong>User ID:</strong> ${session.user.id}</p>
                 <p><strong>Session ID:</strong> ${session.session.id}</p>
-                <p><strong>Is Anonymous:</strong> ${session.user.isAnonymous ? "Yes" : "No"}</p>
                 <p><strong>Created At:</strong> ${new Date(session.user.createdAt).toLocaleString()}</p>
                 <p>This content is only visible to authenticated users (including anonymous ones)!</p>
             `);
