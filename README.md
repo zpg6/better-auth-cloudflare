@@ -21,6 +21,26 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - 🌐 **Cloudflare IP Detection**: Utilize Cloudflare's IP detection headers out-of-the-box.
 - 🔍 **Rich Client-Side Context**: Access timezone, city, country, region, and more via the client plugin.
 
+## Roadmap
+
+**Features:**
+
+- [x] IP Detection
+- [x] Geolocation
+- [x] D1
+- [x] KV
+- [ ] R2
+- [ ] Cloudflare Images
+- [ ] Durable Objects
+- ...whatever we decide!
+
+**Examples:**
+
+- [x] Hono
+- [x] OpenNextJS
+- [ ] SvelteKit
+- [ ] TanStack Start
+
 ## Table of Contents
 
 - [Installation](#installation)
