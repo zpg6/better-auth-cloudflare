@@ -23,6 +23,7 @@
         "./dist/**/*"
     ],
     "scripts": {
+        "clean": "rm -rf dist",
         "build": "tsc",
         "test": "jest",
         "typecheck": "tsc --noEmit",
