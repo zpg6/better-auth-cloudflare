@@ -23,8 +23,6 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 
 ## Roadmap
 
-**Features:**
-
 - [x] IP Detection
 - [x] Geolocation
 - [x] D1
@@ -32,7 +30,6 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - [ ] R2
 - [ ] Cloudflare Images
 - [ ] Durable Objects
-- ...whatever we decide!
 
 **Examples:**
 
@@ -76,6 +73,7 @@ bun add better-auth-cloudflare
 | --------------------- | ------- | ------- | ---------------------------------------------- |
 | `autoDetectIpAddress` | boolean | `true`  | Auto-detect IP address from Cloudflare headers |
 | `geolocationTracking` | boolean | `true`  | Track geolocation data in the session table    |
+| `cf`                  | object  | `{}`    | Cloudflare geolocation context                 |
 
 ## Setup
 
