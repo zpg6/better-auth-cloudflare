@@ -7,6 +7,7 @@ Seamlessly integrate [Better Auth](https://github.com/better-auth/better-auth) w
 [![License: MIT](https://img.shields.io/npm/l/better-auth-cloudflare)](https://opensource.org/licenses/MIT)
 
 **LIVE DEMOS**:
+
 - **OpenNextJS**: [https://better-auth-cloudflare.zpg6.workers.dev/](https://better-auth-cloudflare.zpg6.workers.dev/)
 - **Hono**: [https://better-auth-cloudflare-hono.zpg6.workers.dev/](https://better-auth-cloudflare-hono.zpg6.workers.dev/)
 
@@ -109,6 +110,7 @@ export async function getDb() {
 Set up your Better Auth configuration, wrapping it with `withCloudflare` to enable Cloudflare-specific features. The exact configuration depends on your framework:
 
 **For most frameworks (Hono, etc.):**
+
 ```typescript
 import type { D1Database, IncomingRequestCfProperties } from "@cloudflare/workers-types";
 import { betterAuth } from "better-auth";
@@ -121,7 +123,7 @@ import { schema } from "../db";
 function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties) {
     // Use actual DB for runtime, empty object for CLI
     const db = env ? drizzle(env.DATABASE, { schema, logger: true }) : ({} as any);
-    
+
     return betterAuth({
         ...withCloudflare(
             {
@@ -130,12 +132,12 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties) 
                 cf: cf || {},
                 d1: env
                     ? {
-                        db,
-                        options: {
-                            usePlural: true,
-                            debugLogs: true,
-                        },
-                    }
+                          db,
+                          options: {
+                              usePlural: true,
+                              debugLogs: true,
+                          },
+                      }
                     : undefined,
                 kv: env?.KV,
             },
@@ -152,12 +154,12 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties) 
         ...(env
             ? {}
             : {
-                database: drizzleAdapter({} as D1Database, {
-                    provider: "sqlite",
-                    usePlural: true,
-                    debugLogs: true,
-                }),
-            }),
+                  database: drizzleAdapter({} as D1Database, {
+                      provider: "sqlite",
+                      usePlural: true,
+                      debugLogs: true,
+                  }),
+              }),
     });
 }
 
@@ -262,16 +264,20 @@ import authClient from "@/lib/authClient"; // Adjust path to your client setup
 
 const displayLocationInfo = async () => {
     try {
-        const { data, error } = await authClient.cloudflare.getGeolocation();
-        if (error) {
-            console.error("Error fetching geolocation:", error);
-            return;
-        }
-        if (data) {
-            console.log(`Detected location: ${data.city}, ${data.country}`);
-            console.log(`Timezone: ${data.timezone}`);
-            console.log(`Region: ${data.region} (${data.regionCode})`);
-            console.log(`Coordinates: ${data.latitude}, ${data.longitude}`);
+        const result = await authClient.cloudflare.geolocation();
+        if (result.error) {
+            console.error("Error fetching geolocation:", result.error);
+        } else if (result.data && !("error" in result.data)) {
+            console.log("📍 Geolocation data:", {
+                timezone: result.data.timezone,
+                city: result.data.city,
+                country: result.data.country,
+                region: result.data.region,
+                regionCode: result.data.regionCode,
+                colo: result.data.colo,
+                latitude: result.data.latitude,
+                longitude: result.data.longitude,
+            });
         }
     } catch (err) {
         console.error("Failed to get geolocation data:", err);
