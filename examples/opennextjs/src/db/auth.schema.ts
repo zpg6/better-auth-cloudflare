@@ -1,13 +1,20 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
     email: text("email").notNull().unique(),
-    emailVerified: integer("email_verified", { mode: "boolean" }).notNull(),
+    emailVerified: integer("email_verified", { mode: "boolean" })
+        .$defaultFn(() => false)
+        .notNull(),
     image: text("image"),
-    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .$defaultFn(() => /* @__PURE__ */ new Date())
+        .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .$defaultFn(() => /* @__PURE__ */ new Date())
+        .notNull(),
+    isAnonymous: integer("is_anonymous", { mode: "boolean" }),
 });
 
 export const sessions = sqliteTable("sessions", {
@@ -54,6 +61,22 @@ export const verifications = sqliteTable("verifications", {
     identifier: text("identifier").notNull(),
     value: text("value").notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-    createdAt: integer("created_at", { mode: "timestamp" }),
-    updatedAt: integer("updated_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => /* @__PURE__ */ new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => /* @__PURE__ */ new Date()),
+});
+
+export const userFiles = sqliteTable("user_files", {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+        .notNull()
+        .references(() => users.id, { onDelete: "cascade" }),
+    filename: text("filename").notNull(),
+    originalName: text("original_name").notNull(),
+    contentType: text("content_type").notNull(),
+    size: integer("size").notNull(),
+    r2Key: text("r2_key").notNull(),
+    uploadedAt: integer("uploaded_at", { mode: "timestamp" }).notNull(),
+    category: text("category"),
+    isPublic: integer("is_public", { mode: "boolean" }),
+    description: text("description"),
 });

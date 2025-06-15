@@ -1,6 +1,6 @@
 {
     "name": "opennextjs",
-    "version": "0.1.5",
+    "version": "0.2.0",
     "private": true,
     "scripts": {
         "clean": "rm -rf .open-next && rm -rf .wrangler && rm -rf node_modules && rm -rf .next",
@@ -23,8 +23,10 @@
         "db:studio:prod": "NODE_ENV=production drizzle-kit studio"
     },
     "dependencies": {
+        "@radix-ui/react-dialog": "^1.1.14",
         "@radix-ui/react-label": "^2.1.6",
         "@radix-ui/react-slot": "^1.2.2",
+        "@radix-ui/react-tabs": "^1.1.12",
         "better-auth": "^1.2.7",
         "better-auth-cloudflare": "file:../../",
         "class-variance-authority": "^0.7.1",

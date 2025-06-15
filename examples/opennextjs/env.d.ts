@@ -6,6 +6,7 @@
 interface CloudflareEnv {
     DATABASE: D1Database;
     KV: KVNamespace<string>;
+    R2_BUCKET: R2Bucket;
     BETTER_AUTH_SECRET: string;
     BETTER_AUTH_URL: string;
 }

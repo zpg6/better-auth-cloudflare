@@ -1,75 +1,42 @@
 "use client";
 
+import authClient from "@/auth/authClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import authClient from "@/auth/authClient";
-import { useState } from "react";
+import { Github, Package } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function Home() {
-    const { error: sessionError } = authClient.useSession();
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-
+    const { data: session, error: sessionError } = authClient.useSession();
     const [isAuthActionInProgress, setIsAuthActionInProgress] = useState(false);
-    const [activeAuthAction, setActiveAuthAction] = useState<"signIn" | "signUp" | null>(null);
+    const router = useRouter();
 
-    const executeAuthAction = async (action: Promise<any>, actionType: "signIn" | "signUp") => {
+    // Redirect to dashboard if already logged in
+    useEffect(() => {
+        if (session) {
+            router.push("/dashboard");
+        }
+    }, [session, router]);
+
+    const handleAnonymousLogin = async () => {
         setIsAuthActionInProgress(true);
-        setActiveAuthAction(actionType);
         try {
-            await action;
+            const result = await authClient.signIn.anonymous();
+            console.log("Anonymous login result:", result);
+
+            if (result.error) {
+                setIsAuthActionInProgress(false);
+                alert(`Anonymous login failed: ${result.error.message}`);
+            } else {
+                // Login succeeded, redirect to dashboard
+                // Don't reset loading state here - let the redirect happen
+                window.location.href = "/dashboard";
+            }
         } catch (e: any) {
             setIsAuthActionInProgress(false);
-            setActiveAuthAction(null);
-            alert(`An unexpected error occurred during the auth action: ${e.message}`);
+            alert(`An unexpected error occurred during login: ${e.message}`);
         }
-    };
-
-    const handleSignIn = async () => {
-        if (!email || !password) {
-            alert("Please enter email and password.");
-            return;
-        }
-        await executeAuthAction(
-            authClient.signIn
-                .email({
-                    email,
-                    password,
-                    callbackURL: "/dashboard",
-                })
-                .then(({ error: signInError }) => {
-                    if (signInError) {
-                        setIsAuthActionInProgress(false);
-                        setActiveAuthAction(null);
-                        alert(`Sign in failed: ${signInError.message}`);
-                    }
-                }),
-            "signIn"
-        );
-    };
-
-    const handleSignUp = async () => {
-        if (!email || !password) {
-            alert("Please enter email and password.");
-            return;
-        }
-        await executeAuthAction(
-            authClient.signUp
-                .email({
-                    email,
-                    password,
-                    name: email,
-                    callbackURL: "/dashboard",
-                })
-                .then(({ error: signUpError }) => {
-                    if (signUpError) {
-                        alert(`Sign up failed: ${signUpError.message}`);
-                    }
-                }),
-            "signUp"
-        );
     };
 
     if (sessionError) {
@@ -85,70 +52,41 @@ export default function Home() {
             <Card className="w-full max-w-sm">
                 <CardHeader>
                     <CardTitle className="text-2xl">Login</CardTitle>
-                    <CardDescription>
-                        Powered by better-auth-cloudflare.
-                        <br />
-                        Enter your email below to login to your account.
-                    </CardDescription>
+                    <CardDescription>Powered by better-auth-cloudflare.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                            id="email"
-                            type="email"
-                            placeholder="m@example.com"
-                            required
-                            value={email}
-                            onChange={e => setEmail(e.target.value)}
-                            disabled={isAuthActionInProgress}
-                        />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="password">Password</Label>
-                        <Input
-                            id="password"
-                            type="password"
-                            required
-                            value={password}
-                            onChange={e => setPassword(e.target.value)}
-                            disabled={isAuthActionInProgress}
-                        />
-                    </div>
+                    <p className="text-sm text-gray-600 text-center">No personal information required.</p>
                 </CardContent>
-                <CardFooter className="flex flex-col gap-2">
-                    <Button onClick={handleSignIn} className="w-full" disabled={isAuthActionInProgress}>
-                        {isAuthActionInProgress && activeAuthAction === "signIn" ? "Signing In..." : "Sign In"}
-                    </Button>
-                    <Button
-                        onClick={handleSignUp}
-                        className="w-full"
-                        variant="outline"
-                        disabled={isAuthActionInProgress}
-                    >
-                        {isAuthActionInProgress && activeAuthAction === "signUp" ? "Signing Up..." : "Sign Up"}
+                <CardFooter>
+                    <Button onClick={handleAnonymousLogin} className="w-full" disabled={isAuthActionInProgress}>
+                        {isAuthActionInProgress ? "Logging In..." : "Login Anonymously"}
                     </Button>
                 </CardFooter>
             </Card>
             <footer className="absolute bottom-0 w-full text-center text-sm text-gray-500 py-4">
-                Powered by{" "}
-                <a
-                    href="https://github.com/zpg6/better-auth-cloudflare"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline"
-                >
-                    better-auth-cloudflare
-                </a>
-                {" | "}
-                <a
-                    href="https://www.npmjs.com/package/better-auth-cloudflare"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline"
-                >
-                    npm package
-                </a>
+                <div className="space-y-3">
+                    <div>Powered by better-auth-cloudflare</div>
+                    <div className="flex items-center justify-center gap-4">
+                        <a
+                            href="https://github.com/zpg6/better-auth-cloudflare"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 hover:text-gray-700 transition-colors"
+                        >
+                            <Github size={16} />
+                            <span>GitHub</span>
+                        </a>
+                        <a
+                            href="https://www.npmjs.com/package/better-auth-cloudflare"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 hover:text-gray-700 transition-colors"
+                        >
+                            <Package size={16} />
+                            <span>npm</span>
+                        </a>
+                    </div>
+                </div>
             </footer>
         </div>
     );

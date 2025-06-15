@@ -1,7 +1,7 @@
 "use client";
 
-import { Button } from "@/components/ui/button"; // Import the shadcn/ui Button
 import authClient from "@/auth/authClient"; // Assuming default export from your authClient setup
+import { Button } from "@/components/ui/button"; // Import the shadcn/ui Button
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react"; // Added useState and useTransition
 
@@ -59,14 +59,13 @@ export default function SignOutButton() {
     };
 
     return (
-        <div className="w-full mt-6">
-            {" "}
+        <div className="w-full mt-6 flex flex-col items-center">
             {/* Container for button and error message */}
             <Button
                 onClick={handleSignOut}
                 disabled={isLoading || isPending}
                 variant="destructive" // Use destructive variant for sign out
-                className="w-full"
+                className="w-full max-w-xs"
             >
                 {isLoading || isPending ? "Signing Out..." : "Sign Out"}
             </Button>

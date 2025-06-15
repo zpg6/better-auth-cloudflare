@@ -1,7 +1,7 @@
 {
     "version": "6",
     "dialect": "sqlite",
-    "id": "50ac8e67-9e1b-4538-bd03-be18b10118cc",
+    "id": "eee5da81-ec71-43a2-889d-a6520936edd0",
     "prevId": "00000000-0000-0000-0000-000000000000",
     "tables": {
         "accounts": {
@@ -253,6 +253,103 @@
             "uniqueConstraints": {},
             "checkConstraints": {}
         },
+        "user_files": {
+            "name": "user_files",
+            "columns": {
+                "id": {
+                    "name": "id",
+                    "type": "text",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "user_id": {
+                    "name": "user_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "filename": {
+                    "name": "filename",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "original_name": {
+                    "name": "original_name",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "content_type": {
+                    "name": "content_type",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "size": {
+                    "name": "size",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "r2_key": {
+                    "name": "r2_key",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "uploaded_at": {
+                    "name": "uploaded_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "category": {
+                    "name": "category",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                },
+                "is_public": {
+                    "name": "is_public",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                },
+                "description": {
+                    "name": "description",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {},
+            "foreignKeys": {
+                "user_files_user_id_users_id_fk": {
+                    "name": "user_files_user_id_users_id_fk",
+                    "tableFrom": "user_files",
+                    "tableTo": "users",
+                    "columnsFrom": ["user_id"],
+                    "columnsTo": ["id"],
+                    "onDelete": "cascade",
+                    "onUpdate": "no action"
+                }
+            },
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        },
         "users": {
             "name": "users",
             "columns": {
@@ -303,6 +400,13 @@
                     "type": "integer",
                     "primaryKey": false,
                     "notNull": true,
+                    "autoincrement": false
+                },
+                "is_anonymous": {
+                    "name": "is_anonymous",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": false,
                     "autoincrement": false
                 }
             },

@@ -25,3 +25,7 @@ migrations_dir = "drizzle"
 [[kv_namespaces]]
 binding = "KV"
 id = "YOUR_KV_NAMESPACE_ID"
+
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "your-r2-bucket-name"

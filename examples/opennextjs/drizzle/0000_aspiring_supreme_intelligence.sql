@@ -36,6 +36,21 @@ CREATE TABLE `sessions` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `sessions_token_unique` ON `sessions` (`token`);--> statement-breakpoint
+CREATE TABLE `user_files` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`filename` text NOT NULL,
+	`original_name` text NOT NULL,
+	`content_type` text NOT NULL,
+	`size` integer NOT NULL,
+	`r2_key` text NOT NULL,
+	`uploaded_at` integer NOT NULL,
+	`category` text,
+	`is_public` integer,
+	`description` text,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
 CREATE TABLE `users` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
@@ -43,7 +58,8 @@ CREATE TABLE `users` (
 	`email_verified` integer NOT NULL,
 	`image` text,
 	`created_at` integer NOT NULL,
-	`updated_at` integer NOT NULL
+	`updated_at` integer NOT NULL,
+	`is_anonymous` integer
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `users_email_unique` ON `users` (`email`);--> statement-breakpoint
