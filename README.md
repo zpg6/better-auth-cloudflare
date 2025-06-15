@@ -17,6 +17,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 
 - 🗄️ **D1 Database Integration**: Leverage Cloudflare D1 as your primary database via Drizzle ORM.
 - 🔌 **KV Storage Integration**: Optionally use Cloudflare KV for secondary storage (e.g., session caching).
+- 📁 **R2 File Storage**: Upload, download, and manage user files with Cloudflare R2 object storage and database tracking.
 - 📍 **Automatic Geolocation Tracking**: Enrich user sessions with location data derived from Cloudflare.
 - 🌐 **Cloudflare IP Detection**: Utilize Cloudflare's IP detection headers out-of-the-box.
 - 🔍 **Rich Client-Side Context**: Access timezone, city, country, region, and more via the client plugin.
@@ -27,7 +28,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - [x] Geolocation
 - [x] D1
 - [x] KV
-- [ ] R2
+- [x] R2
 - [ ] Cloudflare Images
 - [ ] Durable Objects
 
@@ -52,6 +53,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
     - [7. Initialize the Client](#7-initialize-the-client)
 - [Usage Examples](#usage-examples)
     - [Accessing Geolocation Data](#accessing-geolocation-data)
+- [R2 File Storage Guide](./docs/r2.md)
 - [License](#license)
 - [Contributing](#contributing)
 
@@ -69,11 +71,12 @@ bun add better-auth-cloudflare
 
 ## Configuration Options
 
-| Option                | Type    | Default | Description                                    |
-| --------------------- | ------- | ------- | ---------------------------------------------- |
-| `autoDetectIpAddress` | boolean | `true`  | Auto-detect IP address from Cloudflare headers |
-| `geolocationTracking` | boolean | `true`  | Track geolocation data in the session table    |
-| `cf`                  | object  | `{}`    | Cloudflare geolocation context                 |
+| Option                | Type    | Default     | Description                                    |
+| --------------------- | ------- | ----------- | ---------------------------------------------- |
+| `autoDetectIpAddress` | boolean | `true`      | Auto-detect IP address from Cloudflare headers |
+| `geolocationTracking` | boolean | `true`      | Track geolocation data in the session table    |
+| `cf`                  | object  | `{}`        | Cloudflare geolocation context                 |
+| `r2`                  | object  | `undefined` | R2 bucket configuration for file storage       |
 
 ## Setup
 
@@ -158,6 +161,17 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties) 
                       }
                     : undefined,
                 kv: env?.KV,
+                // Optional: Enable R2 file storage
+                r2: {
+                    bucket: env.R2_BUCKET,
+                    maxFileSize: 10 * 1024 * 1024, // 10MB
+                    allowedTypes: [".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx"],
+                    additionalFields: {
+                        category: { type: "string", required: false },
+                        isPublic: { type: "boolean", required: false },
+                        description: { type: "string", required: false },
+                    },
+                },
             },
             {
                 emailAndPassword: {
@@ -261,8 +275,7 @@ import { createAuthClient } from "better-auth/client";
 import { cloudflareClient } from "better-auth-cloudflare/client";
 
 const authClient = createAuthClient({
-    // baseURL: "/api/auth", // Optional: Uncomment and adjust if your auth API routes are not at /api/auth
-    plugins: [cloudflareClient()], // Add the Cloudflare client plugin for geolocation features
+    plugins: [cloudflareClient()], // includes geolocation and R2 file features (if configured)
 });
 
 export default authClient;
@@ -304,6 +317,58 @@ const displayLocationInfo = async () => {
 
 displayLocationInfo();
 ```
+
+### R2 File Storage
+
+If you've configured R2 in your server setup, you can upload and manage files:
+
+```typescript
+import authClient from "@/lib/authClient";
+
+// Upload a file with metadata
+const uploadFile = async (file: File) => {
+    const result = await authClient.uploadFile(file, {
+        category: "documents",
+        isPublic: false,
+        description: "Important document",
+    });
+
+    if (result.error) {
+        console.error("Upload failed:", result.error.message || "Failed to upload file. Please try again.");
+    } else {
+        console.log("File uploaded:", result.data);
+    }
+};
+
+// List user's files
+const listFiles = async () => {
+    const result = await authClient.files.list();
+    if (result.data) {
+        console.log("User files:", result.data);
+    }
+};
+
+// Download a file
+const downloadFile = async (fileId: string, filename: string) => {
+    const result = await authClient.files.download({ fileId });
+    if (result.error) {
+        console.error("Download failed:", result.error);
+        return;
+    }
+
+    // Extract blob and create download
+    const response = result.data;
+    const blob = response instanceof Response ? await response.blob() : response;
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    window.URL.revokeObjectURL(url);
+};
+```
+
+For complete R2 file storage documentation, see the [R2 File Storage Guide](./docs/r2.md).
 
 ## License
 

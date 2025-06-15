@@ -3,10 +3,12 @@ import { type BetterAuthOptions, type BetterAuthPlugin, type SecondaryStorage, t
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
 import { schema } from "./schema";
+import { createR2Storage, createR2Endpoints } from "./r2";
 import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types";
 export * from "./client";
 export * from "./schema";
 export * from "./types";
+export * from "./r2";
 
 /**
  * Cloudflare integration for Better Auth
@@ -20,9 +22,11 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
     // Default geolocationTracking to true if not specified
     const geolocationTrackingEnabled = opts.geolocationTracking === undefined || opts.geolocationTracking;
 
+    let r2Storage: ReturnType<typeof createR2Storage> | null = null;
+
     return {
         id: "cloudflare",
-        schema: schema(opts), // schema function will also default geolocationTracking to true
+        schema: schema(opts),
         endpoints: {
             getGeolocation: createAuthEndpoint(
                 "/cloudflare/geolocation",
@@ -46,9 +50,13 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                     return ctx.json(context);
                 }
             ),
+            ...(opts.r2 ? createR2Endpoints(() => r2Storage, opts.r2) : {}),
         },
 
         init(init_ctx) {
+            if (opts.r2) {
+                r2Storage = createR2Storage(opts.r2, init_ctx.generateId);
+            }
             return {
                 options: {
                     databaseHooks: {
