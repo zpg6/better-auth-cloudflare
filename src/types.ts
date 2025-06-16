@@ -1,8 +1,10 @@
-import type { KVNamespace } from "@cloudflare/workers-types";
+import type { IncomingRequestCfProperties, KVNamespace } from "@cloudflare/workers-types";
 import type { AuthContext } from "better-auth";
 import type { DrizzleAdapterConfig } from "better-auth/adapters/drizzle";
 import type { FieldAttribute } from "better-auth/db";
-import type { drizzle } from "drizzle-orm/d1";
+import type { drizzle as d1Drizzle } from "drizzle-orm/d1";
+import type { drizzle as postgresDrizzle } from "drizzle-orm/postgres-js";
+import type { drizzle as mysqlDrizzle } from "drizzle-orm/mysql2";
 
 export interface CloudflarePluginOptions {
     /**
@@ -29,40 +31,36 @@ export interface CloudflarePluginOptions {
     r2?: R2Config;
 }
 
+/**
+ * Generic Drizzle database configuration (internal)
+ */
+interface DrizzleConfig<Fn extends (...args: any) => any> {
+     /** Drizzle database instance */
+     db: ReturnType<Fn>;
+     /** Adapter options (provider omitted) */
+     options?: Omit<DrizzleAdapterConfig, "provider">;
+}
+
 export interface WithCloudflareOptions extends CloudflarePluginOptions {
     /**
      * D1 database for primary storage, if that's what you're using.
      */
-    d1?: {
-        /**
-         * D1 database for primary storage, if that's what you're using.
-         */
-        db: ReturnType<typeof drizzle>;
-        /**
-         * Drizzle adapter options for primary storage, if you're using D1.
-         */
-        options?: Omit<DrizzleAdapterConfig, "provider">;
-    };
+    d1?: DrizzleConfig<typeof d1Drizzle>;
 
-    /**
-     * KV namespace for secondary storage, if you want to use that.
-     */
+    /** Postgres database configuration for Hyperdrive */
+    postgres?: DrizzleConfig<typeof postgresDrizzle>;
+
+    /** MySQL database configuration for Hyperdrive */
+    mysql?: DrizzleConfig<typeof mysqlDrizzle>;
+
+    /** KV namespace for secondary storage */
     kv?: KVNamespace<string>;
 }
 
 /**
  * Cloudflare geolocation data
  */
-export interface CloudflareGeolocation {
-    timezone?: string | null;
-    city?: string | null;
-    country?: string | null;
-    region?: string | null;
-    regionCode?: string | null;
-    colo?: string | null;
-    latitude?: string | null;
-    longitude?: string | null;
-}
+export interface CloudflareGeolocation extends Partial<IncomingRequestCfProperties> {}
 
 /**
  * Minimal R2Bucket interface - only what we actually need for file storage
