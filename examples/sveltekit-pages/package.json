@@ -13,12 +13,13 @@
 		"format": "prettier --write .",
 		"lint": "prettier --check . && eslint .",
 		"clean": "rm -rf .svelte-kit .vite && rm -rf node_modules",
+		"deploy": "pnpm run build && wrangler pages deploy",
+		"cf-typegen": "pnpm wrangler types src/worker-configuration.d.ts",
 		"db:push": "drizzle-kit push",
 		"db:generate": "drizzle-kit generate",
-		"db:migrate": "drizzle-kit migrate",
-		"db:studio": "drizzle-kit studio",
-		"deploy": "pnpm run build && wrangler pages deploy",
-		"cf-typegen": "pnpm wrangler types src/worker-configuration.d.ts"
+		"db:migrate:dev": "pnpm wrangler d1 migrations apply your-sveltekit-pages-d1 --local",
+		"db:migrate:prod": "pnpm wrangler d1 migrations apply your-sveltekit-pages-d1 --remote",
+		"db:studio": "drizzle-kit studio"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20250620.0",

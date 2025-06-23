@@ -14,16 +14,16 @@
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "your-sveltekit-pages",
-			"database_id": "your-sveltekit-pages-d1",
+			"database_name": "your-sveltekit-pages-d1",
+			"database_id": "your-sveltekit-pages-d1-id",
 			"migrations_dir": "drizzle"
 		}
 	],
 	"kv_namespaces": [
 		{
 			"binding": "SVELTEKIT_PAGES_AUTH_SESSION_KV",
-			"id": "your-sveltekit-pages-auth-session-kv",
-			"preview_id": "your-sveltekit-pages-auth-session-kv-preview"
+			"id": "your-sveltekit-pages-auth-session-kv-id",
+			"preview_id": "your-sveltekit-pages-auth-session-kv-preview-id"
 		}
 	],
 	"r2_buckets": [
