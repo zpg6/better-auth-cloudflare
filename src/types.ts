@@ -1,8 +1,8 @@
-import type { KVNamespace } from "@cloudflare/workers-types";
+import type { KVNamespace, IncomingRequestCfProperties } from "@cloudflare/workers-types";
 import type { AuthContext } from "better-auth";
 import type { DrizzleAdapterConfig } from "better-auth/adapters/drizzle";
 import type { FieldAttribute } from "better-auth/db";
-import type { drizzle } from "drizzle-orm/d1";
+import type { drizzle, DrizzleD1Database } from "drizzle-orm/d1";
 
 export interface CloudflarePluginOptions {
     /**
@@ -29,15 +29,16 @@ export interface CloudflarePluginOptions {
     r2?: R2Config;
 }
 
-export interface WithCloudflareOptions extends CloudflarePluginOptions {
+export interface WithCloudflareOptions<TSchema extends Record<string, unknown> = Record<string, unknown>> extends CloudflarePluginOptions {
     /**
      * D1 database for primary storage, if that's what you're using.
      */
     d1?: {
         /**
          * D1 database for primary storage, if that's what you're using.
+         * Accept any DrizzleD1Database (e.g., ReturnType<typeof drizzle> or custom DrizzleClient)
          */
-        db: ReturnType<typeof drizzle>;
+        db: ReturnType<typeof drizzle> | DrizzleD1Database<TSchema>;
         /**
          * Drizzle adapter options for primary storage, if you're using D1.
          */
@@ -47,22 +48,13 @@ export interface WithCloudflareOptions extends CloudflarePluginOptions {
     /**
      * KV namespace for secondary storage, if you want to use that.
      */
-    kv?: KVNamespace<string>;
+    kv?: KVNamespace;
 }
 
 /**
  * Cloudflare geolocation data
  */
-export interface CloudflareGeolocation {
-    timezone?: string | null;
-    city?: string | null;
-    country?: string | null;
-    region?: string | null;
-    regionCode?: string | null;
-    colo?: string | null;
-    latitude?: string | null;
-    longitude?: string | null;
-}
+export interface CloudflareGeolocation extends Partial<IncomingRequestCfProperties> {}
 
 /**
  * Minimal R2Bucket interface - only what we actually need for file storage
