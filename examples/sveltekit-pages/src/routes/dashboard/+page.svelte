@@ -8,6 +8,7 @@
 	import Server from 'virtual:icons/lucide/server';
 	import Navigation from 'virtual:icons/lucide/navigation';
 	import FileUploadDemo from '$lib/components/file-upload-demo.svelte';
+	import SignOutButton from '$lib/components/sign-out-button.svelte';
 
 	let { data } = $props();
 </script>
@@ -52,12 +53,12 @@
 								</p>
 							{/if}
 							{#if data.user?.id}
-								<p class="text-md">
+								<p class="text-md break-words">
 									<strong>User ID:</strong>
 									{data.user.id}
 								</p>
 							{/if}
-							<!-- <SignOutButton />  -->
+							<SignOutButton /> 
 							<!-- Use the client component for sign out -->
 						</CardContent>
 					</Card>
