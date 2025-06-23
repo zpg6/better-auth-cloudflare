@@ -7,7 +7,7 @@
 	import CheckCircle from 'virtual:icons/lucide/check-circle';
 	import FolderOpen from 'virtual:icons/lucide/folder-open';
 	import Upload from 'virtual:icons/lucide/upload';
-	import { authClient } from '$lib/auth'; // Assuming auth client is available
+	import { authClient } from '$lib/auth/client';
 
 	let file: File | null = null;
 	let category = '';
@@ -29,8 +29,8 @@
 		fileOperationResult = null;
 
 		try {
-			// @ts-ignore TODO: improve type-safety of metadata using client action
-			const result = await client.uploadFile(file, {
+			// To do: Improve type-safety of metadata using client action
+			const result = await authClient.uploadFile(file, {
 				isPublic,
 				...(category.trim() && { category: category.trim() }),
 				...(description.trim() && { description: description.trim() })
@@ -66,7 +66,7 @@
 	const loadUserFiles = async () => {
 		isLoadingFiles = true;
 		try {
-			// @ts-ignore Use the inferred list endpoint with pagination support
+			// Use the inferred list endpoint with pagination support
 			const result = await authClient.files.list();
 
 			if (result.data) {
@@ -85,7 +85,6 @@
 
 	const downloadFile = async (fileId: string, filename: string) => {
 		try {
-			// @ts-ignore
 			const result = await authClient.files.download({ fileId });
 
 			if (result.error) {
@@ -124,7 +123,7 @@
 
 	const deleteFile = async (fileId: string) => {
 		try {
-			// @ts-ignore Use the inferred delete endpoint
+			// Use the inferred delete endpoint
 			const result = await authClient.files.delete({ fileId });
 			if (!result.error) {
 				loadUserFiles(); // Auto-refresh list
