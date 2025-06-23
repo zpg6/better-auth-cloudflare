@@ -9,7 +9,30 @@
 	"pages_build_output_dir": ".svelte-kit/cloudflare",
 	"observability": {
 		"enabled": true
-	}
+	},
+	"compatibility_flags": ["nodejs_compat"],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "your-sveltekit-pages",
+			"database_id": "your-sveltekit-pages-d1",
+			"migrations_dir": "drizzle"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "SVELTEKIT_PAGES_AUTH_SESSION_KV",
+			"id": "your-sveltekit-pages-auth-session-kv",
+			"preview_id": "your-sveltekit-pages-auth-session-kv-preview"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "SVELTEKIT_PAGES_ASSETS",
+			"bucket_name": "your-sveltekit-pages-assets",
+			"preview_bucket_name": "your-sveltekit-pages-assets-preview"
+		}
+	]
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

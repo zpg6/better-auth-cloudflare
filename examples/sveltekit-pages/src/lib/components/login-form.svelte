@@ -1,24 +1,52 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button/index.js';
-	import * as Card from '$lib/components/ui/card/index.js';
-	
+	import {
+		Card,
+		CardHeader,
+		CardTitle,
+		CardDescription,
+		CardContent,
+		CardFooter
+	} from '$lib/components/ui/card';
+	import { goto } from '$app/navigation';
+	import { authClient } from '$lib/auth/client';
+
 	let isAuthActionInProgress = false;
-	function handleAnonymousLogin() {}
+
+	async function handleAnonymousLogin() {
+		isAuthActionInProgress = true;
+		try {
+			const result = await authClient.signIn.anonymous();
+			if (result.error) {
+				console.error('Anonymous login failed:', result.error);
+				alert(`Anonymous login failed: ${result.error.message}`);
+
+				return;
+			}
+			console.log('Anonymous login result:', result);
+
+			await goto('/dashboard');
+		} catch (e) {
+			console.error('An unexpected error occurred:', e);
+		} finally {
+			isAuthActionInProgress = false;
+		}
+	}
 </script>
 
-<Card.Root class="mx-auto w-full max-w-sm">
-	<Card.Header>
-		<Card.Title class="text-2xl">Login</Card.Title>
-		<Card.Description>Powered by better-auth-cloudflare.</Card.Description>
-	</Card.Header>
-	<Card.Content>
+<Card class="mx-auto w-full max-w-sm">
+	<CardHeader>
+		<CardTitle class="text-2xl">Login</CardTitle>
+		<CardDescription>Powered by better-auth-cloudflare.</CardDescription>
+	</CardHeader>
+	<CardContent>
 		<div class="grid gap-4">
 			<p class="text-center text-sm text-gray-600">No personal information required.</p>
 		</div>
-	</Card.Content>
-	<Card.Footer>
+	</CardContent>
+	<CardFooter>
 		<Button onclick={handleAnonymousLogin} class="w-full" disabled={isAuthActionInProgress}>
 			{isAuthActionInProgress ? 'Logging In...' : 'Login Anonymously'}
 		</Button>
-	</Card.Footer>
-</Card.Root>
+	</CardFooter>
+</Card>

@@ -6,9 +6,10 @@
 	let { children } = $props();
 </script>
 
-{@render children()}
+<div class="flex h-screen flex-col">
+	{@render children()}
 
-	<footer class="absolute bottom-0 w-full py-4 text-center text-sm text-gray-500">
+	<footer class="w-full py-4 text-center text-sm text-gray-500">
 		<div class="space-y-3">
 			<div>Powered by better-auth-cloudflare</div>
 			<div class="flex items-center justify-center gap-4">
@@ -33,3 +34,4 @@
 			</div>
 		</div>
 	</footer>
+</div>
