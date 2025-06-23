@@ -1,4 +1,4 @@
-import type { KVNamespace } from "@cloudflare/workers-types";
+import type { KVNamespace, IncomingRequestCfProperties } from "@cloudflare/workers-types";
 import type { AuthContext, Session, User } from "better-auth";
 import type { DrizzleAdapterConfig } from "better-auth/adapters/drizzle";
 import type { FieldAttribute } from "better-auth/db";
@@ -64,22 +64,13 @@ export interface WithCloudflareOptions extends CloudflarePluginOptions {
     /**
      * KV namespace for secondary storage, if you want to use that.
      */
-    kv?: KVNamespace<string>;
+    kv?: KVNamespace;
 }
 
 /**
  * Cloudflare geolocation data
  */
-export interface CloudflareGeolocation {
-    timezone?: string | null;
-    city?: string | null;
-    country?: string | null;
-    region?: string | null;
-    regionCode?: string | null;
-    colo?: string | null;
-    latitude?: string | null;
-    longitude?: string | null;
-}
+export interface CloudflareGeolocation extends Partial<IncomingRequestCfProperties> {}
 
 /**
  * Session type enhanced with Cloudflare geolocation data
