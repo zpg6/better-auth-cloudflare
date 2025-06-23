@@ -58,7 +58,7 @@
 									{data.user.id}
 								</p>
 							{/if}
-							<SignOutButton /> 
+							<SignOutButton />
 							<!-- Use the client component for sign out -->
 						</CardContent>
 					</Card>
