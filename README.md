@@ -1,6 +1,6 @@
 # better-auth-cloudflare
 
-Seamlessly integrate [Better Auth](https://github.com/better-auth/better-auth) with Cloudflare Workers, D1, Hyperdrive, KV, and geolocation services.
+Seamlessly integrate [Better Auth](https://github.com/better-auth/better-auth) with Cloudflare Workers, D1, Hyperdrive, KV, R2, and geolocation services.
 
 [![NPM Version](https://img.shields.io/npm/v/better-auth-cloudflare)](https://www.npmjs.com/package/better-auth-cloudflare)
 [![NPM Downloads](https://img.shields.io/npm/dt/better-auth-cloudflare)](https://www.npmjs.com/package/better-auth-cloudflare)
