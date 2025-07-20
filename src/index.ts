@@ -187,11 +187,8 @@ export const withCloudflare = <T extends BetterAuthOptions>(
     }
 
     // Assert that only one database configuration is provided
-    let definedDatabases = 0;
-    if (cloudFlareOptions.postgres) definedDatabases++;
-    if (cloudFlareOptions.mysql) definedDatabases++;
-    if (cloudFlareOptions.d1) definedDatabases++;
-    if (definedDatabases > 1) {
+    const dbConfigs = [cloudFlareOptions.postgres, cloudFlareOptions.mysql, cloudFlareOptions.d1].filter(Boolean);
+    if (dbConfigs.length > 1) {
         throw new Error(
             "Only one database configuration can be provided. Please provide only one of postgres, mysql, or d1."
         );
