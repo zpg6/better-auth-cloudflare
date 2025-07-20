@@ -38,8 +38,8 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 
 - [x] Hono
 - [x] OpenNextJS
-- [ ] SvelteKit (Hyperdrive)
-- [ ] TanStack Start
+- [ ] SvelteKit (+ Hyperdrive)
+- [ ] TanStack Start (+ Durable Objects)
 
 ## Table of Contents
 
