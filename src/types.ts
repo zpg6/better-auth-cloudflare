@@ -34,7 +34,7 @@ export interface CloudflarePluginOptions {
 /**
  * Generic drizzle database configuration
  */
-export type DrizzleConfig<T extends (...args: never[]) => any> = {
+export type DrizzleConfig<T extends typeof d1Drizzle | typeof postgresDrizzle | typeof mysqlDrizzle> = {
     /**
      * The drizzle database instance
      */
