@@ -15,7 +15,8 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 
 ## Features
 
-- 🗄️ **D1 Database Integration**: Leverage Cloudflare D1 as your primary database via Drizzle ORM.
+- 🗄️ **Database Integration**: Support for D1 (SQLite), Postgres, and MySQL databases via Drizzle ORM.
+- ⚡ **Hyperdrive Support**: Connect to Postgres and MySQL databases through Cloudflare Hyperdrive.
 - 🔌 **KV Storage Integration**: Optionally use Cloudflare KV for secondary storage (e.g., session caching).
 - 📁 **R2 File Storage**: Upload, download, and manage user files with Cloudflare R2 object storage and database tracking.
 - 📍 **Automatic Geolocation Tracking**: Enrich user sessions with location data derived from Cloudflare.
@@ -27,6 +28,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - [x] IP Detection
 - [x] Geolocation
 - [x] D1
+- [x] Hyperdrive (Postgres/MySQL)
 - [x] KV
 - [x] R2
 - [ ] Cloudflare Images
@@ -204,6 +206,60 @@ export { createAuth };
 
 **For OpenNext.js with complex async requirements:**
 See the [OpenNext.js example](./examples/opennextjs/README.md) for a more complex configuration that handles async database initialization and singleton patterns.
+
+**Using Hyperdrive (MySQL):**
+
+```typescript
+import { drizzle } from "drizzle-orm/mysql2";
+import mysql from "mysql2/promise";
+
+async function getDb() {
+    const { env } = await getCloudflareContext({ async: true });
+    const connection = mysql.createPool(env.HYPERDRIVE_URL);
+    return drizzle(connection, { schema });
+}
+
+const auth = betterAuth({
+    ...withCloudflare(
+        {
+            mysql: {
+                db: await getDb(),
+            },
+            // other cloudflare options...
+        },
+        {
+            // your auth options...
+        }
+    ),
+});
+```
+
+**Using Hyperdrive (Postgres):**
+
+```typescript
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+
+async function getDb() {
+    const { env } = await getCloudflareContext({ async: true });
+    const sql = postgres(env.HYPERDRIVE_URL);
+    return drizzle(sql, { schema });
+}
+
+const auth = betterAuth({
+    ...withCloudflare(
+        {
+            postgres: {
+                db: await getDb(),
+            },
+            // other cloudflare options...
+        },
+        {
+            // your auth options...
+        }
+    ),
+});
+```
 
 ### 4. Generate and Manage Auth Schema with D1
 

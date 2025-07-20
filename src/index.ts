@@ -186,14 +186,39 @@ export const withCloudflare = <T extends BetterAuthOptions>(
         // If user explicitly set it to true/false, that will be respected.
     }
 
+    // Assert that only one database configuration is provided
+    let definedDatabases = 0;
+    if (cloudFlareOptions.postgres) definedDatabases++;
+    if (cloudFlareOptions.mysql) definedDatabases++;
+    if (cloudFlareOptions.d1) definedDatabases++;
+    if (definedDatabases > 1) {
+        throw new Error(
+            "Only one database configuration can be provided. Please provide only one of postgres, mysql, or d1."
+        );
+    }
+
+    // Determine which database configuration to use
+    let database;
+    if (cloudFlareOptions.postgres) {
+        database = drizzleAdapter(cloudFlareOptions.postgres.db, {
+            provider: "pg",
+            ...cloudFlareOptions.postgres.options,
+        });
+    } else if (cloudFlareOptions.mysql) {
+        database = drizzleAdapter(cloudFlareOptions.mysql.db, {
+            provider: "mysql",
+            ...cloudFlareOptions.mysql.options,
+        });
+    } else if (cloudFlareOptions.d1) {
+        database = drizzleAdapter(cloudFlareOptions.d1.db, {
+            provider: "sqlite",
+            ...cloudFlareOptions.d1.options,
+        });
+    }
+
     return {
         ...options,
-        database: cloudFlareOptions.d1
-            ? drizzleAdapter(cloudFlareOptions.d1.db, {
-                  provider: "sqlite",
-                  ...cloudFlareOptions.d1.options,
-              })
-            : undefined,
+        database,
         secondaryStorage: cloudFlareOptions.kv ? createKVStorage(cloudFlareOptions.kv) : undefined,
         plugins: [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])],
         advanced: updatedAdvanced,
