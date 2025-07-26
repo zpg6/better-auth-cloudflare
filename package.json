@@ -1,6 +1,6 @@
 {
     "name": "better-auth-cloudflare",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "description": "Cloudflare integration plugin for Better Auth",
     "author": "Zach Grimaldi",
     "repository": {
