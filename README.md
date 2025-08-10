@@ -33,6 +33,8 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - [x] R2
 - [ ] Cloudflare Images
 - [ ] Durable Objects
+- [x] CLI for project setup and Cloudflare resources setup
+- [x] CLI for database schema and migration management
 
 **Examples:**
 
@@ -70,6 +72,16 @@ pnpm add better-auth-cloudflare
 # or
 bun add better-auth-cloudflare
 ```
+
+### Quick Start with CLI
+
+For the fastest setup, use the CLI to generate a complete project with Cloudflare resources:
+
+```bash
+npx @better-auth-cloudflare/cli
+```
+
+The CLI creates projects from Hono or Next.js templates and can automatically set up D1, KV, R2, and Hyperdrive resources. See [cli/README.md](./cli/README.md) for full documentation.
 
 ## Configuration Options
 

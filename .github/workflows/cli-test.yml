@@ -1,0 +1,38 @@
+name: CLI Tests
+
+on:
+    push:
+        branches: [main]
+        paths: ["cli/**"]
+    pull_request:
+        paths: ["cli/**"]
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
+
+            - name: Install dependencies
+              working-directory: ./cli
+              run: bun install
+
+            - name: Run tests
+              working-directory: ./cli
+              run: bun test
+
+            - name: Type check
+              working-directory: ./cli
+              run: bun run typecheck
