@@ -172,6 +172,24 @@ function runWranglerCommand(args: string[], cwd: string, accountId?: string) {
     return bunSpawnSync("npx", ["wrangler", ...args], cwd, env);
 }
 
+function checkD1DatabaseExists(databaseId: string, cwd: string, accountId?: string): boolean {
+    if (!databaseId || databaseId.startsWith("YOUR_")) {
+        return false;
+    }
+
+    const result = runWranglerCommand(["d1", "info", databaseId], cwd, accountId);
+    return result.code === 0;
+}
+
+function checkHyperdriveExists(hyperdriveId: string, cwd: string, accountId?: string): boolean {
+    if (!hyperdriveId || hyperdriveId.startsWith("YOUR_")) {
+        return false;
+    }
+
+    const result = runWranglerCommand(["hyperdrive", "get", hyperdriveId], cwd, accountId);
+    return result.code === 0;
+}
+
 function parseAvailableAccounts(stderr: string): Array<{ name: string; id: string }> {
     const accounts: Array<{ name: string; id: string }> = [];
     const lines = stderr.split("\n");
@@ -315,9 +333,8 @@ export function updateD1Block(toml: string, binding: string, dbName: string) {
 export function appendOrReplaceKvNamespaceBlock(toml: string, binding: string, id?: string) {
     const kvBlockRegex = /\[\[kv_namespaces\]\][\s\S]*?(?=(\n\[\[|$))/g;
     const blocks = toml.match(kvBlockRegex) || [];
-    const newBlock = ["[[kv_namespaces]]", `binding = "${binding}"`, id ? `id = "${id}"` : ""]
-        .filter(Boolean)
-        .join("\n");
+    const placeholderId = id || "YOUR_KV_NAMESPACE_ID";
+    const newBlock = ["[[kv_namespaces]]", `binding = "${binding}"`, `id = "${placeholderId}"`].join("\n");
 
     const existingIndex = blocks.findIndex(b => b.includes(`binding = "${binding}"`));
     if (existingIndex >= 0) {
@@ -339,10 +356,29 @@ export function appendOrReplaceR2Block(toml: string, binding: string, bucketName
     return toml.trimEnd() + "\n\n" + newBlock + "\n";
 }
 
-export function appendOrReplaceHyperdriveBlock(toml: string, binding: string, id: string) {
+export function appendOrReplaceHyperdriveBlock(
+    toml: string,
+    binding: string,
+    id?: string,
+    database?: "hyperdrive-postgres" | "hyperdrive-mysql"
+) {
     const blockRegex = /\[\[hyperdrive\]\][\s\S]*?(?=(\n\[\[|$))/g;
     const blocks = toml.match(blockRegex) || [];
-    const newBlock = ["[[hyperdrive]]", `binding = "${binding}"`, `id = "${id}"`].join("\n");
+    const placeholderId = id || "YOUR_HYPERDRIVE_ID";
+
+    // Add appropriate local connection string based on database type
+    let localConnectionString = "postgres://user:password@localhost:5432/your_database";
+    if (database === "hyperdrive-mysql") {
+        localConnectionString = "mysql://user:password@localhost:3306/your_database";
+    }
+
+    const newBlock = [
+        "[[hyperdrive]]",
+        `binding = "${binding}"`,
+        `id = "${placeholderId}"`,
+        `localConnectionString = "${localConnectionString}"`,
+    ].join("\n");
+
     const existingIndex = blocks.findIndex(b => b.includes(`binding = "${binding}"`));
     if (existingIndex >= 0) {
         const existing = blocks[existingIndex];
@@ -353,6 +389,10 @@ export function appendOrReplaceHyperdriveBlock(toml: string, binding: string, id
 
 export function clearAllR2Blocks(toml: string) {
     return toml.replace(/\[\[r2_buckets\]\][\s\S]*?(?=(\n\[\[|$))/g, "");
+}
+
+export function clearAllHyperdriveBlocks(toml: string) {
+    return toml.replace(/\[\[hyperdrive\]\][\s\S]*?(?=(\n\[\[|$))/g, "");
 }
 
 export function clearAllKvBlocks(toml: string) {
@@ -569,31 +609,59 @@ async function migrate(cliArgs?: CliArgs) {
 
     if (d1Databases.length === 0) {
         // No D1 databases found
-        const hyperdriveCount = databases.filter(db => db.type === "hyperdrive").length;
+        const hyperdriveDatabases = databases.filter(db => db.type === "hyperdrive");
+        const existingHyperdriveDatabases = hyperdriveDatabases.filter(db => {
+            if (!db.id) return false;
+            return checkHyperdriveExists(db.id, process.cwd());
+        });
+
+        if (hyperdriveDatabases.length > 0 && existingHyperdriveDatabases.length === 0) {
+            outro(
+                pc.yellow(
+                    `Found ${hyperdriveDatabases.length} Hyperdrive configuration(s) but none exist in your account. Please create your Hyperdrive instance(s) first, then apply migrations using: bun run db:migrate:dev or bun run db:migrate:prod`
+                )
+            );
+        } else {
+            outro(
+                pc.yellow(
+                    `Found ${existingHyperdriveDatabases.length} Hyperdrive database${existingHyperdriveDatabases.length === 1 ? "" : "s"}. Apply migrations to your database using: bun run db:migrate:dev or bun run db:migrate:prod`
+                )
+            );
+        }
+        return;
+    }
+
+    // Check if any D1 databases actually exist
+    const existingD1Databases = d1Databases.filter(db => {
+        if (!db.id) return false;
+        return checkD1DatabaseExists(db.id, process.cwd());
+    });
+
+    if (existingD1Databases.length === 0) {
         outro(
             pc.yellow(
-                `Found ${hyperdriveCount} Hyperdrive database${hyperdriveCount === 1 ? "" : "s"}. Please apply migrations to your database using your preferred workflow.`
+                `No existing D1 databases found in your account. Skipping db:migrate. Please create your D1 database(s) first, then rerun: npx @better-auth-cloudflare/cli migrate`
             )
         );
         return;
     }
 
     // Determine which D1 database to migrate
-    let selectedDatabase = d1Databases[0];
+    let selectedDatabase = existingD1Databases[0];
 
-    if (hasMultipleDatabases && d1Databases.length > 1) {
+    if (hasMultipleDatabases && existingD1Databases.length > 1) {
         if (isNonInteractive) {
-            // In non-interactive mode, use the first D1 database found
+            // In non-interactive mode, use the first existing D1 database found
             outro(
                 pc.yellow(
-                    `Multiple D1 databases found. Using first one: ${selectedDatabase.binding} (${selectedDatabase.name ?? "unnamed"})`
+                    `Multiple existing D1 databases found. Using first one: ${selectedDatabase.binding} (${selectedDatabase.name ?? "unnamed"})`
                 )
             );
         } else {
             // Interactive mode - let user choose
             const choice = (await (select as any)({
-                message: "Multiple D1 databases found. Which one would you like to migrate?",
-                options: d1Databases.map(db => ({
+                message: "Multiple existing D1 databases found. Which one would you like to migrate?",
+                options: existingD1Databases.map(db => ({
                     value: db,
                     label: `${db.binding}${db.name ? ` (${db.name})` : ""}`,
                 })),
@@ -934,6 +1002,15 @@ async function generate(cliArgs?: CliArgs) {
                 wrangler = clearAllR2Blocks(wrangler);
             }
 
+            // Clear template Hyperdrive blocks and add user's configuration
+            if (answers.database !== "d1" && answers.hdBinding) {
+                wrangler = clearAllHyperdriveBlocks(wrangler);
+                wrangler = appendOrReplaceHyperdriveBlock(wrangler, answers.hdBinding, undefined, answers.database);
+            } else {
+                // If user doesn't want Hyperdrive, remove all Hyperdrive blocks from template
+                wrangler = clearAllHyperdriveBlocks(wrangler);
+            }
+
             writeFileSync(wranglerPath, wrangler);
         } catch (e) {
             fatal("Failed to update wrangler.toml.");
@@ -1097,14 +1174,64 @@ async function generate(cliArgs?: CliArgs) {
                 if (answers.kv && answers.kvBinding) {
                     updated = updated.replace(/process\.env\.KV\b/g, `process.env.${answers.kvBinding}`);
                 } else {
-                    updated = updated.replace(/\n\s*kv:\s*process\.env\.[A-Z_]+[^\n]*,?/g, "\n");
+                    // Remove KV configuration: comment line + kv property
+                    updated = updated.replace(/\s*\/\/[^\n]*KV[^\n]*\n\s*kv:[^\n]*,?\n/g, "");
                 }
                 if (answers.r2 && answers.r2Binding) {
                     updated = updated.replace(
                         /getCloudflareContext\(\)\.env\.R2_BUCKET\b/g,
                         `getCloudflareContext().env.${answers.r2Binding}`
                     );
+                } else {
+                    // Remove R2 configuration: comment line + entire r2 block
+                    // This is a multi-step approach to handle the nested structure
+                    const lines = updated.split("\n");
+                    const filteredLines = [];
+                    let inR2Block = false;
+                    let braceCount = 0;
+
+                    for (const element of lines) {
+                        const line = element;
+
+                        // Check if this is an R2 comment line
+                        if (line.includes("R2") && line.trim().startsWith("//")) {
+                            continue; // Skip R2 comment lines
+                        }
+
+                        // Check if this line starts the r2 configuration
+                        if (line.trim().startsWith("r2:")) {
+                            inR2Block = true;
+                            braceCount = (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+                            if (braceCount === 0) {
+                                inR2Block = false; // Single line r2 config
+                            }
+                            continue; // Skip this line
+                        }
+
+                        if (inR2Block) {
+                            braceCount += (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+                            if (braceCount <= 0) {
+                                inR2Block = false;
+                            }
+                            continue; // Skip lines inside r2 block
+                        }
+
+                        filteredLines.push(line);
+                    }
+                    updated = filteredLines.join("\n");
+                    // Clean up any orphaned closing braces or malformed structure after R2 removal
+                    updated = updated.replace(/,\s*\}\s*,?\s*\n\s*\}/g, ",\n                }");
                 }
+                // Fix provider for Hyperdrive databases in schema generation section
+                if (answers.database === "hyperdrive-postgres") {
+                    updated = updated.replace(/provider:\s*"sqlite"/g, 'provider: "pg"');
+                }
+                if (answers.database === "hyperdrive-mysql") {
+                    updated = updated.replace(/provider:\s*"sqlite"/g, 'provider: "mysql"');
+                }
+                // Clean up any trailing commas and extra whitespace
+                updated = updated.replace(/,(\s*)\}/g, "$1}"); // Remove trailing commas before closing braces
+                updated = updated.replace(/\n\s*\n\s*\n/g, "\n\n"); // Collapse multiple empty lines
                 return updated;
             });
 
@@ -1166,12 +1293,14 @@ async function generate(cliArgs?: CliArgs) {
     // Handle Cloudflare setup
     const isNonInteractive = Boolean(cliArgs && Object.keys(cliArgs).length > 0);
     let setup: boolean;
+    let databaseSetupSkipped = false;
 
     if (isNonInteractive) {
         // Non-interactive mode
         setup = !answers.skipCloudflareSetup;
         if (answers.skipCloudflareSetup) {
             outro(pc.yellow("Skipping Cloudflare setup as requested."));
+            databaseSetupSkipped = true;
         }
     } else {
         // Interactive mode
@@ -1179,6 +1308,7 @@ async function generate(cliArgs?: CliArgs) {
         setup = confirmResult === true;
         if (!setup) {
             outro(pc.yellow("You can run wrangler setup later."));
+            databaseSetupSkipped = true;
         }
     }
 
@@ -1187,6 +1317,7 @@ async function generate(cliArgs?: CliArgs) {
         const authResult = await ensureWranglerAuth(isNonInteractive);
         if (authResult === "skip-setup") {
             setup = false;
+            databaseSetupSkipped = true;
         }
     }
 
@@ -1236,7 +1367,7 @@ async function generate(cliArgs?: CliArgs) {
                 const id = match ? match[1] : undefined;
                 if (id && existsSync(wranglerPath)) {
                     let wrangler = readFileSync(wranglerPath, "utf8");
-                    wrangler = appendOrReplaceHyperdriveBlock(wrangler, answers.hdBinding, id);
+                    wrangler = appendOrReplaceHyperdriveBlock(wrangler, answers.hdBinding, id, answers.database);
                     writeFileSync(wranglerPath, wrangler);
                 }
                 creating.stop(pc.green(`Hyperdrive created${id ? " (id: " + id + ")" : ""}.`));
@@ -1331,7 +1462,7 @@ async function generate(cliArgs?: CliArgs) {
         }
     }
 
-    if (answers.database === "d1" && !answers.skipCloudflareSetup) {
+    if (answers.database === "d1" && !databaseSetupSkipped) {
         let migrateChoice: "dev" | "prod" | "skip";
 
         if (isNonInteractive) {
@@ -1369,6 +1500,12 @@ async function generate(cliArgs?: CliArgs) {
                 assertOk(res, "Remote migration failed.");
             }
         }
+    } else if (answers.database === "d1" && databaseSetupSkipped) {
+        outro(
+            pc.yellow(
+                "Skipping D1 migrations since database setup was skipped. After setting up your D1 database, run: npx @better-auth-cloudflare/cli migrate"
+            )
+        );
     }
 
     // Final instructions
@@ -1390,7 +1527,7 @@ async function generate(cliArgs?: CliArgs) {
     } else {
         lines.push(
             pc.gray(
-                "Apply migrations to your Postgres/MySQL database using your preferred workflow (Drizzle Kit push/migrate)."
+                "Apply migrations to your Postgres/MySQL database using: bun run db:migrate:dev or bun run db:migrate:prod"
             )
         );
     }

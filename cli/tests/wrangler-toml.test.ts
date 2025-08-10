@@ -3,6 +3,7 @@ import {
     appendOrReplaceHyperdriveBlock,
     appendOrReplaceKvNamespaceBlock,
     appendOrReplaceR2Block,
+    clearAllHyperdriveBlocks,
     clearAllKvBlocks,
     clearAllR2Blocks,
     extractFirstBlock,
@@ -92,17 +93,62 @@ describe("appendOrReplaceR2Block", () => {
 });
 
 describe("appendOrReplaceHyperdriveBlock", () => {
-    test("adds hyperdrive block", () => {
+    test("adds hyperdrive block with PostgreSQL defaults", () => {
         const out = appendOrReplaceHyperdriveBlock(baseToml, "HYPERDRIVE", "abcd");
         expect(out).toContain("[[hyperdrive]]");
         expect(out).toContain('binding = "HYPERDRIVE"');
         expect(out).toContain('id = "abcd"');
+        // Should default to PostgreSQL connection string
+        expect(out).toContain('localConnectionString = "postgres://user:password@localhost:5432/your_database"');
     });
+
+    test("adds hyperdrive block with MySQL connection string", () => {
+        const out = appendOrReplaceHyperdriveBlock(baseToml, "HYPERDRIVE", "abcd", "hyperdrive-mysql");
+        expect(out).toContain("[[hyperdrive]]");
+        expect(out).toContain('binding = "HYPERDRIVE"');
+        expect(out).toContain('id = "abcd"');
+        expect(out).toContain('localConnectionString = "mysql://user:password@localhost:3306/your_database"');
+    });
+
+    test("adds hyperdrive block with PostgreSQL connection string explicitly", () => {
+        const out = appendOrReplaceHyperdriveBlock(baseToml, "HYPERDRIVE", "abcd", "hyperdrive-postgres");
+        expect(out).toContain("[[hyperdrive]]");
+        expect(out).toContain('binding = "HYPERDRIVE"');
+        expect(out).toContain('id = "abcd"');
+        expect(out).toContain('localConnectionString = "postgres://user:password@localhost:5432/your_database"');
+    });
+
+    test("adds placeholder ID when no ID provided (skip-cloudflare-setup fix)", () => {
+        const out = appendOrReplaceHyperdriveBlock(baseToml, "HYPERDRIVE", undefined, "hyperdrive-postgres");
+        expect(out).toContain("[[hyperdrive]]");
+        expect(out).toContain('binding = "HYPERDRIVE"');
+        expect(out).toContain('id = "YOUR_HYPERDRIVE_ID"');
+        expect(out).toContain('localConnectionString = "postgres://user:password@localhost:5432/your_database"');
+    });
+
     test("replaces existing hyperdrive block", () => {
         const first = appendOrReplaceHyperdriveBlock(baseToml, "HYPERDRIVE", "abcd");
         const second = appendOrReplaceHyperdriveBlock(first, "HYPERDRIVE", "efgh");
         expect(second).toContain('id = "efgh"');
         expect(second).not.toContain('id = "abcd"');
+        // Should still have local connection string
+        expect(second).toContain('localConnectionString = "postgres://user:password@localhost:5432/your_database"');
+    });
+
+    test("validates complete Hyperdrive configuration format", () => {
+        const out = appendOrReplaceHyperdriveBlock(baseToml, "HYPERDRIVE", "hd-123", "hyperdrive-postgres");
+
+        // Verify structure is correct
+        const lines = out.split("\n");
+        const hyperdriveStart = lines.findIndex(line => line.includes("[[hyperdrive]]"));
+        expect(hyperdriveStart).toBeGreaterThanOrEqual(0);
+
+        // Should have all required fields in correct order
+        expect(lines[hyperdriveStart + 1]).toContain('binding = "HYPERDRIVE"');
+        expect(lines[hyperdriveStart + 2]).toContain('id = "hd-123"');
+        expect(lines[hyperdriveStart + 3]).toContain(
+            'localConnectionString = "postgres://user:password@localhost:5432/your_database"'
+        );
     });
 });
 
@@ -161,6 +207,33 @@ bucket_name = "existing-bucket"
         const invalidKvBlock = appendOrReplaceKvNamespaceBlock(baseToml, "KV");
         expect(invalidKvBlock).toContain('binding = "KV"');
         // When no id provided, should not add id field (this would be invalid for actual wrangler)
+    });
+
+    test("KV namespace adds placeholder ID when no ID provided (skip-cloudflare-setup fix)", () => {
+        // This tests the fix for the Next.js build failure when --skip-cloudflare-setup=true
+        const kvBlock = appendOrReplaceKvNamespaceBlock(baseToml, "KV");
+
+        // Should have placeholder ID to prevent Next.js build failures
+        expect(kvBlock).toContain('binding = "KV"');
+        expect(kvBlock).toContain('id = "YOUR_KV_NAMESPACE_ID"');
+
+        // Verify the generated wrangler.toml is valid TOML
+        const tomlLines = kvBlock.split("\n");
+        const kvBlockStart = tomlLines.findIndex(line => line.includes("[[kv_namespaces]]"));
+        expect(kvBlockStart).toBeGreaterThanOrEqual(0);
+
+        // Next line should have binding
+        expect(tomlLines[kvBlockStart + 1]).toContain('binding = "KV"');
+        // Following line should have placeholder ID
+        expect(tomlLines[kvBlockStart + 2]).toContain('id = "YOUR_KV_NAMESPACE_ID"');
+    });
+
+    test("KV namespace uses real ID when provided", () => {
+        const kvBlock = appendOrReplaceKvNamespaceBlock(baseToml, "KV", "real-kv-id-123");
+
+        expect(kvBlock).toContain('binding = "KV"');
+        expect(kvBlock).toContain('id = "real-kv-id-123"');
+        expect(kvBlock).not.toContain("YOUR_KV_NAMESPACE_ID");
     });
 
     test("validates complete CLI-generated wrangler.toml format", () => {
@@ -289,6 +362,33 @@ binding = "DATABASE"
         expect(result).not.toContain("[[kv_namespaces]]");
         expect(result).not.toContain('binding = "KV"');
         expect(result).not.toContain('binding = "CACHE"');
+        // Should preserve other blocks
+        expect(result).toContain("[[d1_databases]]");
+    });
+
+    test("clearAllHyperdriveBlocks removes all Hyperdrive configurations", () => {
+        const tomlWithMultipleHyperdrive = `name = "app"
+
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "hd-123"
+localConnectionString = "postgres://user:pass@localhost:5432/db"
+
+[[hyperdrive]]
+binding = "HYPERDRIVE_MYSQL"
+id = "hd-456"
+localConnectionString = "mysql://user:pass@localhost:3306/db"
+
+[[d1_databases]]
+binding = "DATABASE"
+`;
+
+        const result = clearAllHyperdriveBlocks(tomlWithMultipleHyperdrive);
+
+        expect(result).not.toContain("[[hyperdrive]]");
+        expect(result).not.toContain('binding = "HYPERDRIVE"');
+        expect(result).not.toContain('binding = "HYPERDRIVE_MYSQL"');
+        expect(result).not.toContain("localConnectionString");
         // Should preserve other blocks
         expect(result).toContain("[[d1_databases]]");
     });

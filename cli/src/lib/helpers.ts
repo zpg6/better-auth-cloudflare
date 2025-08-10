@@ -66,10 +66,28 @@ export function appendOrReplaceR2Block(toml: string, binding: string, bucketName
     return toml.trimEnd() + "\n\n" + newBlock + "\n";
 }
 
-export function appendOrReplaceHyperdriveBlock(toml: string, binding: string, id: string) {
+export function appendOrReplaceHyperdriveBlock(
+    toml: string,
+    binding: string,
+    id: string,
+    database?: "hyperdrive-postgres" | "hyperdrive-mysql"
+) {
     const blockRegex = /\[\[hyperdrive\]\][\s\S]*?(?=(\n\[\[|$))/g;
     const blocks = toml.match(blockRegex) || [];
-    const newBlock = ["[[hyperdrive]]", `binding = "${binding}"`, `id = "${id}"`].join("\n");
+
+    // Add appropriate local connection string based on database type
+    let localConnectionString = "postgres://user:password@localhost:5432/your_database";
+    if (database === "hyperdrive-mysql") {
+        localConnectionString = "mysql://user:password@localhost:3306/your_database";
+    }
+
+    const newBlock = [
+        "[[hyperdrive]]",
+        `binding = "${binding}"`,
+        `id = "${id}"`,
+        `localConnectionString = "${localConnectionString}"`,
+    ].join("\n");
+
     const existingIndex = blocks.findIndex(b => b.includes(`binding = "${binding}"`));
     if (existingIndex >= 0) {
         const existing = blocks[existingIndex];
@@ -98,14 +116,17 @@ export function parseWranglerToml(tomlContent: string): {
         const block = d1Match[1];
         const bindingRegex = /binding\s*=\s*"([^"]+)"/;
         const nameRegex = /database_name\s*=\s*"([^"]+)"/;
+        const idRegex = /database_id\s*=\s*"([^"]+)"/;
         const bindingMatch = bindingRegex.exec(block);
         const nameMatch = nameRegex.exec(block);
+        const idMatch = idRegex.exec(block);
 
         if (bindingMatch) {
             databases.push({
                 type: "d1",
                 binding: bindingMatch[1],
                 name: nameMatch?.[1],
+                id: idMatch?.[1],
             });
         }
     }
