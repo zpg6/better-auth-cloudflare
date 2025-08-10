@@ -255,26 +255,26 @@ describe("Migrate Command", () => {
 
     test("migrate command handles different database types from wrangler.toml", () => {
         const wranglerConfigs = [
-            { 
+            {
                 databases: [{ type: "d1", binding: "DATABASE", name: "test-app-db" }],
-                expectedBehavior: "offers migration options"
+                expectedBehavior: "offers migration options",
             },
-            { 
+            {
                 databases: [{ type: "hyperdrive", binding: "HYPERDRIVE", id: "hd-123" }],
-                expectedBehavior: "shows informational message"
+                expectedBehavior: "shows informational message",
             },
-            { 
+            {
                 databases: [
                     { type: "d1", binding: "DATABASE", name: "main-db" },
-                    { type: "d1", binding: "USERS_DB", name: "users-db" }
+                    { type: "d1", binding: "USERS_DB", name: "users-db" },
                 ],
-                expectedBehavior: "prompts to choose database"
+                expectedBehavior: "prompts to choose database",
             },
         ];
 
         for (const config of wranglerConfigs) {
             expect(config.databases.length).toBeGreaterThan(0);
-            
+
             const hasD1 = config.databases.some(db => db.type === "d1");
             const hasHyperdrive = config.databases.some(db => db.type === "hyperdrive");
             expect(hasD1 || hasHyperdrive).toBe(true);

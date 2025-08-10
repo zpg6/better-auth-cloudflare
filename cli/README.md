@@ -8,6 +8,8 @@
 
 Generate a Better Auth Cloudflare project with D1, KV, R2, or Hyperdrive. This CLI tool provides scaffolding for both Hono and Next.js (OpenNext.js) applications with automatic Cloudflare resource setup.
 
+**Note**: The `generate` command configures one primary database (D1, Postgres via Hyperdrive, or MySQL via Hyperdrive). You can add additional database connections manually after project creation.
+
 ## What This CLI Replaces
 
 **The `generate` command** eliminates manual project setup:
@@ -87,9 +89,13 @@ The migrate command automatically detects your database configuration from `wran
 --template=<template>          hono | nextjs (default: hono)
 --database=<db>                d1 | hyperdrive-postgres | hyperdrive-mysql (default: d1)
 --geolocation=<bool>           Enable geolocation tracking (default: true)
---kv=<bool>                    Use KV storage (default: true)
---r2=<bool>                    Enable R2 storage (default: false)
+--kv=<bool>                    Use KV as secondary storage for Better Auth (default: true)
+--r2=<bool>                    Enable R2 to extend Better Auth with user file storage (default: false)
 ```
+
+**KV Integration**: Provides secondary storage for Better Auth sessions, rate limiting, and other features. See [Better Auth secondary storage documentation](https://www.better-auth.com/docs/reference/options#secondarystorage).
+
+**R2 Integration**: Enables file upload and management capabilities. See [R2 setup guide](../docs/r2.md) for detailed configuration and usage.
 
 ### Database-specific arguments
 
@@ -113,7 +119,7 @@ The migrate command automatically detects your database configuration from `wran
 ### Cloudflare account arguments
 
 ```
---account-id=<id>              Cloudflare account ID (for non-interactive mode)
+--account-id=<id>              Cloudflare account ID (only required if you have multiple accounts)
 --skip-cloudflare-setup=<bool> Skip Cloudflare resource creation (default: false)
 --apply-migrations=<choice>    Apply D1 migrations: dev | prod | skip (default: skip)
 ```

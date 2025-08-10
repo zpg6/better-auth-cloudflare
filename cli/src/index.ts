@@ -1421,8 +1421,8 @@ function printHelp() {
         `  --template=<template>          hono | nextjs (default: hono)\n` +
         `  --database=<db>                d1 | hyperdrive-postgres | hyperdrive-mysql (default: d1)\n` +
         `  --geolocation=<bool>           Enable geolocation tracking (default: true)\n` +
-        `  --kv=<bool>                    Use KV storage (default: true)\n` +
-        `  --r2=<bool>                    Enable R2 storage (default: false)\n` +
+        `  --kv=<bool>                    Use KV as secondary storage for Better Auth (default: true)\n` +
+        `  --r2=<bool>                    Enable R2 to extend Better Auth with user file storage (default: false)\n` +
         `\n` +
         `Database-specific arguments:\n` +
         `  --d1-name=<name>               D1 database name (default: <app-name>-db)\n` +
@@ -1438,7 +1438,7 @@ function printHelp() {
         `  --r2-bucket-name=<name>        R2 bucket name (default: <app-name>-files)\n` +
         `\n` +
         `Cloudflare account arguments:\n` +
-        `  --account-id=<id>              Cloudflare account ID (for non-interactive mode)\n` +
+        `  --account-id=<id>              Cloudflare account ID (only required if you have multiple accounts)\n` +
         `  --skip-cloudflare-setup=<bool> Skip Cloudflare resource creation (default: false)\n` +
         `  --apply-migrations=<choice>    Apply D1 migrations: dev | prod | skip (default: skip)\n` +
         `\n` +
