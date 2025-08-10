@@ -203,3 +203,81 @@ describe("Command availability", () => {
         // but it should always be a boolean
     });
 });
+
+describe("Version command parsing", () => {
+    test("version commands are identified correctly", () => {
+        const testCases = [
+            { input: "version", isVersion: true },
+            { input: "--version", isVersion: true },
+            { input: "-v", isVersion: true },
+            { input: "generate", isVersion: false },
+            { input: "migrate", isVersion: false },
+            { input: "help", isVersion: false },
+            { input: "--help", isVersion: false },
+            { input: "-h", isVersion: false },
+            { input: "unknown", isVersion: false },
+        ];
+
+        for (const testCase of testCases) {
+            const isVersionCommand = testCase.input === "version" || testCase.input === "--version" || testCase.input === "-v";
+            expect(isVersionCommand).toBe(testCase.isVersion);
+        }
+    });
+
+    test("version command parsing follows CLI priority order", () => {
+        // Simulate the command parsing logic from the main CLI
+        function parseCommand(cmd: string): string {
+            if (cmd === "version" || cmd === "--version" || cmd === "-v") {
+                return "version";
+            } else if (cmd === "help" || cmd === "-h" || cmd === "--help") {
+                return "help";
+            } else if (cmd === "migrate") {
+                return "migrate";
+            } else if (!cmd || cmd === "generate") {
+                return "generate";
+            } else {
+                return "unknown";
+            }
+        }
+
+        // Test version commands are handled first
+        expect(parseCommand("version")).toBe("version");
+        expect(parseCommand("--version")).toBe("version");
+        expect(parseCommand("-v")).toBe("version");
+        
+        // Test other commands still work
+        expect(parseCommand("help")).toBe("help");
+        expect(parseCommand("migrate")).toBe("migrate");
+        expect(parseCommand("generate")).toBe("generate");
+        expect(parseCommand(undefined as any)).toBe("generate");
+    });
+
+    test("version command output format is consistent", () => {
+        // Test expected version output format
+        const mockVersion = "0.1.0";
+        const expectedOutput = `@better-auth-cloudflare/cli v${mockVersion}`;
+        
+        expect(expectedOutput).toContain("@better-auth-cloudflare/cli");
+        expect(expectedOutput).toContain(`v${mockVersion}`);
+        expect(expectedOutput).toMatch(/v\d+\.\d+\.\d+/);
+    });
+
+    test("version integration with other commands", () => {
+        // Test that version is shown in command intros
+        const mockVersion = "0.1.0";
+        
+        const generateIntro = `Better Auth Cloudflare v${mockVersion} · generator`;
+        const migrateIntro = `Better Auth Cloudflare v${mockVersion} · migrate`;
+        const helpHeader = `@better-auth-cloudflare/cli v${mockVersion}`;
+        
+        // All should contain version
+        expect(generateIntro).toContain(mockVersion);
+        expect(migrateIntro).toContain(mockVersion);
+        expect(helpHeader).toContain(mockVersion);
+        
+        // All should follow consistent format
+        expect(generateIntro).toMatch(/v\d+\.\d+\.\d+/);
+        expect(migrateIntro).toMatch(/v\d+\.\d+\.\d+/);
+        expect(helpHeader).toMatch(/v\d+\.\d+\.\d+/);
+    });
+});

@@ -6,6 +6,62 @@ import { tmpdir } from "os";
 import { join, resolve } from "path";
 import pc from "picocolors";
 
+// Get package version from package.json
+function getPackageVersion(): string {
+    try {
+        const packagePath = join(__dirname, "..", "package.json");
+        const packageJson = JSON.parse(readFileSync(packagePath, "utf8")) as JSONObject;
+        return packageJson.version as string;
+    } catch {
+        return "unknown";
+    }
+}
+
+// Check for updates and suggest upgrade
+async function checkForUpdates(): Promise<void> {
+    try {
+        const currentVersion = getPackageVersion();
+        if (currentVersion === "unknown") return;
+
+        // Use npm view to get the latest version
+        const result = bunSpawnSync("npm", ["view", "@better-auth-cloudflare/cli", "version"]);
+        if (result.code !== 0) return;
+
+        const latestVersion = result.stdout.trim();
+        if (!latestVersion || latestVersion === currentVersion) return;
+
+        // Simple version comparison (assumes semantic versioning)
+        const currentParts = currentVersion.split('.').map(n => parseInt(n, 10));
+        const latestParts = latestVersion.split('.').map(n => parseInt(n, 10));
+        
+        let isNewer = false;
+        for (let i = 0; i < Math.max(currentParts.length, latestParts.length); i++) {
+            const current = currentParts[i] || 0;
+            const latest = latestParts[i] || 0;
+            if (latest > current) {
+                isNewer = true;
+                break;
+            } else if (latest < current) {
+                break;
+            }
+        }
+
+        if (isNewer) {
+            console.log(pc.yellow(`\n🔄 Update available: ${currentVersion} → ${latestVersion}`));
+            console.log(pc.cyan(`   Run: npm install -g @better-auth-cloudflare/cli@latest`));
+            console.log(pc.cyan(`   Or:  npx @better-auth-cloudflare/cli@latest\n`));
+        }
+    } catch {
+        // Silently fail - don't interrupt the user experience
+    }
+}
+
+// Print version information
+function printVersion(): void {
+    const version = getPackageVersion();
+    console.log(`@better-auth-cloudflare/cli v${version}`);
+}
+
 type DbKind = "d1" | "hyperdrive-postgres" | "hyperdrive-mysql";
 
 interface GenerateAnswers {
@@ -452,7 +508,11 @@ function cliArgsToAnswers(args: CliArgs): Partial<GenerateAnswers> {
 }
 
 async function migrate(cliArgs?: CliArgs) {
-    intro(`${pc.bold("Better Auth Cloudflare")} ${pc.gray("· migrate")}`);
+    const version = getPackageVersion();
+    intro(`${pc.bold("Better Auth Cloudflare")} ${pc.gray("v" + version + " · migrate")}`);
+
+    // Check for updates in the background
+    checkForUpdates();
 
     // Check if we're in a project directory by looking for project.config.json
     const configPath = join(process.cwd(), "project.config.json");
@@ -559,7 +619,11 @@ async function migrate(cliArgs?: CliArgs) {
 }
 
 async function generate(cliArgs?: CliArgs) {
-    intro(`${pc.bold("Better Auth Cloudflare")} ${pc.gray("· generator")}`);
+    const version = getPackageVersion();
+    intro(`${pc.bold("Better Auth Cloudflare")} ${pc.gray("v" + version + " · generator")}`);
+
+    // Check for updates in the background
+    checkForUpdates();
 
     let answers: GenerateAnswers;
 
@@ -1331,12 +1395,19 @@ async function generate(cliArgs?: CliArgs) {
 }
 
 function printHelp() {
+    const version = getPackageVersion();
+    // Check for updates in the background
+    checkForUpdates();
+    
     const help =
-        `\n${pc.bold("@better-auth-cloudflare/cli")}\n\n` +
+        `\n${pc.bold("@better-auth-cloudflare/cli")} ${pc.gray("v" + version)}\n\n` +
         `Usage:\n` +
         `  npx @better-auth-cloudflare/cli                         Run interactive generator\n` +
         `  npx @better-auth-cloudflare/cli generate                Run interactive generator\n` +
         `  npx @better-auth-cloudflare/cli migrate                 Run migration workflow\n` +
+        `  npx @better-auth-cloudflare/cli version                 Show version information\n` +
+        `  npx @better-auth-cloudflare/cli --version               Show version information\n` +
+        `  npx @better-auth-cloudflare/cli -v                      Show version information\n` +
         `  npx @better-auth-cloudflare/cli --app-name=my-app ...   Run with arguments\n` +
         `  bunx @better-auth-cloudflare/cli --app-name=my-app ...  Run with arguments\n` +
         `\n` +
@@ -1404,8 +1475,11 @@ function printHelp() {
 
 const cmd = process.argv[2];
 
-// Check for help first
-if (cmd === "help" || cmd === "-h" || cmd === "--help") {
+// Check for version first
+if (cmd === "version" || cmd === "--version" || cmd === "-v") {
+    printVersion();
+    checkForUpdates();
+} else if (cmd === "help" || cmd === "-h" || cmd === "--help") {
     printHelp();
 } else if (cmd === "migrate") {
     // Handle migrate command
@@ -1419,10 +1493,15 @@ if (cmd === "help" || cmd === "-h" || cmd === "--help") {
     const hasCliArgs = process.argv.slice(2).some(arg => arg.startsWith("--"));
 
     if (!cmd || cmd === "generate" || hasCliArgs) {
-        const cliArgs = hasCliArgs ? parseCliArgs(process.argv) : undefined;
-        generate(cliArgs).catch(err => {
-            fatal(String(err?.message ?? err));
-        });
+        // If no command is specified and no CLI args, show help with version
+        if (!cmd && !hasCliArgs) {
+            printHelp();
+        } else {
+            const cliArgs = hasCliArgs ? parseCliArgs(process.argv) : undefined;
+            generate(cliArgs).catch(err => {
+                fatal(String(err?.message ?? err));
+            });
+        }
     } else {
         printHelp();
         process.exit(1);

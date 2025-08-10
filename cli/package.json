@@ -1,8 +1,22 @@
 {
     "name": "@better-auth-cloudflare/cli",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "CLI to generate Better Auth Cloudflare projects (Hono or OpenNext.js)",
-    "author": "better-auth-cloudflare",
+    "author": "Zach Grimaldi",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/zpg6/better-auth-cloudflare.git"
+    },
+    "keywords": [
+        "better-auth",
+        "auth",
+        "cli",
+        "cloudflare",
+        "workers",
+        "hono",
+        "opennextjs",
+        "generator"
+    ],
     "license": "MIT",
     "private": false,
     "bin": {

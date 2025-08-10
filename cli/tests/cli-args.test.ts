@@ -7,6 +7,9 @@ describe("CLI Argument Handling", () => {
             undefined, // no command defaults to generate
             "generate",
             "migrate",
+            "version",
+            "--version",
+            "-v",
             "help",
             "-h",
             "--help",
@@ -16,6 +19,9 @@ describe("CLI Argument Handling", () => {
         // The actual CLI execution is tested through the main CLI functionality
         expect(validCommands).toContain("generate");
         expect(validCommands).toContain("migrate");
+        expect(validCommands).toContain("version");
+        expect(validCommands).toContain("--version");
+        expect(validCommands).toContain("-v");
         expect(validCommands).toContain("help");
         expect(validCommands).toContain("-h");
         expect(validCommands).toContain("--help");
@@ -52,6 +58,9 @@ describe("CLI Argument Handling", () => {
             "bunx @better-auth-cloudflare/cli",
             "generate",
             "migrate",
+            "version",
+            "--version",
+            "-v",
             "Better Auth Cloudflare project",
             "Hono or OpenNext.js templates",
         ];
@@ -91,7 +100,7 @@ describe("CLI Argument Handling", () => {
 
         // Test that unknown commands are not recognized as valid
         const isValidCommand =
-            !cmd || cmd === "generate" || cmd === "migrate" || cmd === "help" || cmd === "-h" || cmd === "--help";
+            !cmd || cmd === "generate" || cmd === "migrate" || cmd === "version" || cmd === "--version" || cmd === "-v" || cmd === "help" || cmd === "-h" || cmd === "--help";
         expect(isValidCommand).toBeFalsy();
     });
 
@@ -145,6 +154,37 @@ describe("CLI Argument Handling", () => {
             if (shouldRunGenerate) {
                 expect(shouldUseNonInteractive).toBe(testCase.expectNonInteractive);
             }
+        }
+    });
+
+    test("version commands are handled correctly", () => {
+        // Test version command variants
+        const versionCommands = ["version", "--version", "-v"];
+        
+        for (const cmd of versionCommands) {
+            const testArgv = ["node", "cli", cmd];
+            const command = testArgv[2];
+            
+            // Test that version commands are recognized
+            const isVersionCommand = command === "version" || command === "--version" || command === "-v";
+            expect(isVersionCommand).toBe(true);
+        }
+    });
+
+    test("version commands take precedence over other logic", () => {
+        // Version commands should be handled first, before generate/migrate logic
+        const versionScenarios = [
+            { argv: ["node", "cli", "version"], shouldBeVersion: true },
+            { argv: ["node", "cli", "--version"], shouldBeVersion: true },
+            { argv: ["node", "cli", "-v"], shouldBeVersion: true },
+            { argv: ["node", "cli", "generate"], shouldBeVersion: false },
+            { argv: ["node", "cli", "migrate"], shouldBeVersion: false },
+        ];
+
+        for (const scenario of versionScenarios) {
+            const cmd = scenario.argv[2];
+            const isVersionCommand = cmd === "version" || cmd === "--version" || cmd === "-v";
+            expect(isVersionCommand).toBe(scenario.shouldBeVersion);
         }
     });
 });

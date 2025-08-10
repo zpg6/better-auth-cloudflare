@@ -1,8 +1,41 @@
 # @better-auth-cloudflare/cli
 
-Generate a Better Auth Cloudflare project with D1, KV, R2, or Hyperdrive.
+[![NPM Version](https://img.shields.io/npm/v/@better-auth-cloudflare/cli)](https://www.npmjs.com/package/@better-auth-cloudflare/cli)
+[![NPM Downloads](https://img.shields.io/npm/dt/@better-auth-cloudflare/cli)](https://www.npmjs.com/package/@better-auth-cloudflare/cli)
+[![License: MIT](https://img.shields.io/npm/l/@better-auth-cloudflare/cli)](https://opensource.org/licenses/MIT)
+
+> Part of the [Better Auth Cloudflare](https://github.com/zpg6/better-auth-cloudflare) ecosystem - A complete authentication solution for Cloudflare Workers with Better Auth, featuring ready-to-use templates and integrations.
+
+Generate a Better Auth Cloudflare project with D1, KV, R2, or Hyperdrive. This CLI tool provides scaffolding for both Hono and Next.js (OpenNext.js) applications with automatic Cloudflare resource setup.
+
+## What This CLI Replaces
+
+**The `generate` command** eliminates manual project setup:
+
+🏗️ Creates complete Hono or Next.js projects with pre-configured auth (more types coming)
+- Sets up TypeScript configs, package.json scripts, file structure, and API routes
+- Creates database adapters for D1, Postgres, or MySQL
+
+☁️ Handles Cloudflare resource creation:
+- Runs `wrangler d1/kv/r2 create` commands and configures `wrangler.toml`
+- Sets up Hyperdrive connections and auth integrations
+
+📦 Runs initial setup: `@better-auth/cli generate`, `drizzle-kit generate`, and optionally applies migrations
+
+**The `migrate` command** streamlines schema updates:
+
+🔄 Handles the workflow when you modify auth configuration: generates auth schema, creates Drizzle migrations, and optionally applies them
 
 ## Quick Start
+
+**Check version and get help**:
+
+```bash
+npx @better-auth-cloudflare/cli --version    # Show version
+npx @better-auth-cloudflare/cli -v           # Show version (short)
+npx @better-auth-cloudflare/cli version      # Show version (command)
+npx @better-auth-cloudflare/cli              # Show help with version
+```
 
 **Interactive mode** (asks questions):
 
@@ -137,3 +170,9 @@ npx @better-auth-cloudflare/cli migrate --migrate-target=dev
 ---
 
 Creates a new Better Auth Cloudflare project from Hono or OpenNext.js templates, optionally creating Cloudflare D1, KV, R2, or Hyperdrive resources for you. The migrate command runs `auth:update`, `db:generate`, and optionally `db:migrate`.
+
+## Related
+
+- 📦 **[better-auth-cloudflare](https://github.com/zpg6/better-auth-cloudflare)** - Main package and documentation
+- 🌐 **[Better Auth](https://github.com/better-auth/better-auth)** - The authentication library powering this ecosystem
+- 📚 **[Examples](https://github.com/zpg6/better-auth-cloudflare/tree/main/examples)** - Ready-to-use templates and implementations
