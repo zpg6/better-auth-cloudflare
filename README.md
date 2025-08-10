@@ -40,7 +40,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - [x] `generate` - Create new projects from Hono/Next.js templates with automatic Cloudflare resource setup
 - [ ] `integrate` - Add `better-auth-cloudflare` to existing projects, creating/updating auth and schema files
 - [x] `migrate` - Update auth schema and run database migrations when configuration changes
-- [ ] `plugin` - Generate Better Auth plugins with typesafe endpoints and schema fields
+- [ ] `plugin` - Generate empty Better Auth plugin for quickly adding typesafe endpoints and schema fields
 - [x] `version` - Check the version of the CLI
 - [x] `help` - Show all commands and their usage
 
