@@ -137,6 +137,9 @@ function commandAvailable(command: string): boolean {
 function fatal(message: string, details?: string) {
     if (details && details.trim()) process.stdout.write(details);
     outro(pc.red(message));
+    console.log(pc.gray("\nNeed help?"));
+    console.log(pc.cyan("  Get help (usage, arguments): npx @better-auth-cloudflare/cli --help"));
+    console.log(pc.cyan("  Report issues: https://github.com/zpg6/better-auth-cloudflare/issues"));
     process.exit(1);
 }
 
@@ -1473,7 +1476,9 @@ function printHelp() {
         `\n` +
         `Creates a new Better Auth Cloudflare project from Hono or OpenNext.js templates,\n` +
         `optionally creating Cloudflare D1, KV, R2, or Hyperdrive resources for you.\n` +
-        `The migrate command runs auth:update, db:generate, and optionally db:migrate.\n`;
+        `The migrate command runs auth:update, db:generate, and optionally db:migrate.\n` +
+        `\n` +
+        `Report issues: https://github.com/zpg6/better-auth-cloudflare/issues\n`;
     // eslint-disable-next-line no-console
     console.log(help);
 }

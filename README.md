@@ -22,6 +22,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - 📍 **Automatic Geolocation Tracking**: Enrich user sessions with location data derived from Cloudflare.
 - 🌐 **Cloudflare IP Detection**: Utilize Cloudflare's IP detection headers out-of-the-box.
 - 🔍 **Rich Client-Side Context**: Access timezone, city, country, region, and more via the client plugin.
+- 📦 **CLI**: Tools for getting started quickly with Hono or Next.js, managing database schema, and more.
 
 ## Roadmap
 
@@ -33,8 +34,15 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - [x] R2
 - [ ] Cloudflare Images
 - [ ] Durable Objects
-- [x] CLI for project setup and Cloudflare resources setup
-- [x] CLI for database schema and migration management
+
+**CLI:**
+
+- [x] `generate` - Create new projects from Hono/Next.js templates with automatic Cloudflare resource setup
+- [ ] `integrate` - Add `better-auth-cloudflare` to existing projects, creating/updating auth and schema files
+- [x] `migrate` - Update auth schema and run database migrations when configuration changes
+- [ ] `plugin` - Generate Better Auth plugins with typesafe endpoints and schema fields
+- [x] `version` - Check the version of the CLI
+- [x] `help` - Show all commands and their usage
 
 **Examples:**
 
@@ -64,7 +72,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 
 ## Quick Start with CLI
 
-⚡️ For the fastest setup, use the CLI to generate a complete project with Cloudflare resources:
+⚡️ For the fastest setup, use the CLI to generate a complete project (including the resources on Cloudflare):
 
 **Interactive mode** (asks questions):
 
@@ -101,7 +109,7 @@ npx @better-auth-cloudflare/cli migrate              # Interactive
 npx @better-auth-cloudflare/cli migrate --migrate-target=dev  # Non-interactive
 ```
 
-The CLI creates projects from Hono or Next.js templates and can automatically set up D1, KV, R2, and Hyperdrive resources. See [cli/README.md](./cli/README.md) for full documentation and all available arguments.
+The CLI creates projects from Hono or Next.js templates and can automatically set up D1, KV, R2, and Hyperdrive resources. See [CLI Documentation](./cli/README.md) for full documentation and all available arguments.
 
 ## Manual Installation
 

@@ -190,3 +190,4 @@ Creates a new Better Auth Cloudflare project from Hono or OpenNext.js templates,
 - 📦 **[better-auth-cloudflare](https://github.com/zpg6/better-auth-cloudflare)** - Main package and documentation
 - 🌐 **[Better Auth](https://github.com/better-auth/better-auth)** - The authentication library powering this ecosystem
 - 📚 **[Examples](https://github.com/zpg6/better-auth-cloudflare/tree/main/examples)** - Ready-to-use templates and implementations
+- 🐛 **[Issues](https://github.com/zpg6/better-auth-cloudflare/issues)** - Bug reports, typos, and support
