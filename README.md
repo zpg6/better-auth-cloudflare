@@ -83,22 +83,13 @@ npx @better-auth-cloudflare/cli generate
 **Non-interactive mode** (use arguments):
 
 ```bash
-# Simple D1 app
+# Simple D1 app with KV (ready to run)
 npx @better-auth-cloudflare/cli generate \
-  --app-name=my-app \
+  --app-name=my-auth-app \
   --template=hono \
-  --database=d1
-
-# Full-featured app with all options
-npx @better-auth-cloudflare/cli generate \
-  --app-name=my-production-app \
-  --template=nextjs \
-  --database=hyperdrive-postgres \
-  --hd-connection-string=postgres://user:password@host:5432/db \
-  --geolocation=true \
+  --database=d1 \
   --kv=true \
-  --r2=true \
-  --account-id=your-cloudflare-account-id \
+  --r2=false \
   --apply-migrations=dev
 ```
 
