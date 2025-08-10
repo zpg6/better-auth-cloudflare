@@ -1508,6 +1508,42 @@ async function generate(cliArgs?: CliArgs) {
         );
     }
 
+    // Deploy to Cloudflare if setup was completed
+    if (setup && !databaseSetupSkipped) {
+        let deployChoice: boolean;
+
+        if (isNonInteractive) {
+            // In non-interactive mode, deploy automatically since they chose to setup Cloudflare
+            deployChoice = true;
+        } else {
+            // In interactive mode, ask user
+            const deployResult = await confirm({
+                message: "Deploy your app to Cloudflare Workers now?",
+                initialValue: true,
+            });
+            deployChoice = deployResult === true;
+        }
+
+        if (deployChoice) {
+            const deploySpinner = spinner();
+            deploySpinner.start("Deploying to Cloudflare Workers...");
+
+            const deployRes = runScript(pm, "deploy", targetDir);
+            if (deployRes.code === 0) {
+                deploySpinner.stop(pc.green("Successfully deployed to Cloudflare Workers!"));
+
+                // Try to extract the deployment URL from wrangler output
+                const urlMatch = deployRes.stdout.match(/https:\/\/[^\s]+\.workers\.dev/);
+                if (urlMatch) {
+                    outro(pc.cyan(`🚀 Your app is live at: ${urlMatch[0]}`));
+                }
+            } else {
+                deploySpinner.stop(pc.red("Deployment failed."));
+                outro(pc.yellow("You can deploy manually later with: bun run deploy"));
+            }
+        }
+    }
+
     // Final instructions
     const pmDev = pm === "yarn" ? "yarn dev" : pm === "npm" ? "npm run dev" : `${pm} run dev`;
     const runScriptHelp = (name: string) =>
@@ -1533,8 +1569,9 @@ async function generate(cliArgs?: CliArgs) {
     }
     lines.push(`  ${runScriptHelp("db:studio:dev")} ${pc.gray("# Open Drizzle Studio (local)")}`);
     lines.push(`  ${runScriptHelp("db:studio:prod")} ${pc.gray("# Open Drizzle Studio (remote)")}`);
+    lines.push(`  ${runScriptHelp("deploy")} ${pc.gray("# Deploy to Cloudflare Workers")}`);
     lines.push("");
-    lines.push(pc.gray("Refer to the example README for more details and deployment commands."));
+    lines.push(pc.gray("Refer to the example README for more details."));
 
     outro(lines.join("\n"));
 }
@@ -1579,7 +1616,7 @@ function printHelp() {
         `\n` +
         `Cloudflare account arguments:\n` +
         `  --account-id=<id>              Cloudflare account ID (only required if you have multiple accounts)\n` +
-        `  --skip-cloudflare-setup=<bool> Skip Cloudflare resource creation (default: false)\n` +
+        `  --skip-cloudflare-setup=<bool> Skip Cloudflare resource creation and deployment (default: false)\n` +
         `  --apply-migrations=<choice>    Apply D1 migrations: dev | prod | skip (default: skip)\n` +
         `\n` +
         `Migrate command arguments:\n` +
@@ -1604,6 +1641,9 @@ function printHelp() {
         `\n` +
         `  # Apply migrations automatically in non-interactive mode\n` +
         `  npx @better-auth-cloudflare/cli --app-name=auto-app --apply-migrations=dev\n` +
+        `\n` +
+        `  # Create and deploy app in one command (default when not skipping setup)\n` +
+        `  npx @better-auth-cloudflare/cli --app-name=prod-app\n` +
         `\n` +
         `  # Run migration workflow interactively\n` +
         `  npx @better-auth-cloudflare/cli migrate\n` +

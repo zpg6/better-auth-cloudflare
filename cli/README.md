@@ -26,6 +26,8 @@ Generate a Better Auth Cloudflare project with D1, KV, R2, or Hyperdrive. This C
 
 📦 Runs initial setup: `@better-auth/cli generate`, `drizzle-kit generate`, and optionally applies migrations
 
+🚀 Deploys to Cloudflare Workers when resources are set up (automatic in non-interactive mode, prompted in interactive mode)
+
 **The `migrate` command** streamlines schema updates:
 
 🔄 Handles the workflow when you modify auth configuration: generates auth schema, creates Drizzle migrations, and optionally applies them
@@ -111,7 +113,7 @@ The migrate command automatically detects your database configuration from `wran
 
 ```
 --account-id=<id>              Cloudflare account ID (only required if you have multiple accounts)
---skip-cloudflare-setup=<bool> Skip Cloudflare resource creation (default: false)
+--skip-cloudflare-setup=<bool> Skip Cloudflare resource creation and deployment (default: false)
 --apply-migrations=<choice>    Apply D1 migrations: dev | prod | skip (default: skip)
 ```
 
@@ -142,10 +144,18 @@ Create app without KV or R2:
 npx @better-auth-cloudflare/cli generate --app-name=minimal-app --kv=false --r2=false
 ```
 
-Skip Cloudflare setup (useful for CI/CD):
+Create and deploy in one command (default behavior):
+
+```bash
+npx @better-auth-cloudflare/cli generate --app-name=my-app
+# Creates resources, runs migrations, and deploys automatically
+```
+
+Skip Cloudflare setup and deployment (useful for CI/CD):
 
 ```bash
 npx @better-auth-cloudflare/cli generate --app-name=ci-app --skip-cloudflare-setup=true
+# Only generates project files, no Cloudflare resources or deployment
 ```
 
 Specify account ID for non-interactive mode:
