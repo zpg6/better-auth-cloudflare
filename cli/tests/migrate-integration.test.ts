@@ -23,54 +23,53 @@ describe("Migrate Command Integration", () => {
         }
     });
 
-    test("migrate command fails without project.config.json", () => {
-        // Ensure no project.config.json exists
-        const configPath = join(testDir, "project.config.json");
-        expect(existsSync(configPath)).toBe(false);
+    test("migrate command fails without wrangler.toml", () => {
+        // Ensure no wrangler.toml exists
+        const wranglerPath = join(testDir, "wrangler.toml");
+        expect(existsSync(wranglerPath)).toBe(false);
 
-        // The migrate command should detect missing config
+        // The migrate command should detect missing wrangler.toml
         // This would be tested by actually running the CLI in real integration tests
     });
 
-    test("migrate command reads project.config.json correctly", () => {
-        // Create a valid project.config.json
-        const projectConfig = {
-            name: "test-app",
-            template: "hono",
-            database: "d1",
-            d1Name: "test-app-db",
-            d1Binding: "DATABASE",
-            geolocation: true,
-            kv: true,
-            kvBinding: "KV",
-            r2: false,
-        };
+    test("migrate command reads wrangler.toml correctly", () => {
+        // Create a valid wrangler.toml with D1 database
+        const wranglerContent = `
+name = "test-app"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
 
-        const configPath = join(testDir, "project.config.json");
-        writeFileSync(configPath, JSON.stringify(projectConfig, null, 2));
+[[d1_databases]]
+binding = "DATABASE"
+database_name = "test-app-db"
+database_id = "test-id-123"
+`;
 
-        expect(existsSync(configPath)).toBe(true);
+        const wranglerPath = join(testDir, "wrangler.toml");
+        writeFileSync(wranglerPath, wranglerContent);
 
-        // The migrate command should be able to read this config
-        const readConfig = JSON.parse(require("fs").readFileSync(configPath, "utf8"));
-        expect(readConfig.database).toBe("d1");
-        expect(readConfig.name).toBe("test-app");
+        expect(existsSync(wranglerPath)).toBe(true);
+
+        // The migrate command should be able to parse this config
+        const readContent = require("fs").readFileSync(wranglerPath, "utf8");
+        expect(readContent).toContain("DATABASE");
+        expect(readContent).toContain("test-app-db");
     });
 
     test("migrate command with D1 database configuration", () => {
-        // Create project config for D1 database
-        const projectConfig = {
-            name: "d1-app",
-            template: "hono",
-            database: "d1",
-            d1Name: "d1-app-db",
-            d1Binding: "DATABASE",
-            geolocation: true,
-            kv: false,
-            r2: false,
-        };
+        // Create wrangler.toml with D1 database
+        const wranglerContent = `
+name = "d1-app"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
 
-        writeFileSync(join(testDir, "project.config.json"), JSON.stringify(projectConfig, null, 2));
+[[d1_databases]]
+binding = "DATABASE"
+database_name = "d1-app-db"
+database_id = "test-id-456"
+`;
+
+        writeFileSync(join(testDir, "wrangler.toml"), wranglerContent);
 
         // Create a package.json with the expected scripts
         const packageJson = {
@@ -86,28 +85,31 @@ describe("Migrate Command Integration", () => {
         writeFileSync(join(testDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
         // Verify the test setup
-        expect(existsSync(join(testDir, "project.config.json"))).toBe(true);
+        expect(existsSync(join(testDir, "wrangler.toml"))).toBe(true);
         expect(existsSync(join(testDir, "package.json"))).toBe(true);
 
-        const config = JSON.parse(require("fs").readFileSync(join(testDir, "project.config.json"), "utf8"));
-        expect(config.database).toBe("d1");
+        const content = require("fs").readFileSync(join(testDir, "wrangler.toml"), "utf8");
+        expect(content).toContain("[[d1_databases]]");
+        expect(content).toContain('binding = "DATABASE"');
     });
 
     test("migrate command with hyperdrive database configuration", () => {
-        // Create project config for Hyperdrive database
-        const projectConfig = {
-            name: "pg-app",
-            template: "nextjs",
-            database: "hyperdrive-postgres",
-            hdName: "pg-app-hyperdrive",
-            hdBinding: "HYPERDRIVE",
-            hdConnectionString: "postgres://user:pass@host:5432/db",
-            geolocation: true,
-            kv: true,
-            r2: false,
-        };
+        // Create wrangler.toml with Hyperdrive database
+        const wranglerContent = `
+name = "pg-app"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
 
-        writeFileSync(join(testDir, "project.config.json"), JSON.stringify(projectConfig, null, 2));
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "hyperdrive-id-123"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "kv-id-789"
+`;
+
+        writeFileSync(join(testDir, "wrangler.toml"), wranglerContent);
 
         // Create package.json
         const packageJson = {
@@ -120,8 +122,9 @@ describe("Migrate Command Integration", () => {
 
         writeFileSync(join(testDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
-        const config = JSON.parse(require("fs").readFileSync(join(testDir, "project.config.json"), "utf8"));
-        expect(config.database).toBe("hyperdrive-postgres");
+        const content = require("fs").readFileSync(join(testDir, "wrangler.toml"), "utf8");
+        expect(content).toContain("[[hyperdrive]]");
+        expect(content).toContain('binding = "HYPERDRIVE"');
 
         // For hyperdrive databases, migrate command should not offer db:migrate options
     });
@@ -203,14 +206,19 @@ describe("Migrate Command Integration", () => {
     });
 
     test("migrate command script execution simulation", () => {
-        // Create a project setup
-        const projectConfig = {
-            name: "test-app",
-            database: "d1",
-            template: "hono",
-        };
+        // Create a wrangler.toml setup
+        const wranglerContent = `
+name = "test-app"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
 
-        writeFileSync(join(testDir, "project.config.json"), JSON.stringify(projectConfig, null, 2));
+[[d1_databases]]
+binding = "DATABASE"
+database_name = "test-app-db"
+database_id = "test-id"
+`;
+
+        writeFileSync(join(testDir, "wrangler.toml"), wranglerContent);
 
         // Simulate the script execution order
         const executionOrder: string[] = [];
@@ -236,16 +244,21 @@ describe("Migrate Command Integration", () => {
     });
 
     test("migrate command handles missing package.json", () => {
-        // Create project.config.json but no package.json
-        const projectConfig = {
-            name: "test-app",
-            database: "d1",
-            template: "hono",
-        };
+        // Create wrangler.toml but no package.json
+        const wranglerContent = `
+name = "test-app"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
 
-        writeFileSync(join(testDir, "project.config.json"), JSON.stringify(projectConfig, null, 2));
+[[d1_databases]]
+binding = "DATABASE"
+database_name = "test-app-db"
+database_id = "test-id"
+`;
 
-        expect(existsSync(join(testDir, "project.config.json"))).toBe(true);
+        writeFileSync(join(testDir, "wrangler.toml"), wranglerContent);
+
+        expect(existsSync(join(testDir, "wrangler.toml"))).toBe(true);
         expect(existsSync(join(testDir, "package.json"))).toBe(false);
 
         // The migrate command should handle missing package.json gracefully
@@ -259,16 +272,22 @@ describe("Migrate Command Integration", () => {
         const realTestDir = require("fs").realpathSync(testDir);
         expect(realCwd).toBe(realTestDir);
 
-        // Create a project config to simulate being in a project directory
-        const projectConfig = {
-            name: "test-app",
-            database: "d1",
-        };
+        // Create a wrangler.toml to simulate being in a project directory
+        const wranglerContent = `
+name = "test-app"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
 
-        writeFileSync(join(testDir, "project.config.json"), JSON.stringify(projectConfig, null, 2));
+[[d1_databases]]
+binding = "DATABASE"
+database_name = "test-app-db"
+database_id = "test-id"
+`;
 
-        // Should be able to find project.config.json in current directory
-        expect(existsSync(join(process.cwd(), "project.config.json"))).toBe(true);
+        writeFileSync(join(testDir, "wrangler.toml"), wranglerContent);
+
+        // Should be able to find wrangler.toml in current directory
+        expect(existsSync(join(process.cwd(), "wrangler.toml"))).toBe(true);
     });
 
     test("migrate command with different database types shows appropriate messages", () => {

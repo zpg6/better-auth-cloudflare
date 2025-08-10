@@ -77,3 +77,60 @@ export function appendOrReplaceHyperdriveBlock(toml: string, binding: string, id
     }
     return toml.trimEnd() + "\n\n" + newBlock + "\n";
 }
+
+export interface DatabaseConfig {
+    type: "d1" | "hyperdrive";
+    binding: string;
+    name?: string;
+    id?: string;
+}
+
+export function parseWranglerToml(tomlContent: string): {
+    databases: DatabaseConfig[];
+    hasMultipleDatabases: boolean;
+} {
+    const databases: DatabaseConfig[] = [];
+
+    // Parse D1 databases
+    const d1Regex = /\[\[d1_databases\]\]\s*\n([^[]*?)(?=\n\[|\n$|$)/g;
+    let d1Match;
+    while ((d1Match = d1Regex.exec(tomlContent)) !== null) {
+        const block = d1Match[1];
+        const bindingRegex = /binding\s*=\s*"([^"]+)"/;
+        const nameRegex = /database_name\s*=\s*"([^"]+)"/;
+        const bindingMatch = bindingRegex.exec(block);
+        const nameMatch = nameRegex.exec(block);
+
+        if (bindingMatch) {
+            databases.push({
+                type: "d1",
+                binding: bindingMatch[1],
+                name: nameMatch?.[1],
+            });
+        }
+    }
+
+    // Parse Hyperdrive databases
+    const hyperdriveRegex = /\[\[hyperdrive\]\]\s*\n([^[]*?)(?=\n\[|\n$|$)/g;
+    let hyperdriveMatch;
+    while ((hyperdriveMatch = hyperdriveRegex.exec(tomlContent)) !== null) {
+        const block = hyperdriveMatch[1];
+        const bindingRegex = /binding\s*=\s*"([^"]+)"/;
+        const idRegex = /id\s*=\s*"([^"]+)"/;
+        const bindingMatch = bindingRegex.exec(block);
+        const idMatch = idRegex.exec(block);
+
+        if (bindingMatch) {
+            databases.push({
+                type: "hyperdrive",
+                binding: bindingMatch[1],
+                id: idMatch?.[1],
+            });
+        }
+    }
+
+    return {
+        databases,
+        hasMultipleDatabases: databases.length > 1,
+    };
+}

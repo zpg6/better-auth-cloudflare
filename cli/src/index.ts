@@ -5,6 +5,7 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "fs
 import { tmpdir } from "os";
 import { join, resolve } from "path";
 import pc from "picocolors";
+import { parseWranglerToml, type DatabaseConfig } from "./lib/helpers.js";
 
 // Get package version from package.json
 function getPackageVersion(): string {
@@ -31,9 +32,9 @@ async function checkForUpdates(): Promise<void> {
         if (!latestVersion || latestVersion === currentVersion) return;
 
         // Simple version comparison (assumes semantic versioning)
-        const currentParts = currentVersion.split('.').map(n => parseInt(n, 10));
-        const latestParts = latestVersion.split('.').map(n => parseInt(n, 10));
-        
+        const currentParts = currentVersion.split(".").map(n => parseInt(n, 10));
+        const latestParts = latestVersion.split(".").map(n => parseInt(n, 10));
+
         let isNewer = false;
         for (let i = 0; i < Math.max(currentParts.length, latestParts.length); i++) {
             const current = currentParts[i] || 0;
@@ -514,19 +515,25 @@ async function migrate(cliArgs?: CliArgs) {
     // Check for updates in the background
     checkForUpdates();
 
-    // Check if we're in a project directory by looking for project.config.json
-    const configPath = join(process.cwd(), "project.config.json");
-    if (!existsSync(configPath)) {
-        fatal("No project.config.json found. Please run this command from a Better Auth Cloudflare project directory.");
+    // Check if we're in a project directory by looking for wrangler.toml
+    const wranglerPath = join(process.cwd(), "wrangler.toml");
+    if (!existsSync(wranglerPath)) {
+        fatal("No wrangler.toml found. Please run this command from a Cloudflare Workers project directory.");
     }
 
-    // Read project config to get project details
-    let projectConfig: JSONObject;
+    // Read and parse wrangler.toml to detect database configurations
+    let wranglerContent: string;
     try {
-        projectConfig = JSON.parse(readFileSync(configPath, "utf8")) as JSONObject;
+        wranglerContent = readFileSync(wranglerPath, "utf8");
     } catch (e) {
-        fatal("Failed to read project.config.json");
-        return; // This line will never be reached due to fatal(), but satisfies TypeScript
+        fatal("Failed to read wrangler.toml");
+        return;
+    }
+
+    const { databases, hasMultipleDatabases } = parseWranglerToml(wranglerContent);
+
+    if (databases.length === 0) {
+        fatal("No database configurations found in wrangler.toml. Please configure a D1 or Hyperdrive database.");
     }
 
     const pm = detectPackageManager(process.cwd());
@@ -554,65 +561,92 @@ async function migrate(cliArgs?: CliArgs) {
         assertOk(dbRes, "Database migration generation failed.");
     }
 
-    // Only ask about db:migrate if database is D1
-    const database = projectConfig.database as string;
-    if (database === "d1") {
-        let migrateChoice: "dev" | "remote" | "skip" = "skip";
+    // Handle D1 database migrations
+    const d1Databases = databases.filter(db => db.type === "d1");
 
-        if (isNonInteractive) {
-            // Check for CLI argument
-            if (cliArgs && cliArgs["migrate-target"]) {
-                const target = cliArgs["migrate-target"] as string;
-                if (["dev", "remote", "skip"].includes(target)) {
-                    migrateChoice = target as "dev" | "remote" | "skip";
-                } else {
-                    fatal("migrate-target must be 'dev', 'remote', or 'skip'");
-                }
-            } else {
-                migrateChoice = "skip"; // Default in non-interactive mode
-            }
-        } else {
-            // Interactive mode - ask user
-            migrateChoice = (await (select as any)({
-                message: "Apply D1 migrations?",
-                options: [
-                    { value: "dev", label: "Yes, apply locally (dev)" },
-                    { value: "remote", label: "Yes, apply to remote (prod)" },
-                    { value: "skip", label: "No, skip migration" },
-                ],
-                initialValue: "skip",
-            })) as "dev" | "remote" | "skip";
-        }
-
-        if (migrateChoice === "dev") {
-            const migSpinner = spinner();
-            migSpinner.start("Applying migrations locally...");
-            const migRes = runScript(pm, "db:migrate:dev", process.cwd());
-            if (migRes.code === 0) {
-                migSpinner.stop(pc.green("Migrations applied locally."));
-            } else {
-                migSpinner.stop(pc.red("Failed to apply local migrations."));
-                assertOk(migRes, "Local migration failed.");
-            }
-        } else if (migrateChoice === "remote") {
-            const migSpinner = spinner();
-            migSpinner.start("Applying migrations to remote...");
-            const migRes = runScript(pm, "db:migrate:prod", process.cwd());
-            if (migRes.code === 0) {
-                migSpinner.stop(pc.green("Migrations applied to remote."));
-            } else {
-                migSpinner.stop(pc.red("Failed to apply remote migrations."));
-                assertOk(migRes, "Remote migration failed.");
-            }
-        }
-    } else {
-        // For non-D1 databases, just show a message
+    if (d1Databases.length === 0) {
+        // No D1 databases found
+        const hyperdriveCount = databases.filter(db => db.type === "hyperdrive").length;
         outro(
             pc.yellow(
-                `Database type is ${database}. Please apply migrations to your database using your preferred workflow.`
+                `Found ${hyperdriveCount} Hyperdrive database${hyperdriveCount === 1 ? "" : "s"}. Please apply migrations to your database using your preferred workflow.`
             )
         );
         return;
+    }
+
+    // Determine which D1 database to migrate
+    let selectedDatabase = d1Databases[0];
+
+    if (hasMultipleDatabases && d1Databases.length > 1) {
+        if (isNonInteractive) {
+            // In non-interactive mode, use the first D1 database found
+            outro(
+                pc.yellow(
+                    `Multiple D1 databases found. Using first one: ${selectedDatabase.binding} (${selectedDatabase.name ?? "unnamed"})`
+                )
+            );
+        } else {
+            // Interactive mode - let user choose
+            const choice = (await (select as any)({
+                message: "Multiple D1 databases found. Which one would you like to migrate?",
+                options: d1Databases.map(db => ({
+                    value: db,
+                    label: `${db.binding}${db.name ? ` (${db.name})` : ""}`,
+                })),
+                initialValue: selectedDatabase,
+            })) as DatabaseConfig;
+            selectedDatabase = choice;
+        }
+    }
+
+    // Ask about migration target
+    let migrateChoice: "dev" | "remote" | "skip" = "skip";
+
+    if (isNonInteractive) {
+        if (cliArgs && cliArgs["migrate-target"]) {
+            const target = cliArgs["migrate-target"] as string;
+            if (["dev", "remote", "skip"].includes(target)) {
+                migrateChoice = target as "dev" | "remote" | "skip";
+            } else {
+                fatal("migrate-target must be 'dev', 'remote', or 'skip'");
+            }
+        }
+    } else {
+        const databaseLabel = selectedDatabase.name
+            ? `${selectedDatabase.binding} (${selectedDatabase.name})`
+            : selectedDatabase.binding;
+        migrateChoice = (await (select as any)({
+            message: `Apply D1 migrations for ${databaseLabel}?`,
+            options: [
+                { value: "dev", label: "Yes, apply locally (dev)" },
+                { value: "remote", label: "Yes, apply to remote (prod)" },
+                { value: "skip", label: "No, skip migration" },
+            ],
+            initialValue: "skip",
+        })) as "dev" | "remote" | "skip";
+    }
+
+    if (migrateChoice === "dev") {
+        const migSpinner = spinner();
+        migSpinner.start("Applying migrations locally...");
+        const migRes = runScript(pm, "db:migrate:dev", process.cwd());
+        if (migRes.code === 0) {
+            migSpinner.stop(pc.green("Migrations applied locally."));
+        } else {
+            migSpinner.stop(pc.red("Failed to apply local migrations."));
+            assertOk(migRes, "Local migration failed.");
+        }
+    } else if (migrateChoice === "remote") {
+        const migSpinner = spinner();
+        migSpinner.start("Applying migrations to remote...");
+        const migRes = runScript(pm, "db:migrate:prod", process.cwd());
+        if (migRes.code === 0) {
+            migSpinner.stop(pc.green("Migrations applied to remote."));
+        } else {
+            migSpinner.stop(pc.red("Failed to apply remote migrations."));
+            assertOk(migRes, "Remote migration failed.");
+        }
     }
 
     outro(pc.green("Migration completed successfully!"));
@@ -836,35 +870,6 @@ async function generate(cliArgs?: CliArgs) {
     copying.stop("Project files copied.");
 
     // Centralize project constants for future tooling
-    const constantsFile = join(targetDir, "project.config.json");
-    try {
-        writeFileSync(
-            constantsFile,
-            JSON.stringify(
-                {
-                    name: answers.appName,
-                    template: answers.template,
-                    database: answers.database,
-                    d1Name: answers.d1Name ?? null,
-                    d1Binding: answers.d1Binding ?? null,
-                    hdName: answers.hdName ?? null,
-                    hdBinding: answers.hdBinding ?? null,
-                    hdConnectionString: answers.hdConnectionString ?? null,
-                    geolocation: answers.geolocation,
-                    kv: answers.kv,
-                    kvBinding: answers.kvBinding ?? null,
-                    kvNamespaceName: answers.kvNamespaceName ?? null,
-                    r2: answers.r2,
-                    r2Binding: answers.r2Binding ?? null,
-                    r2BucketName: answers.r2BucketName ?? null,
-                },
-                null,
-                2
-            )
-        );
-    } catch (e) {
-        fatal("Failed to write project config.");
-    }
 
     // Update package.json name and dependencies and scripts to use chosen bindings
     const pkgPath = join(targetDir, "package.json");
@@ -1398,7 +1403,7 @@ function printHelp() {
     const version = getPackageVersion();
     // Check for updates in the background
     checkForUpdates();
-    
+
     const help =
         `\n${pc.bold("@better-auth-cloudflare/cli")} ${pc.gray("v" + version)}\n\n` +
         `Usage:\n` +

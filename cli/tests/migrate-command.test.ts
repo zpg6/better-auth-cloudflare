@@ -61,13 +61,13 @@ describe("Migrate Command", () => {
         }
     });
 
-    test("migrate command requires project.config.json", () => {
-        // This test verifies the logic that checks for project.config.json
-        // In actual implementation, this would check existsSync(configPath)
-        const projectConfigPath = "project.config.json";
-        expect(projectConfigPath).toBe("project.config.json");
+    test("migrate command requires wrangler.toml", () => {
+        // This test verifies the logic that checks for wrangler.toml
+        // In actual implementation, this would check existsSync(wranglerPath)
+        const wranglerPath = "wrangler.toml";
+        expect(wranglerPath).toBe("wrangler.toml");
 
-        // The migrate command should fail if no project.config.json exists
+        // The migrate command should fail if no wrangler.toml exists
         // This would be tested in integration tests with actual file system
     });
 
@@ -151,8 +151,8 @@ describe("Migrate Command", () => {
         // Test error scenarios
         const errorScenarios = [
             {
-                condition: "no project.config.json",
-                expectedError: "No project.config.json found",
+                condition: "no wrangler.toml",
+                expectedError: "No wrangler.toml found",
             },
             {
                 condition: "invalid migrate-target",
@@ -253,25 +253,32 @@ describe("Migrate Command", () => {
         }
     });
 
-    test("migrate command handles different project configurations", () => {
-        const projectConfigs = [
-            { database: "d1", name: "test-app", template: "hono" },
-            { database: "hyperdrive-postgres", name: "pg-app", template: "nextjs" },
-            { database: "hyperdrive-mysql", name: "mysql-app", template: "hono" },
+    test("migrate command handles different database types from wrangler.toml", () => {
+        const wranglerConfigs = [
+            { 
+                databases: [{ type: "d1", binding: "DATABASE", name: "test-app-db" }],
+                expectedBehavior: "offers migration options"
+            },
+            { 
+                databases: [{ type: "hyperdrive", binding: "HYPERDRIVE", id: "hd-123" }],
+                expectedBehavior: "shows informational message"
+            },
+            { 
+                databases: [
+                    { type: "d1", binding: "DATABASE", name: "main-db" },
+                    { type: "d1", binding: "USERS_DB", name: "users-db" }
+                ],
+                expectedBehavior: "prompts to choose database"
+            },
         ];
 
-        for (const config of projectConfigs) {
-            expect(config.database).toBeTruthy();
-            expect(config.name).toBeTruthy();
-            expect(config.template).toBeTruthy();
-
-            // D1 should support migration commands
-            if (config.database === "d1") {
-                expect(config.database).toBe("d1");
-            } else {
-                // Non-D1 should show informational message
-                expect(["hyperdrive-postgres", "hyperdrive-mysql"]).toContain(config.database);
-            }
+        for (const config of wranglerConfigs) {
+            expect(config.databases.length).toBeGreaterThan(0);
+            
+            const hasD1 = config.databases.some(db => db.type === "d1");
+            const hasHyperdrive = config.databases.some(db => db.type === "hyperdrive");
+            expect(hasD1 || hasHyperdrive).toBe(true);
+            expect(config.expectedBehavior).toBeTruthy();
         }
     });
 });

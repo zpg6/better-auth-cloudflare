@@ -13,10 +13,12 @@ Generate a Better Auth Cloudflare project with D1, KV, R2, or Hyperdrive. This C
 **The `generate` command** eliminates manual project setup:
 
 🏗️ Creates complete Hono or Next.js projects with pre-configured auth (more types coming)
+
 - Sets up TypeScript configs, package.json scripts, file structure, and API routes
 - Creates database adapters for D1, Postgres, or MySQL
 
 ☁️ Handles Cloudflare resource creation:
+
 - Runs `wrangler d1/kv/r2 create` commands and configures `wrangler.toml`
 - Sets up Hyperdrive connections and auth integrations
 
@@ -71,6 +73,12 @@ npx @better-auth-cloudflare/cli generate \
 npx @better-auth-cloudflare/cli migrate              # Interactive
 npx @better-auth-cloudflare/cli migrate --migrate-target=dev  # Non-interactive
 ```
+
+The migrate command automatically detects your database configuration from `wrangler.toml`. It supports:
+
+- **D1 databases**: Offers migration options (dev/remote)
+- **Hyperdrive databases**: Shows informational message
+- **Multiple databases**: Prompts you to choose which D1 database to migrate
 
 ## Arguments
 
