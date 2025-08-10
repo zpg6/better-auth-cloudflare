@@ -45,9 +45,10 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 
 ## Table of Contents
 
-- [Installation](#installation)
+- [Quick Start with CLI](#quick-start-with-cli)
 - [Configuration Options](#configuration-options)
-- [Setup](#setup)
+- [Manual Installation](#manual-installation)
+- [Manual Setup](#manual-setup)
     - [1. Define Your Database Schema (`src/db/schema.ts`)](#1-define-your-database-schema-srcdbschemats)
     - [2. Initialize Drizzle ORM (`src/db/index.ts`)](#2-initialize-drizzle-orm-srcdbindexts)
     - [3. Configure Better Auth (`src/auth/index.ts`)](#3-configure-better-auth-srcauthindexts)
@@ -61,7 +62,48 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - [License](#license)
 - [Contributing](#contributing)
 
-## Installation
+## Quick Start with CLI
+
+⚡️ For the fastest setup, use the CLI to generate a complete project with Cloudflare resources:
+
+**Interactive mode** (asks questions):
+
+```bash
+npx @better-auth-cloudflare/cli generate
+```
+
+**Non-interactive mode** (use arguments):
+
+```bash
+# Simple D1 app
+npx @better-auth-cloudflare/cli generate \
+  --app-name=my-app \
+  --template=hono \
+  --database=d1
+
+# Full-featured app with all options
+npx @better-auth-cloudflare/cli generate \
+  --app-name=my-production-app \
+  --template=nextjs \
+  --database=hyperdrive-postgres \
+  --hd-connection-string=postgres://user:password@host:5432/db \
+  --geolocation=true \
+  --kv=true \
+  --r2=true \
+  --account-id=your-cloudflare-account-id \
+  --apply-migrations=dev
+```
+
+**Migration workflow**:
+
+```bash
+npx @better-auth-cloudflare/cli migrate              # Interactive
+npx @better-auth-cloudflare/cli migrate --migrate-target=dev  # Non-interactive
+```
+
+The CLI creates projects from Hono or Next.js templates and can automatically set up D1, KV, R2, and Hyperdrive resources. See [cli/README.md](./cli/README.md) for full documentation and all available arguments.
+
+## Manual Installation
 
 ```bash
 npm install better-auth-cloudflare
@@ -72,16 +114,6 @@ pnpm add better-auth-cloudflare
 # or
 bun add better-auth-cloudflare
 ```
-
-### Quick Start with CLI
-
-For the fastest setup, use the CLI to generate a complete project with Cloudflare resources:
-
-```bash
-npx @better-auth-cloudflare/cli
-```
-
-The CLI creates projects from Hono or Next.js templates and can automatically set up D1, KV, R2, and Hyperdrive resources. See [cli/README.md](./cli/README.md) for full documentation.
 
 ## Configuration Options
 

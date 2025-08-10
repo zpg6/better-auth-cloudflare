@@ -1,13 +1,42 @@
 # @better-auth-cloudflare/cli
 
-## Usage
+Generate a Better Auth Cloudflare project with D1, KV, R2, or Hyperdrive.
+
+## Quick Start
+
+**Interactive mode** (asks questions):
 
 ```bash
-npx @better-auth-cloudflare/cli                         # Run interactive generator
-npx @better-auth-cloudflare/cli generate                # Run interactive generator
-npx @better-auth-cloudflare/cli migrate                 # Run migration workflow
-npx @better-auth-cloudflare/cli --app-name=my-app ...   # Run with arguments
-bunx @better-auth-cloudflare/cli --app-name=my-app ...  # Run with arguments
+npx @better-auth-cloudflare/cli generate
+```
+
+**Non-interactive mode** (use arguments):
+
+```bash
+# Simple D1 app
+npx @better-auth-cloudflare/cli generate \
+  --app-name=my-app \
+  --template=hono \
+  --database=d1
+
+# Full-featured app with all options
+npx @better-auth-cloudflare/cli generate \
+  --app-name=my-production-app \
+  --template=nextjs \
+  --database=hyperdrive-postgres \
+  --hd-connection-string=postgres://user:password@host:5432/db \
+  --geolocation=true \
+  --kv=true \
+  --r2=true \
+  --account-id=your-cloudflare-account-id \
+  --apply-migrations=dev
+```
+
+**Migration workflow**:
+
+```bash
+npx @better-auth-cloudflare/cli migrate              # Interactive
+npx @better-auth-cloudflare/cli migrate --migrate-target=dev  # Non-interactive
 ```
 
 ## Arguments
@@ -59,38 +88,38 @@ bunx @better-auth-cloudflare/cli --app-name=my-app ...  # Run with arguments
 Create a Hono app with D1 database:
 
 ```bash
-npx @better-auth-cloudflare/cli --app-name=my-hono-app --template=hono --database=d1
+npx @better-auth-cloudflare/cli generate --app-name=my-hono-app --template=hono --database=d1
 ```
 
 Create a Next.js app with PostgreSQL via Hyperdrive:
 
 ```bash
-npx @better-auth-cloudflare/cli --app-name=my-next-app --template=nextjs \
+npx @better-auth-cloudflare/cli generate --app-name=my-next-app --template=nextjs \
   --database=hyperdrive-postgres --hd-connection-string=postgres://user:pass@host:5432/db
 ```
 
 Create app without KV or R2:
 
 ```bash
-npx @better-auth-cloudflare/cli --app-name=minimal-app --kv=false --r2=false
+npx @better-auth-cloudflare/cli generate --app-name=minimal-app --kv=false --r2=false
 ```
 
 Skip Cloudflare setup (useful for CI/CD):
 
 ```bash
-npx @better-auth-cloudflare/cli --app-name=ci-app --skip-cloudflare-setup=true
+npx @better-auth-cloudflare/cli generate --app-name=ci-app --skip-cloudflare-setup=true
 ```
 
 Specify account ID for non-interactive mode:
 
 ```bash
-npx @better-auth-cloudflare/cli --app-name=prod-app --account-id=your-account-id
+npx @better-auth-cloudflare/cli generate --app-name=prod-app --account-id=your-account-id
 ```
 
 Apply migrations automatically in non-interactive mode:
 
 ```bash
-npx @better-auth-cloudflare/cli --app-name=auto-app --apply-migrations=dev
+npx @better-auth-cloudflare/cli generate --app-name=auto-app --apply-migrations=dev
 ```
 
 Run migration workflow interactively:
