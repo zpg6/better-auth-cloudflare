@@ -8,8 +8,8 @@ Seamlessly integrate [Better Auth](https://github.com/better-auth/better-auth) w
 
 **LIVE DEMOS**:
 
-- **OpenNextJS**: [https://better-auth-cloudflare.zpg6.workers.dev/](https://better-auth-cloudflare.zpg6.workers.dev/)
-- **Hono**: [https://better-auth-cloudflare-hono.zpg6.workers.dev/](https://better-auth-cloudflare-hono.zpg6.workers.dev/)
+- **OpenNextJS**: [https://better-auth-cloudflare.zpg6.workers.dev](https://better-auth-cloudflare.zpg6.workers.dev/)
+- **Hono**: [https://better-auth-cloudflare-hono.zpg6.workers.dev](https://better-auth-cloudflare-hono.zpg6.workers.dev/)
 
 Demo implementations are available in the [`examples/`](./examples/) directory for **OpenNextJS ◆** and **Hono 🔥**, along with recommended scripts for generating database schema, migrating, and more. The library is compatible with any framework that runs on Cloudflare Workers.
 
@@ -74,7 +74,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 
 ⚡️ For the fastest setup, use the CLI to generate a complete project (including the resources on Cloudflare):
 
-**Interactive mode** (asks questions):
+**Interactive mode** (asks questions and provides helpful defaults):
 
 ```bash
 npx @better-auth-cloudflare/cli generate
