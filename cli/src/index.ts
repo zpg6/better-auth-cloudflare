@@ -1381,8 +1381,13 @@ export const verification = {} as any;`;
 
                 if (databaseId && answers.d1Binding && existsSync(wranglerPath)) {
                     // Update existing wrangler.toml with the actual database ID
-                    const currentWrangler = readFileSync(wranglerPath, 'utf-8');
-                    const updatedWrangler = updateD1BlockWithId(currentWrangler, answers.d1Binding, answers.d1Name, databaseId);
+                    const currentWrangler = readFileSync(wranglerPath, "utf-8");
+                    const updatedWrangler = updateD1BlockWithId(
+                        currentWrangler,
+                        answers.d1Binding,
+                        answers.d1Name,
+                        databaseId
+                    );
                     writeFileSync(wranglerPath, updatedWrangler);
                 }
                 creating.stop(
@@ -1402,8 +1407,13 @@ export const verification = {} as any;`;
                         const databaseId = extractD1DatabaseId(retryRes.stdout);
                         if (databaseId && answers.d1Binding && existsSync(wranglerPath)) {
                             // Update existing wrangler.toml with the actual database ID
-                            const currentWrangler = readFileSync(wranglerPath, 'utf-8');
-                            const updatedWrangler = updateD1BlockWithId(currentWrangler, answers.d1Binding, answers.d1Name, databaseId);
+                            const currentWrangler = readFileSync(wranglerPath, "utf-8");
+                            const updatedWrangler = updateD1BlockWithId(
+                                currentWrangler,
+                                answers.d1Binding,
+                                answers.d1Name,
+                                databaseId
+                            );
                             writeFileSync(wranglerPath, updatedWrangler);
                         }
                         creating.stop(
@@ -1435,8 +1445,12 @@ export const verification = {} as any;`;
 
                 if (hyperdriveId && existsSync(wranglerPath)) {
                     // Update existing wrangler.toml with the actual hyperdrive ID
-                    const currentWrangler = readFileSync(wranglerPath, 'utf-8');
-                    const updatedWrangler = updateHyperdriveBlockWithId(currentWrangler, answers.hdBinding!, hyperdriveId);
+                    const currentWrangler = readFileSync(wranglerPath, "utf-8");
+                    const updatedWrangler = updateHyperdriveBlockWithId(
+                        currentWrangler,
+                        answers.hdBinding!,
+                        hyperdriveId
+                    );
                     writeFileSync(wranglerPath, updatedWrangler);
                 }
                 creating.stop(pc.green(`Hyperdrive created${hyperdriveId ? " (id: " + hyperdriveId + ")" : ""}.`));
@@ -1460,7 +1474,7 @@ export const verification = {} as any;`;
 
                 if (namespaceId && existsSync(wranglerPath)) {
                     // Update existing wrangler.toml with the actual KV namespace ID
-                    const currentWrangler = readFileSync(wranglerPath, 'utf-8');
+                    const currentWrangler = readFileSync(wranglerPath, "utf-8");
                     const updatedWrangler = updateKvBlockWithId(currentWrangler, answers.kvBinding!, namespaceId);
                     writeFileSync(wranglerPath, updatedWrangler);
                 }

@@ -1,8 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import {
-    TypeScriptValidator,
-    validateTypeScript,
-} from "../src/lib/typescript-validator";
+import { TypeScriptValidator, validateTypeScript } from "../src/lib/typescript-validator";
 import type { FileToValidate } from "../src/lib/typescript-validator";
 
 describe("TypeScript Validator", () => {
@@ -120,7 +117,7 @@ describe("TypeScript Validator", () => {
         test("handles timeout gracefully", async () => {
             // Create a validator with a very short timeout
             const validator = new TypeScriptValidator();
-            
+
             const files: FileToValidate[] = [
                 {
                     path: "test.ts",
@@ -153,7 +150,7 @@ describe("TypeScript Validator", () => {
     describe("Cleanup", () => {
         test("cleans up temporary files", async () => {
             const validator = new TypeScriptValidator();
-            
+
             const files: FileToValidate[] = [
                 {
                     path: "test.ts",

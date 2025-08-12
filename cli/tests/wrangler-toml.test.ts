@@ -10,11 +10,7 @@ import {
     updateKvBlockWithId,
     validateBindingName,
 } from "../src/lib/helpers.js";
-import {
-    clearAllHyperdriveBlocks,
-    clearAllKvBlocks,
-    clearAllR2Blocks,
-} from "../src/index.js";
+import { clearAllHyperdriveBlocks, clearAllKvBlocks, clearAllR2Blocks } from "../src/index.js";
 
 const baseToml = `name = "app"
 compatibility_date = "2025-03-01"

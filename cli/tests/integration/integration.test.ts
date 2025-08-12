@@ -219,7 +219,7 @@ for (const config of configurations) {
 
                 await testDeployment(env, config);
                 console.log("✅ Deployment test passed");
-                         }, 300000); // 5 minute timeout for deployment
+            }, 300000); // 5 minute timeout for deployment
         } else {
             test("Skip setup preserves placeholders but still builds", async () => {
                 console.log("\n⏭️  Validating skip setup behavior...");

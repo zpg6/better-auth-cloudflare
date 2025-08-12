@@ -38,7 +38,7 @@ export async function testDeployment(env: TestEnvironment, config: TestConfig): 
                 cwd: projectPath,
                 encoding: "utf8",
                 stdio: "pipe",
-                                    timeout: 300000, // 5 minute timeout for Next.js deployments
+                timeout: 300000, // 5 minute timeout for Next.js deployments
                 env: {
                     ...process.env,
                     CLOUDFLARE_ACCOUNT_ID: TestEnvironment.accountId,
@@ -50,7 +50,7 @@ export async function testDeployment(env: TestEnvironment, config: TestConfig): 
                 cwd: projectPath,
                 encoding: "utf8",
                 stdio: "pipe",
-                                    timeout: 180000, // 3 minute timeout for Hono deployments
+                timeout: 180000, // 3 minute timeout for Hono deployments
                 env: {
                     ...process.env,
                     CLOUDFLARE_ACCOUNT_ID: TestEnvironment.accountId,
@@ -120,11 +120,11 @@ async function testNextjsAuthEndpoints(baseUrl: string): Promise<void> {
         const status = dashboardResponse.status;
         const isUnauthorized = status === 401;
         const isRedirect = status >= 300 && status < 400;
-        
+
         if (!isUnauthorized && !isRedirect) {
             throw new Error(`Dashboard route should return 401 or 3xx without auth, got: ${status}`);
         }
-        
+
         console.log(`✅ Protected dashboard route properly secured (status: ${status})`);
     } catch (error) {
         console.error(`❌ Next.js route test failed: ${error}`);

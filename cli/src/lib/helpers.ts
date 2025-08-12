@@ -42,8 +42,11 @@ export function updateD1Block(toml: string, binding: string, dbName: string) {
 export function appendOrReplaceKvNamespaceBlock(toml: string, binding: string, id?: string) {
     const kvBlockRegex = /\[\[kv_namespaces\]\][\s\S]*?(?=(\n\[\[|$))/g;
     const blocks = toml.match(kvBlockRegex) || [];
-    const newBlock = ["[[kv_namespaces]]", `binding = "${binding}"`, id ? `id = "${id}"` : `id = "YOUR_KV_NAMESPACE_ID"`]
-        .join("\n");
+    const newBlock = [
+        "[[kv_namespaces]]",
+        `binding = "${binding}"`,
+        id ? `id = "${id}"` : `id = "YOUR_KV_NAMESPACE_ID"`,
+    ].join("\n");
 
     const existingIndex = blocks.findIndex(b => b.includes(`binding = "${binding}"`));
     if (existingIndex >= 0) {

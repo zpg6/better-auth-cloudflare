@@ -368,7 +368,7 @@ export class FileValidator {
                 if (!wranglerContent.includes("[[r2_buckets]]")) {
                     errors.push("Missing R2 bucket configuration in wrangler.toml");
                 }
-                if (!wranglerContent.includes("binding = \"R2_BUCKET\"")) {
+                if (!wranglerContent.includes('binding = "R2_BUCKET"')) {
                     errors.push("Missing R2 bucket binding in wrangler.toml");
                 }
             } catch (error) {

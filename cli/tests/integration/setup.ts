@@ -27,7 +27,9 @@ export class TestEnvironment {
 
         if (!isQuickTest) {
             if (!TestEnvironment.ACCOUNT_ID) {
-                console.warn("⚠️  CLOUDFLARE_ACCOUNT_ID environment variable not set - integration tests will be skipped");
+                console.warn(
+                    "⚠️  CLOUDFLARE_ACCOUNT_ID environment variable not set - integration tests will be skipped"
+                );
                 process.env.SKIP_INTEGRATION_TESTS = "true";
             }
             if (!TestEnvironment.POSTGRES_URL) {
@@ -481,23 +483,22 @@ export class TestEnvironment {
                     }
                 }
                 "`,
-                { 
+                {
                     stdio: "pipe",
                     encoding: "utf8",
-                    timeout: 30000 // 30 second timeout
+                    timeout: 30000, // 30 second timeout
                 }
             );
 
             console.log("✅ PostgreSQL tables cleaned up successfully");
-            
         } catch (error) {
             console.error(`❌ CRITICAL: PostgreSQL cleanup failed: ${error}`);
             console.error("This will cause test contamination and must be fixed!");
-            
+
             // For now, log the specific error but don't fail the test
             // In production, we might want to fail the test suite
             console.error("Error details:", error.message);
-            
+
             throw new Error(`PostgreSQL cleanup failed: ${error.message}`);
         }
     }

@@ -122,10 +122,10 @@ bucket_name = "${bucketName}"`);
         const hyperdriveId = config.skipCloudflareSetup
             ? "your-hyperdrive-id-here"
             : config.resourceIds?.hyperdriveId || "your-hyperdrive-id-here";
-        
+
         // Add proper localConnectionString for Next.js builds
-        const localConnectionString = config.resourceIds?.hyperdriveConnectionString || 
-            "postgresql://postgres:password@localhost:5432/postgres";
+        const localConnectionString =
+            config.resourceIds?.hyperdriveConnectionString || "postgresql://postgres:password@localhost:5432/postgres";
 
         resources.push(`
 [[hyperdrive]]
