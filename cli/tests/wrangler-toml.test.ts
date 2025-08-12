@@ -3,13 +3,18 @@ import {
     appendOrReplaceHyperdriveBlock,
     appendOrReplaceKvNamespaceBlock,
     appendOrReplaceR2Block,
+    extractFirstBlock,
+    updateD1Block,
+    updateD1BlockWithId,
+    updateHyperdriveBlockWithId,
+    updateKvBlockWithId,
+    validateBindingName,
+} from "../src/lib/helpers.js";
+import {
     clearAllHyperdriveBlocks,
     clearAllKvBlocks,
     clearAllR2Blocks,
-    extractFirstBlock,
-    updateD1Block,
-    validateBindingName,
-} from "../src/index";
+} from "../src/index.js";
 
 const baseToml = `name = "app"
 compatibility_date = "2025-03-01"
@@ -99,7 +104,7 @@ describe("appendOrReplaceHyperdriveBlock", () => {
         expect(out).toContain('binding = "HYPERDRIVE"');
         expect(out).toContain('id = "abcd"');
         // Should default to PostgreSQL connection string
-        expect(out).toContain('localConnectionString = "postgres://user:password@localhost:5432/your_database"');
+        expect(out).toContain('localConnectionString = "postgresql://postgres:password@localhost:5432/postgres"');
     });
 
     test("adds hyperdrive block with MySQL connection string", () => {
@@ -107,7 +112,7 @@ describe("appendOrReplaceHyperdriveBlock", () => {
         expect(out).toContain("[[hyperdrive]]");
         expect(out).toContain('binding = "HYPERDRIVE"');
         expect(out).toContain('id = "abcd"');
-        expect(out).toContain('localConnectionString = "mysql://user:password@localhost:3306/your_database"');
+        expect(out).toContain('localConnectionString = "mysql://root:password@localhost:3306/mysql"');
     });
 
     test("adds hyperdrive block with PostgreSQL connection string explicitly", () => {
@@ -115,7 +120,7 @@ describe("appendOrReplaceHyperdriveBlock", () => {
         expect(out).toContain("[[hyperdrive]]");
         expect(out).toContain('binding = "HYPERDRIVE"');
         expect(out).toContain('id = "abcd"');
-        expect(out).toContain('localConnectionString = "postgres://user:password@localhost:5432/your_database"');
+        expect(out).toContain('localConnectionString = "postgresql://postgres:password@localhost:5432/postgres"');
     });
 
     test("adds placeholder ID when no ID provided (skip-cloudflare-setup fix)", () => {
@@ -123,7 +128,7 @@ describe("appendOrReplaceHyperdriveBlock", () => {
         expect(out).toContain("[[hyperdrive]]");
         expect(out).toContain('binding = "HYPERDRIVE"');
         expect(out).toContain('id = "YOUR_HYPERDRIVE_ID"');
-        expect(out).toContain('localConnectionString = "postgres://user:password@localhost:5432/your_database"');
+        expect(out).toContain('localConnectionString = "postgresql://postgres:password@localhost:5432/postgres"');
     });
 
     test("replaces existing hyperdrive block", () => {
@@ -132,7 +137,7 @@ describe("appendOrReplaceHyperdriveBlock", () => {
         expect(second).toContain('id = "efgh"');
         expect(second).not.toContain('id = "abcd"');
         // Should still have local connection string
-        expect(second).toContain('localConnectionString = "postgres://user:password@localhost:5432/your_database"');
+        expect(second).toContain('localConnectionString = "postgresql://postgres:password@localhost:5432/postgres"');
     });
 
     test("validates complete Hyperdrive configuration format", () => {
@@ -147,7 +152,7 @@ describe("appendOrReplaceHyperdriveBlock", () => {
         expect(lines[hyperdriveStart + 1]).toContain('binding = "HYPERDRIVE"');
         expect(lines[hyperdriveStart + 2]).toContain('id = "hd-123"');
         expect(lines[hyperdriveStart + 3]).toContain(
-            'localConnectionString = "postgres://user:password@localhost:5432/your_database"'
+            'localConnectionString = "postgresql://postgres:password@localhost:5432/postgres"'
         );
     });
 });
