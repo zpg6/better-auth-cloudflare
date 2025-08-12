@@ -284,7 +284,7 @@ export const createFileValidator = (config: R2Config) => {
  */
 export const createR2Storage = (
     config: R2Config,
-    generateId: (options: { model: string; size?: number }) => string
+    generateId: (options: { model: string; size?: number }) => string | false
 ) => {
     const { bucket } = config;
 
@@ -327,6 +327,9 @@ export const createR2Storage = (
                 }
 
                 const fileId = generateId({ model: modelName || "userFile" });
+                if (!fileId) {
+                    throw new Error("Failed to generate unique file ID. Please try again.");
+                }
                 const filename = `${fileId}-${sanitizeFilename(originalName)}`;
                 r2Key = `user-files/${userId}/${filename}`;
 
