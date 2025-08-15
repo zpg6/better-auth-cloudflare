@@ -205,7 +205,7 @@ function runInstall(pm: PackageManager, cwd: string) {
 
 function runWranglerCommand(args: string[], cwd: string, accountId?: string) {
     const env = accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined;
-    debugLog(`Running wrangler command: wrangler ${args.join(' ')}${accountId ? ' (with account ID)' : ''}`);
+    debugLog(`Running wrangler command: wrangler ${args.join(" ")}${accountId ? " (with account ID)" : ""}`);
     return bunSpawnSync("npx", ["wrangler", ...args], cwd, env);
 }
 
@@ -600,7 +600,22 @@ async function migrate(cliArgs?: CliArgs) {
     const pm = detectPackageManager(process.cwd());
     debugLog(`Detected package manager: ${pm}`);
     const isNonInteractive = Boolean(cliArgs && Object.keys(cliArgs).length > 0);
-    debugLog(`Running in ${isNonInteractive ? 'non-interactive' : 'interactive'} mode`);
+    debugLog(`Running in ${isNonInteractive ? "non-interactive" : "interactive"} mode`);
+
+    // Determine migration target early to potentially skip database checks
+    let migrateChoice: "dev" | "remote" | "skip" = "skip";
+    
+    if (isNonInteractive) {
+        if (cliArgs && cliArgs["migrate-target"]) {
+            const target = cliArgs["migrate-target"] as string;
+            if (["dev", "remote", "skip"].includes(target)) {
+                migrateChoice = target as "dev" | "remote" | "skip";
+                debugLog(`Migration target set to: ${migrateChoice}`);
+            } else {
+                fatal("migrate-target must be 'dev', 'remote', or 'skip'");
+            }
+        }
+    }
 
     // Run auth:update
     debugLog("Running auth:update script");
@@ -624,6 +639,13 @@ async function migrate(cliArgs?: CliArgs) {
     } else {
         dbSpinner.stop(pc.red("Failed to generate database migrations."));
         assertOk(dbRes, "Database migration generation failed.");
+    }
+
+    // If migration target is skip, exit early
+    if (migrateChoice === "skip") {
+        debugLog("Migration target is skip, skipping database migration");
+        outro(pc.green("Migration completed successfully! Database migration was skipped as requested."));
+        return;
     }
 
     // Handle D1 database migrations
@@ -658,7 +680,7 @@ async function migrate(cliArgs?: CliArgs) {
     const existingD1Databases = d1Databases.filter(db => {
         if (!db.id) return false;
         const exists = checkD1DatabaseExists(db.id, process.cwd());
-        debugLog(`D1 database ${db.binding} (${db.id}): ${exists ? 'exists' : 'not found'}`);
+        debugLog(`D1 database ${db.binding} (${db.id}): ${exists ? "exists" : "not found"}`);
         return exists;
     });
 
@@ -696,19 +718,8 @@ async function migrate(cliArgs?: CliArgs) {
         }
     }
 
-    // Ask about migration target
-    let migrateChoice: "dev" | "remote" | "skip" = "skip";
-
-    if (isNonInteractive) {
-        if (cliArgs && cliArgs["migrate-target"]) {
-            const target = cliArgs["migrate-target"] as string;
-            if (["dev", "remote", "skip"].includes(target)) {
-                migrateChoice = target as "dev" | "remote" | "skip";
-            } else {
-                fatal("migrate-target must be 'dev', 'remote', or 'skip'");
-            }
-        }
-    } else {
+    // Ask about migration target (interactive mode only)
+    if (!isNonInteractive) {
         const databaseLabel = selectedDatabase.name
             ? `${selectedDatabase.binding} (${selectedDatabase.name})`
             : selectedDatabase.binding;
@@ -1544,7 +1555,7 @@ export const verification = {} as any;`;
 
         if (answers.database !== "d1" && answers.hdName && answers.hdConnectionString && answers.hdBinding) {
             debugLog(`Creating Hyperdrive: ${answers.hdName} with binding: ${answers.hdBinding}`);
-            debugLog(`Connection string: ${answers.hdConnectionString.replace(/:([^:@]+)@/, ':***@')}`);
+            debugLog(`Connection string: ${answers.hdConnectionString.replace(/:([^:@]+)@/, ":***@")}`);
             const creating = spinner();
             creating.start(`Creating Hyperdrive \`${answers.hdName}\`...`);
             const res = runWranglerCommand(
