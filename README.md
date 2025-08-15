@@ -8,8 +8,8 @@ Seamlessly integrate [Better Auth](https://github.com/better-auth/better-auth) w
 
 **LIVE DEMOS**:
 
-- **OpenNextJS**: [https://better-auth-cloudflare.zpg6.workers.dev/](https://better-auth-cloudflare.zpg6.workers.dev/)
-- **Hono**: [https://better-auth-cloudflare-hono.zpg6.workers.dev/](https://better-auth-cloudflare-hono.zpg6.workers.dev/)
+- **OpenNextJS**: [https://better-auth-cloudflare.zpg6.workers.dev](https://better-auth-cloudflare.zpg6.workers.dev/)
+- **Hono**: [https://better-auth-cloudflare-hono.zpg6.workers.dev](https://better-auth-cloudflare-hono.zpg6.workers.dev/)
 
 Demo implementations are available in the [`examples/`](./examples/) directory for **OpenNextJS ◆** and **Hono 🔥**, along with recommended scripts for generating database schema, migrating, and more. The library is compatible with any framework that runs on Cloudflare Workers.
 
@@ -22,6 +22,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - 📍 **Automatic Geolocation Tracking**: Enrich user sessions with location data derived from Cloudflare.
 - 🌐 **Cloudflare IP Detection**: Utilize Cloudflare's IP detection headers out-of-the-box.
 - 🔍 **Rich Client-Side Context**: Access timezone, city, country, region, and more via the client plugin.
+- 📦 **CLI**: Tools for getting started quickly with Hono or Next.js, managing database schema, and more.
 
 ## Roadmap
 
@@ -34,6 +35,15 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - [ ] Cloudflare Images
 - [ ] Durable Objects
 
+**CLI:**
+
+- [x] `generate` - Create new projects from Hono/Next.js templates with automatic Cloudflare resource setup
+- [ ] `integrate` - Add `better-auth-cloudflare` to existing projects, creating/updating auth and schema files
+- [x] `migrate` - Update auth schema and run database migrations when configuration changes
+- [ ] `plugin` - Generate empty Better Auth plugin for quickly adding typesafe endpoints and schema fields
+- [x] `version` - Check the version of the CLI
+- [x] `help` - Show all commands and their usage
+
 **Examples:**
 
 - [x] Hono
@@ -43,9 +53,10 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 
 ## Table of Contents
 
-- [Installation](#installation)
+- [Quick Start with CLI](#quick-start-with-cli)
 - [Configuration Options](#configuration-options)
-- [Setup](#setup)
+- [Manual Installation](#manual-installation)
+- [Manual Setup](#manual-setup)
     - [1. Define Your Database Schema (`src/db/schema.ts`)](#1-define-your-database-schema-srcdbschemats)
     - [2. Initialize Drizzle ORM (`src/db/index.ts`)](#2-initialize-drizzle-orm-srcdbindexts)
     - [3. Configure Better Auth (`src/auth/index.ts`)](#3-configure-better-auth-srcauthindexts)
@@ -59,7 +70,39 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - [License](#license)
 - [Contributing](#contributing)
 
-## Installation
+## Quick Start with CLI
+
+⚡️ For the fastest setup, use the CLI to generate a complete project (including the resources on Cloudflare):
+
+**Interactive mode** (asks questions and provides helpful defaults):
+
+```bash
+npx @better-auth-cloudflare/cli generate
+```
+
+**Non-interactive mode** (use arguments):
+
+```bash
+# Simple D1 app with KV (ready to run)
+npx @better-auth-cloudflare/cli generate \
+  --app-name=my-auth-app \
+  --template=hono \
+  --database=d1 \
+  --kv=true \
+  --r2=false \
+  --apply-migrations=dev
+```
+
+**Migration workflow**:
+
+```bash
+npx @better-auth-cloudflare/cli migrate              # Interactive
+npx @better-auth-cloudflare/cli migrate --migrate-target=dev  # Non-interactive
+```
+
+The CLI creates projects from Hono or Next.js templates and can automatically set up D1, KV, R2, and Hyperdrive resources. See [CLI Documentation](./cli/README.md) for full documentation and all available arguments.
+
+## Manual Installation
 
 ```bash
 npm install better-auth-cloudflare

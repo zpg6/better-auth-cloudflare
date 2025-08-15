@@ -4,3 +4,5 @@
 node_modules
 dist
 pnpm-lock.yaml
+bun.lock
+*.log

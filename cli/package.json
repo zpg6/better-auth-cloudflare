@@ -1,0 +1,52 @@
+{
+    "name": "@better-auth-cloudflare/cli",
+    "version": "0.1.13",
+    "description": "CLI to generate Better Auth Cloudflare projects (Hono or OpenNext.js)",
+    "author": "Zach Grimaldi",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/zpg6/better-auth-cloudflare.git"
+    },
+    "keywords": [
+        "better-auth",
+        "auth",
+        "cli",
+        "cloudflare",
+        "workers",
+        "hono",
+        "opennextjs",
+        "generator"
+    ],
+    "license": "MIT",
+    "private": false,
+    "bin": {
+        "better-auth-cloudflare": "dist/index.js"
+    },
+    "type": "commonjs",
+    "files": [
+        "dist/**/*"
+    ],
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "dev": "node --enable-source-maps dist/index.js",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "test": "bun test --timeout 60000",
+        "test:unit": "bun test tests/*.test.ts --timeout 60000",
+        "test:integration": "bun test tests/integration/ --timeout 600000",
+        "prepublishOnly": "npm run build"
+    },
+    "dependencies": {
+        "@clack/prompts": "^0.7.0",
+        "picocolors": "^1.0.0"
+    },
+    "devDependencies": {
+        "@iarna/toml": "^2.2.5",
+        "@types/node": "^22.7.5",
+        "bun-types": "^1.1.33",
+        "postgres": "^3.4.4",
+        "typescript": "^5.5.4"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}
