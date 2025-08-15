@@ -103,6 +103,7 @@ interface GenerateAnswers {
 
 interface CliArgs {
     [key: string]: string | boolean | undefined;
+    verbose?: boolean;
 }
 
 // JSON typing helpers (avoid any/unknown)
@@ -113,6 +114,15 @@ export interface JSONObject {
 export interface JSONArray extends Array<JSONValue> {}
 
 type PackageManager = "bun" | "pnpm" | "yarn" | "npm";
+
+// Global verbose flag state
+let isVerbose = false;
+
+function debugLog(message: string): void {
+    if (isVerbose) {
+        process.stderr.write(`${pc.gray("|")}  ${pc.cyan("DEBUG:")} ${pc.gray(message)}\n`);
+    }
+}
 
 function bunSpawnSync(command: string, args: string[], cwd?: string, env?: Record<string, string>) {
     const { spawnSync } = require("child_process") as typeof import("child_process");
@@ -125,12 +135,12 @@ function bunSpawnSync(command: string, args: string[], cwd?: string, env?: Recor
 
     // Enhanced error logging for debugging
     if (result.status !== 0) {
-        process.stderr.write(`\nDEBUG: Command failed: ${command} ${args.join(" ")}\n`);
-        process.stderr.write(`DEBUG: CWD: ${cwd || "default"}\n`);
-        process.stderr.write(`DEBUG: Status: ${result.status}\n`);
-        process.stderr.write(`DEBUG: Stdout: ${result.stdout || "empty"}\n`);
-        process.stderr.write(`DEBUG: Stderr: ${result.stderr || "empty"}\n`);
-        process.stderr.write(`DEBUG: Error: ${result.error || "none"}\n`);
+        debugLog(`Command failed: ${command} ${args.join(" ")}`);
+        debugLog(`CWD: ${cwd || "default"}`);
+        debugLog(`Status: ${result.status}`);
+        debugLog(`Stdout: ${result.stdout || "empty"}`);
+        debugLog(`Stderr: ${result.stderr || "empty"}`);
+        debugLog(`Error: ${result.error || "none"}`);
     }
 
     return { code: result.status ?? 1, stdout: result.stdout, stderr: result.stderr };
@@ -171,18 +181,18 @@ function runScript(pm: PackageManager, script: string, cwd: string) {
 
 function runInstall(pm: PackageManager, cwd: string) {
     const args = pm === "yarn" ? [] : ["install"];
-    process.stderr.write(`\nDEBUG: Running install: ${pm} ${args.join(" ")} in ${cwd}\n`);
+    debugLog(`Running install: ${pm} ${args.join(" ")} in ${cwd}`);
     const result = bunSpawnSync(pm, args, cwd);
-    process.stderr.write(`DEBUG: Install result: code=${result.code}\n`);
+    debugLog(`Install result: code=${result.code}`);
 
     // Verify installation actually worked by checking for node_modules
     const nodeModulesPath = join(cwd, "node_modules");
     const actuallyInstalled = existsSync(nodeModulesPath);
-    process.stderr.write(`DEBUG: node_modules exists: ${actuallyInstalled}\n`);
+    debugLog(`node_modules exists: ${actuallyInstalled}`);
 
     if (result.code === 0 && !actuallyInstalled) {
         // Installation claimed success but didn't create node_modules
-        process.stderr.write(`DEBUG: Installation failed - no node_modules created\n`);
+        debugLog(`Installation failed - no node_modules created`);
         return {
             code: 1,
             stdout: result.stdout,
@@ -195,6 +205,7 @@ function runInstall(pm: PackageManager, cwd: string) {
 
 function runWranglerCommand(args: string[], cwd: string, accountId?: string) {
     const env = accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined;
+    debugLog(`Running wrangler command: wrangler ${args.join(' ')}${accountId ? ' (with account ID)' : ''}`);
     return bunSpawnSync("npx", ["wrangler", ...args], cwd, env);
 }
 
@@ -413,8 +424,12 @@ function parseCliArgs(argv: string[]): CliArgs {
     for (let i = 2; i < argv.length; i++) {
         const arg = argv[i];
 
+        // Handle short flags like -v
+        if (arg === "-v") {
+            args.verbose = true;
+        }
         // Handle --key=value format
-        if (arg.startsWith("--") && arg.includes("=")) {
+        else if (arg.startsWith("--") && arg.includes("=")) {
             const [key, ...valueParts] = arg.slice(2).split("=");
             const value = valueParts.join("="); // Handle values that contain "="
 
@@ -547,6 +562,12 @@ function cliArgsToAnswers(args: CliArgs): Partial<GenerateAnswers> {
 }
 
 async function migrate(cliArgs?: CliArgs) {
+    // Set verbose mode if specified
+    if (cliArgs?.verbose) {
+        isVerbose = true;
+        debugLog("Verbose mode enabled");
+    }
+
     const version = getPackageVersion();
     intro(`${pc.bold("Better Auth Cloudflare")} ${pc.gray("v" + version + " · migrate")}`);
 
@@ -560,6 +581,7 @@ async function migrate(cliArgs?: CliArgs) {
     }
 
     // Read and parse wrangler.toml to detect database configurations
+    debugLog(`Reading wrangler.toml from: ${wranglerPath}`);
     let wranglerContent: string;
     try {
         wranglerContent = readFileSync(wranglerPath, "utf8");
@@ -569,15 +591,19 @@ async function migrate(cliArgs?: CliArgs) {
     }
 
     const { databases, hasMultipleDatabases } = parseWranglerToml(wranglerContent);
+    debugLog(`Found ${databases.length} database configuration(s) in wrangler.toml`);
 
     if (databases.length === 0) {
         fatal("No database configurations found in wrangler.toml. Please configure a D1 or Hyperdrive database.");
     }
 
     const pm = detectPackageManager(process.cwd());
+    debugLog(`Detected package manager: ${pm}`);
     const isNonInteractive = Boolean(cliArgs && Object.keys(cliArgs).length > 0);
+    debugLog(`Running in ${isNonInteractive ? 'non-interactive' : 'interactive'} mode`);
 
     // Run auth:update
+    debugLog("Running auth:update script");
     const authSpinner = spinner();
     authSpinner.start("Running auth:update...");
     const authRes = runScript(pm, "auth:update", process.cwd());
@@ -589,6 +615,7 @@ async function migrate(cliArgs?: CliArgs) {
     }
 
     // Run db:generate
+    debugLog("Running db:generate script");
     const dbSpinner = spinner();
     dbSpinner.start("Running db:generate...");
     const dbRes = runScript(pm, "db:generate", process.cwd());
@@ -627,9 +654,12 @@ async function migrate(cliArgs?: CliArgs) {
     }
 
     // Check if any D1 databases actually exist
+    debugLog(`Checking existence of ${d1Databases.length} D1 database(s)`);
     const existingD1Databases = d1Databases.filter(db => {
         if (!db.id) return false;
-        return checkD1DatabaseExists(db.id, process.cwd());
+        const exists = checkD1DatabaseExists(db.id, process.cwd());
+        debugLog(`D1 database ${db.binding} (${db.id}): ${exists ? 'exists' : 'not found'}`);
+        return exists;
     });
 
     if (existingD1Databases.length === 0) {
@@ -694,6 +724,7 @@ async function migrate(cliArgs?: CliArgs) {
     }
 
     if (migrateChoice === "dev") {
+        debugLog("Applying migrations locally (dev environment)");
         const migSpinner = spinner();
         migSpinner.start("Applying migrations locally...");
         const migRes = runScript(pm, "db:migrate:dev", process.cwd());
@@ -704,6 +735,7 @@ async function migrate(cliArgs?: CliArgs) {
             assertOk(migRes, "Local migration failed.");
         }
     } else if (migrateChoice === "remote") {
+        debugLog("Applying migrations to remote (production environment)");
         const migSpinner = spinner();
         migSpinner.start("Applying migrations to remote...");
         const migRes = runScript(pm, "db:migrate:prod", process.cwd());
@@ -719,6 +751,12 @@ async function migrate(cliArgs?: CliArgs) {
 }
 
 async function generate(cliArgs?: CliArgs) {
+    // Set verbose mode if specified
+    if (cliArgs?.verbose) {
+        isVerbose = true;
+        debugLog("Verbose mode enabled");
+    }
+
     const version = getPackageVersion();
     intro(`${pc.bold("Better Auth Cloudflare")} ${pc.gray("v" + version + " · generator")}`);
 
@@ -729,6 +767,7 @@ async function generate(cliArgs?: CliArgs) {
 
     if (cliArgs && Object.keys(cliArgs).length > 0) {
         // Non-interactive mode - use CLI arguments
+        debugLog(`Non-interactive mode detected with ${Object.keys(cliArgs).length} arguments`);
         const validationErrors = validateCliArgs(cliArgs);
         if (validationErrors.length > 0) {
             fatal("Invalid arguments:\n" + validationErrors.map(e => `  - ${e}`).join("\n"));
@@ -917,8 +956,10 @@ async function generate(cliArgs?: CliArgs) {
     }
 
     const templateDir = answers.template === "hono" ? join(tmp, "examples/hono") : join(tmp, "examples/opennextjs");
+    debugLog(`Using template: ${answers.template} from ${templateDir}`);
 
     const targetDir = resolve(process.cwd(), answers.appName);
+    debugLog(`Target directory: ${targetDir}`);
     try {
         ensureCleanAppDir(targetDir);
     } catch (err) {
@@ -927,6 +968,7 @@ async function generate(cliArgs?: CliArgs) {
 
     const copying = spinner();
     copying.start("Copying project files...");
+    debugLog(`Copying template files from ${templateDir} to ${targetDir}`);
     try {
         cpSync(templateDir, targetDir, { recursive: true });
     } catch (e) {
@@ -940,6 +982,7 @@ async function generate(cliArgs?: CliArgs) {
     // Update package.json name and dependencies and scripts to use chosen bindings
     const pkgPath = join(targetDir, "package.json");
     if (existsSync(pkgPath)) {
+        debugLog(`Updating package.json: ${pkgPath}`);
         try {
             updateJSON(pkgPath, j => {
                 const deps = ((j.dependencies as JSONObject) || {}) as JSONObject;
@@ -981,6 +1024,7 @@ async function generate(cliArgs?: CliArgs) {
     // Create .env file for Hyperdrive projects
     if (answers.database !== "d1" && answers.hdConnectionString) {
         const envPath = join(targetDir, ".env");
+        debugLog(`Creating .env file: ${envPath}`);
         const envContent = `# Database connection string for Drizzle migrations\nDATABASE_URL="${answers.hdConnectionString}"\n`;
         writeFileSync(envPath, envContent, "utf8");
     }
@@ -996,6 +1040,7 @@ async function generate(cliArgs?: CliArgs) {
 
         if (existsSync(schemaPath)) {
             originalSchemaContent = readFileSync(schemaPath, "utf8");
+            debugLog(`Temporarily modifying schema file: ${schemaPath}`);
             // Create temporary schema without auth.schema import
             const tempSchemaContent = `// Temporary schema for auth generation
 export const schema = {} as const;`;
@@ -1037,6 +1082,7 @@ export const schema = {} as const;`;
         }
 
         // Create a temporary empty auth.schema.ts to avoid import errors during auth generation
+        debugLog(`Creating temporary auth schema: ${authSchemaPath}`);
         const tempAuthSchema = `// Temporary empty auth schema for generation
 export const user = {} as any;
 export const session = {} as any;
@@ -1100,6 +1146,7 @@ export const verification = {} as any;`;
     // Generate initial wrangler.toml (will be updated after resource creation)
     const { generateWranglerToml } = await import("./lib/wrangler-generator");
     const wranglerPath = join(targetDir, "wrangler.toml");
+    debugLog(`Creating wrangler.toml: ${wranglerPath}`);
     const initialWrangler = generateWranglerToml(createWranglerConfig());
     writeFileSync(wranglerPath, initialWrangler);
 
@@ -1109,6 +1156,7 @@ export const verification = {} as any;`;
 
     try {
         // Generate auth files using unified generator
+        debugLog("Generating auth configuration files");
         const { generateAuthFile } = await import("./lib/auth-generator");
 
         const authConfig = {
@@ -1134,6 +1182,7 @@ export const verification = {} as any;`;
         };
 
         // Generate database files using unified generator
+        debugLog("Generating database configuration files");
         const { generateDbIndex } = await import("./lib/db-generator");
 
         const dbConfig = {
@@ -1152,10 +1201,12 @@ export const verification = {} as any;`;
 
         if (isHono) {
             const authPath = join(targetDir, "src/auth/index.ts");
+            debugLog(`Writing auth configuration: ${authPath}`);
             const generatedAuth = generateAuthFile(authConfig);
             writeFileSync(authPath, generatedAuth);
 
             const dbIndex = join(targetDir, "src/db/index.ts");
+            debugLog(`Writing database index: ${dbIndex}`);
             const generatedDbIndex = generateDbIndex(dbConfig);
             writeFileSync(dbIndex, generatedDbIndex);
 
@@ -1163,6 +1214,7 @@ export const verification = {} as any;`;
             // Users can run `npm run build` or `npm run typecheck` after installation to validate
 
             // Generate env.d.ts using unified generator
+            debugLog("Generating env.d.ts file for Hono template");
             const { generateEnvDFile } = await import("./lib/env-d-generator");
             const envDConfig = {
                 template: "hono" as const,
@@ -1186,10 +1238,12 @@ export const verification = {} as any;`;
                 },
             };
             const envPath = join(targetDir, "src/env.d.ts");
+            debugLog(`Writing env.d.ts: ${envPath}`);
             const generatedEnvD = generateEnvDFile(envDConfig);
             writeFileSync(envPath, generatedEnvD);
 
             const drizzleCfg = join(targetDir, "drizzle.config.ts");
+            debugLog(`Updating drizzle config: ${drizzleCfg}`);
             tryUpdateFile(drizzleCfg, code => {
                 if (answers.database === "hyperdrive-postgres") {
                     return code.replace(/dialect:\s*"sqlite"/g, 'dialect: "postgresql"').replace(
@@ -1229,10 +1283,12 @@ export const verification = {} as any;`;
 
         if (isNext) {
             const dbIndex = join(targetDir, "src/db/index.ts");
+            debugLog(`Writing database index: ${dbIndex}`);
             const generatedDbIndex = generateDbIndex(dbConfig);
             writeFileSync(dbIndex, generatedDbIndex);
 
             const nextAuth = join(targetDir, "src/auth/index.ts");
+            debugLog(`Writing auth configuration: ${nextAuth}`);
             const generatedNextAuth = generateAuthFile(authConfig);
             writeFileSync(nextAuth, generatedNextAuth);
 
@@ -1240,6 +1296,7 @@ export const verification = {} as any;`;
             // Users can run `npm run build` or `npm run typecheck` after installation to validate
 
             // Generate env.d.ts using unified generator
+            debugLog("Generating env.d.ts file for Next.js template");
             const { generateEnvDFile } = await import("./lib/env-d-generator");
             const envDConfig = {
                 template: "nextjs" as const,
@@ -1263,10 +1320,12 @@ export const verification = {} as any;`;
                 },
             };
             const envPath = join(targetDir, "env.d.ts");
+            debugLog(`Writing env.d.ts: ${envPath}`);
             const generatedEnvD = generateEnvDFile(envDConfig);
             writeFileSync(envPath, generatedEnvD);
 
             const drizzleCfg = join(targetDir, "drizzle.config.ts");
+            debugLog(`Updating drizzle config: ${drizzleCfg}`);
             tryUpdateFile(drizzleCfg, code => {
                 if (answers.database === "hyperdrive-postgres") {
                     return code.replace(/dialect:\s*"sqlite"/g, 'dialect: "postgresql"').replace(
@@ -1346,6 +1405,7 @@ export const verification = {} as any;`;
     // Install dependencies before Cloudflare resource creation
     // This ensures projects are buildable even if Cloudflare setup fails
     const pm = detectPackageManager(targetDir);
+    debugLog(`Detected package manager: ${pm}`);
     let doInstall: boolean;
 
     if (isNonInteractive) {
@@ -1372,6 +1432,7 @@ export const verification = {} as any;`;
     }
 
     if (setup) {
+        debugLog("Starting Cloudflare resource setup");
         // Ensure user is authenticated and handle account selection
         const authResult = await ensureWranglerAuth(isNonInteractive);
         if (authResult === "skip-setup") {
@@ -1386,6 +1447,7 @@ export const verification = {} as any;`;
         const cwd = targetDir;
 
         if (answers.database === "d1" && answers.d1Name) {
+            debugLog(`Creating D1 database: ${answers.d1Name} with binding: ${answers.d1Binding}`);
             const creating = spinner();
             creating.start(`Creating D1 Database \`${answers.d1Name}\`...`);
             const res = runWranglerCommand(["d1", "create", answers.d1Name], cwd, answers.accountId);
@@ -1395,6 +1457,7 @@ export const verification = {} as any;`;
                 const databaseId = extractD1DatabaseId(res.stdout);
 
                 if (databaseId && answers.d1Binding && existsSync(wranglerPath)) {
+                    debugLog(`Updating wrangler.toml with D1 database ID: ${databaseId}`);
                     // Update existing wrangler.toml with the actual database ID
                     const currentWrangler = readFileSync(wranglerPath, "utf-8");
                     const updatedWrangler = updateD1BlockWithId(
@@ -1480,6 +1543,8 @@ export const verification = {} as any;`;
         }
 
         if (answers.database !== "d1" && answers.hdName && answers.hdConnectionString && answers.hdBinding) {
+            debugLog(`Creating Hyperdrive: ${answers.hdName} with binding: ${answers.hdBinding}`);
+            debugLog(`Connection string: ${answers.hdConnectionString.replace(/:([^:@]+)@/, ':***@')}`);
             const creating = spinner();
             creating.start(`Creating Hyperdrive \`${answers.hdName}\`...`);
             const res = runWranglerCommand(
@@ -1492,6 +1557,7 @@ export const verification = {} as any;`;
                 const hyperdriveId = extractHyperdriveId(res.stdout);
 
                 if (hyperdriveId && existsSync(wranglerPath)) {
+                    debugLog(`Updating wrangler.toml with Hyperdrive ID: ${hyperdriveId}`);
                     // Update existing wrangler.toml with the actual hyperdrive ID
                     const currentWrangler = readFileSync(wranglerPath, "utf-8");
                     const updatedWrangler = updateHyperdriveBlockWithId(
@@ -1532,6 +1598,7 @@ export const verification = {} as any;`;
         }
 
         if (answers.kv && answers.kvNamespaceName && answers.kvBinding) {
+            debugLog(`Creating KV namespace: ${answers.kvNamespaceName} with binding: ${answers.kvBinding}`);
             const creating = spinner();
             creating.start(`Creating KV Namespace \`${answers.kvNamespaceName}\`...`);
             const res = runWranglerCommand(
@@ -1544,6 +1611,7 @@ export const verification = {} as any;`;
                 const namespaceId = extractKvNamespaceId(res.stdout);
 
                 if (namespaceId && existsSync(wranglerPath)) {
+                    debugLog(`Updating wrangler.toml with KV namespace ID: ${namespaceId}`);
                     // Update existing wrangler.toml with the actual KV namespace ID
                     const currentWrangler = readFileSync(wranglerPath, "utf-8");
                     const updatedWrangler = updateKvBlockWithId(currentWrangler, answers.kvBinding!, namespaceId);
@@ -1576,12 +1644,14 @@ export const verification = {} as any;`;
         }
 
         if (answers.r2 && answers.r2BucketName) {
-            const creating = spinner();
             const r2Binding = answers.r2Binding || "R2_BUCKET";
+            debugLog(`Creating R2 bucket: ${answers.r2BucketName} with binding: ${r2Binding}`);
+            const creating = spinner();
             creating.start(`Creating R2 Bucket \`${answers.r2BucketName}\`...`);
             const res = runWranglerCommand(["r2", "bucket", "create", answers.r2BucketName], cwd, answers.accountId);
             if (res.code === 0) {
                 if (existsSync(wranglerPath)) {
+                    debugLog(`Updating wrangler.toml with R2 bucket: ${answers.r2BucketName}`);
                     let wrangler = readFileSync(wranglerPath, "utf8");
                     wrangler = appendOrReplaceR2Block(wrangler, r2Binding, answers.r2BucketName);
                     writeFileSync(wranglerPath, wrangler);
@@ -1619,6 +1689,7 @@ export const verification = {} as any;`;
     // All resources created successfully at this point
 
     // Schema generation & migrations
+    debugLog("Starting auth schema generation");
     const genAuth = spinner();
     genAuth.start("Generating auth schema...");
     {
@@ -1634,12 +1705,14 @@ export const verification = {} as any;`;
                 const indexPath = join(targetDir, "src/db/index.ts");
 
                 if (existsSync(tempSchemaBackupPath)) {
+                    debugLog(`Restoring original schema file: ${schemaPath}`);
                     const originalSchemaContent = readFileSync(tempSchemaBackupPath, "utf8");
                     writeFileSync(schemaPath, originalSchemaContent, "utf8");
                     rmSync(tempSchemaBackupPath, { force: true });
                 }
 
                 if (existsSync(tempIndexBackupPath)) {
+                    debugLog(`Restoring original index file: ${indexPath}`);
                     const originalIndexContent = readFileSync(tempIndexBackupPath, "utf8");
                     writeFileSync(indexPath, originalIndexContent, "utf8");
                     rmSync(tempIndexBackupPath, { force: true });
@@ -1653,6 +1726,7 @@ export const verification = {} as any;`;
         }
     }
 
+    debugLog("Starting Drizzle migration generation");
     const genDb = spinner();
     genDb.start("Generating Drizzle migrations...");
     {
@@ -1685,6 +1759,7 @@ export const verification = {} as any;`;
         }
 
         if (migrateChoice === "dev") {
+            debugLog("Applying D1 migrations locally");
             const mig = spinner();
             mig.start("Applying migrations locally...");
             const res = runScript(pm, "db:migrate:dev", targetDir);
@@ -1694,6 +1769,7 @@ export const verification = {} as any;`;
                 assertOk(res, "Local migration failed.");
             }
         } else if (migrateChoice === "prod") {
+            debugLog("Applying D1 migrations to production");
             const mig = spinner();
             mig.start("Applying migrations remotely...");
             const res = runScript(pm, "db:migrate:prod", targetDir);
@@ -1821,6 +1897,7 @@ export const verification = {} as any;`;
         }
 
         if (deployChoice) {
+            debugLog("Starting deployment to Cloudflare Workers");
             const deploySpinner = spinner();
             deploySpinner.start("Deploying to Cloudflare Workers...");
 
@@ -1897,6 +1974,8 @@ function printHelp() {
         `  --geolocation=<bool>           Enable geolocation tracking (default: true)\n` +
         `  --kv=<bool>                    Use KV as secondary storage for Better Auth (default: true)\n` +
         `  --r2=<bool>                    Enable R2 to extend Better Auth with user file storage (default: false)\n` +
+        `  --verbose                      Show debug output during execution\n` +
+        `  -v                             Show debug output (when used with other args) or version (when alone)\n` +
         `\n` +
         `Database-specific arguments:\n` +
         `  --d1-name=<name>               D1 database name (default: <app-name>-db)\n` +
@@ -1959,22 +2038,22 @@ function printHelp() {
 
 const cmd = process.argv[2];
 
-// Check for version first
-if (cmd === "version" || cmd === "--version" || cmd === "-v") {
+// Check for version first - handle -v as version only when it's the only argument
+if (cmd === "version" || cmd === "--version" || (cmd === "-v" && process.argv.length === 3)) {
     printVersion();
     checkForUpdates();
 } else if (cmd === "help" || cmd === "-h" || cmd === "--help") {
     printHelp();
 } else if (cmd === "migrate") {
     // Handle migrate command
-    const hasCliArgs = process.argv.slice(3).some(arg => arg.startsWith("--"));
+    const hasCliArgs = process.argv.slice(3).some(arg => arg.startsWith("--") || arg === "-v");
     const cliArgs = hasCliArgs ? parseCliArgs(process.argv) : undefined;
     migrate(cliArgs).catch(err => {
         fatal(String(err?.message ?? err));
     });
 } else {
-    // Check if we have CLI arguments (starts with --)
-    const hasCliArgs = process.argv.slice(2).some(arg => arg.startsWith("--"));
+    // Check if we have CLI arguments (starts with -- or -v)
+    const hasCliArgs = process.argv.slice(2).some(arg => arg.startsWith("--") || arg === "-v");
 
     if (!cmd || cmd === "generate" || hasCliArgs) {
         // If no command is specified and no CLI args, show help with version
