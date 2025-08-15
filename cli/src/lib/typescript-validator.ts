@@ -1,7 +1,7 @@
-import { writeFileSync, mkdirSync, rmSync, existsSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
 import { spawnSync } from "child_process";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 
 export interface ValidationResult {
     isValid: boolean;

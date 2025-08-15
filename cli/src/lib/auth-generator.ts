@@ -100,11 +100,7 @@ function generateNextjsAuth(config: AuthConfig): string {
         imports.unshift(`import { KVNamespace } from "@cloudflare/workers-types";`);
     }
 
-    if (config.database === "sqlite") {
-        imports.push(`import { getDb } from "../db";`);
-    } else {
-        imports.push(`import { getDb, schema } from "../db";`);
-    }
+    imports.push(`import { getDb, schema } from "../db";`);
 
     const cloudflareConfig = generateNextjsCloudflareConfig(config);
     const cliDatabaseConfig = generateCliDatabaseConfig(config);
@@ -331,7 +327,7 @@ function generateNextjsCloudflareConfig(config: AuthConfig): string {
     return parts.join("");
 }
 
-function generateNextjsSchemaConfig(config: AuthConfig): string {
+function generateSchemaConfig(config: AuthConfig): string {
     const parts: string[] = [];
 
     // R2 configuration for schema generation
@@ -351,6 +347,9 @@ function generateNextjsSchemaConfig(config: AuthConfig): string {
     return parts.join("");
 }
 
+const generateHonoSchemaConfig = generateSchemaConfig;
+const generateNextjsSchemaConfig = generateSchemaConfig;
+
 function generateDbConnection(config: AuthConfig): string {
     if (config.database === "sqlite") {
         return `drizzle(env.${config.bindings.d1 || "DATABASE"}, { schema, logger: true })`;
@@ -369,7 +368,6 @@ function generateCliDatabaseConfig(config: AuthConfig): string {
     return `drizzleAdapter({} as ${dbType}, {
                       provider: "${provider}",
                       usePlural: true,
-                      debugLogs: true,
-                      schema
+                      debugLogs: true
                   })`;
 }

@@ -283,20 +283,24 @@ export class TestEnvironment {
         return join(TestEnvironment.TEST_DIR, appName);
     }
 
-    async cleanup() {
+    async cleanup(skipCloudflare: boolean = false) {
         console.log(`🧹 Cleaning up resources for: ${this.testName}`);
 
         const errors: string[] = [];
 
-        // Clean up Cloudflare resources
-        for (const resource of this.createdResources) {
-            try {
-                await this.cleanupResource(resource);
-                console.log(`✅ Cleaned up ${resource.type}: ${resource.name}`);
-            } catch (error) {
-                const errorMsg = `Failed to cleanup ${resource.type} ${resource.name}: ${error}`;
-                errors.push(errorMsg);
-                console.warn(`⚠️  ${errorMsg}`);
+        if (skipCloudflare) {
+            console.log("⏭️  Skipping Cloudflare resource cleanup (skip-cloudflare mode)");
+        } else {
+            // Clean up Cloudflare resources
+            for (const resource of this.createdResources) {
+                try {
+                    await this.cleanupResource(resource);
+                    console.log(`✅ Cleaned up ${resource.type}: ${resource.name}`);
+                } catch (error) {
+                    const errorMsg = `Failed to cleanup ${resource.type} ${resource.name}: ${error}`;
+                    errors.push(errorMsg);
+                    console.warn(`⚠️  ${errorMsg}`);
+                }
             }
         }
 
@@ -424,71 +428,87 @@ export class TestEnvironment {
         console.log("🧹 Cleaning up PostgreSQL tables...");
 
         try {
-            // Use bun to run the cleanup script with better error handling
-            const result = execSync(
-                `bun -e "
-                import postgres from 'postgres';
-                
-                let sql;
-                try {
-                    sql = postgres('${TestEnvironment.POSTGRES_URL}', {
-                        max: 1,
-                        idle_timeout: 5,
-                        connect_timeout: 10
-                    });
-                    
-                    // Test connection first
-                    await sql\\\`SELECT 1\\\`;
-                    console.log('✅ PostgreSQL connection established');
-                    
-                    // Drop tables in correct order (respecting foreign keys)
-                    const tables = [
-                        'user_files',
-                        'sessions', 
-                        'accounts',
-                        'verifications',
-                        'users',
-                        '__drizzle_migrations'
-                    ];
-                    
-                    for (const table of tables) {
-                        try {
-                            await sql\\\`DROP TABLE IF EXISTS \\\${sql(table)} CASCADE\\\`;
-                            console.log(\\\`✅ Dropped table: \\\${table}\\\`);
-                        } catch (e) {
-                            console.log(\\\`⚠️  Table \\\${table} did not exist (this is fine)\\\`);
-                        }
-                    }
-                    
-                    // Drop schema if it exists
-                    try {
-                        await sql\\\`DROP SCHEMA IF EXISTS drizzle CASCADE\\\`;
-                        console.log('✅ Dropped drizzle schema');
-                    } catch (e) {
-                        console.log('⚠️  Drizzle schema did not exist (this is fine)');
-                    }
-                    
-                    console.log('✅ PostgreSQL cleanup completed successfully');
-                    
-                } catch (e) {
-                    console.error('❌ PostgreSQL cleanup error:', e.message);
-                    process.exit(1);
-                } finally {
-                    if (sql) {
-                        try {
-                            await sql.end();
-                        } catch (e) {
-                            // Ignore connection close errors
-                        }
-                    }
-                }
-                "`,
-                {
+            // Create a temporary script file to avoid shell escaping issues with special characters
+            const fs = require("fs");
+            const path = require("path");
+            const tempScript = path.join(TestEnvironment.testDir, "temp-postgres-cleanup.mjs");
+
+            const scriptContent = `
+import postgres from 'postgres';
+
+let sql;
+try {
+    sql = postgres(process.env.DATABASE_URL, {
+        max: 1,
+        idle_timeout: 5,
+        connect_timeout: 10
+    });
+    
+    // Test connection first
+    await sql\`SELECT 1\`;
+    console.log('✅ PostgreSQL connection established');
+    
+    // Drop tables in correct order (respecting foreign keys)
+    const tables = [
+        'user_files',
+        'sessions', 
+        'accounts',
+        'verifications',
+        'users',
+        '__drizzle_migrations'
+    ];
+    
+    for (const table of tables) {
+        try {
+            await sql\`DROP TABLE IF EXISTS \${sql(table)} CASCADE\`;
+            console.log(\`✅ Dropped table: \${table}\`);
+        } catch (e) {
+            console.log(\`⚠️  Table \${table} did not exist (this is fine)\`);
+        }
+    }
+    
+    // Drop schema if it exists
+    try {
+        await sql\`DROP SCHEMA IF EXISTS drizzle CASCADE\`;
+        console.log('✅ Dropped drizzle schema');
+    } catch (e) {
+        console.log('⚠️  Drizzle schema did not exist (this is fine)');
+    }
+    
+    console.log('✅ PostgreSQL cleanup completed successfully');
+    
+} catch (e) {
+    console.error('❌ PostgreSQL cleanup error:', e.message);
+    process.exit(1);
+} finally {
+    if (sql) {
+        try {
+            await sql.end();
+        } catch (e) {
+            // Ignore connection close errors
+        }
+    }
+}
+`;
+
+            fs.writeFileSync(tempScript, scriptContent);
+
+            try {
+                execSync(`bun ${tempScript}`, {
                     stdio: "pipe",
                     encoding: "utf8",
-                    timeout: 30000, // 30 second timeout
+                    timeout: 30000,
+                    env: {
+                        ...process.env,
+                        DATABASE_URL: TestEnvironment.POSTGRES_URL,
+                    },
+                });
+            } finally {
+                // Clean up temp file
+                if (fs.existsSync(tempScript)) {
+                    fs.unlinkSync(tempScript);
                 }
-            );
+            }
 
             console.log("✅ PostgreSQL tables cleaned up successfully");
         } catch (error) {
@@ -497,9 +517,9 @@ export class TestEnvironment {
 
             // For now, log the specific error but don't fail the test
             // In production, we might want to fail the test suite
-            console.error("Error details:", error.message);
+            console.error("Error details:", (error as Error).message);
 
-            throw new Error(`PostgreSQL cleanup failed: ${error.message}`);
+            throw new Error(`PostgreSQL cleanup failed: ${(error as Error).message}`);
         }
     }
 }

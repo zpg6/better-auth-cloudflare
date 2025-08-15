@@ -45,7 +45,7 @@ for (const config of configurations) {
 
         afterAll(async () => {
             if (env) {
-                await env.cleanup();
+                await env.cleanup(config.skipCloudflare);
             }
         });
 
@@ -255,7 +255,7 @@ for (const config of configurations) {
                             cwd: projectPath,
                             encoding: "utf8",
                             stdio: "pipe",
-                            shell: true,
+
                             env: {
                                 ...process.env,
                                 // localConnectionString is now properly set in wrangler.toml by CLI
@@ -267,7 +267,6 @@ for (const config of configurations) {
                             cwd: projectPath,
                             encoding: "utf8",
                             stdio: "pipe",
-                            shell: true,
                         });
                     }
 

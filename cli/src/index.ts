@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 
 import { cancel, confirm, group, intro, outro, select, spinner, text } from "@clack/prompts";
-import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from "fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join, resolve } from "path";
 import pc from "picocolors";
 import {
-    parseWranglerToml,
-    type DatabaseConfig,
-    extractD1DatabaseId,
-    extractKvNamespaceId,
-    extractHyperdriveId,
-    updateD1BlockWithId,
-    updateKvBlockWithId,
-    updateHyperdriveBlockWithId,
     appendOrReplaceHyperdriveBlock,
+    extractD1DatabaseId,
+    extractHyperdriveId,
+    extractKvNamespaceId,
+    parseWranglerToml,
+    updateD1BlockWithId,
+    updateHyperdriveBlockWithId,
+    updateKvBlockWithId,
+    type DatabaseConfig,
 } from "./lib/helpers.js";
 
 // Get package version from package.json
@@ -115,21 +115,6 @@ export interface JSONArray extends Array<JSONValue> {}
 type PackageManager = "bun" | "pnpm" | "yarn" | "npm";
 
 function bunSpawnSync(command: string, args: string[], cwd?: string, env?: Record<string, string>) {
-    // Force use of Node.js child_process for better compatibility in test environments
-    // try {
-    //     if (typeof Bun !== "undefined" && typeof Bun.spawnSync === "function") {
-    //         const res = Bun.spawnSync({
-    //             cmd: [command, ...args],
-    //             cwd,
-    //             stdout: "pipe",
-    //             stderr: "pipe",
-    //             env: env ? { ...process.env, ...env } : process.env,
-    //         });
-    //         const decode = (b: Uint8Array | undefined) => (b ? new TextDecoder().decode(b) : "");
-    //         return { code: res.exitCode ?? 0, stdout: decode(res.stdout), stderr: decode(res.stderr) };
-    //     }
-    // } catch {}
-    // Fallback to Node's child_process
     const { spawnSync } = require("child_process") as typeof import("child_process");
     const result = spawnSync(command, args, {
         stdio: "pipe",
@@ -1112,11 +1097,11 @@ export const verification = {} as any;`;
         },
     });
 
-    // Generate wrangler.toml using unified generator
+    // Generate initial wrangler.toml (will be updated after resource creation)
     const { generateWranglerToml } = await import("./lib/wrangler-generator");
     const wranglerPath = join(targetDir, "wrangler.toml");
-    const generatedWrangler = generateWranglerToml(createWranglerConfig());
-    writeFileSync(wranglerPath, generatedWrangler);
+    const initialWrangler = generateWranglerToml(createWranglerConfig());
+    writeFileSync(wranglerPath, initialWrangler);
 
     // Tweak example source based on options
     const isHono = answers.template === "hono";
@@ -1358,6 +1343,34 @@ export const verification = {} as any;`;
         }
     }
 
+    // Install dependencies before Cloudflare resource creation
+    // This ensures projects are buildable even if Cloudflare setup fails
+    const pm = detectPackageManager(targetDir);
+    let doInstall: boolean;
+
+    if (isNonInteractive) {
+        // In non-interactive mode, always install dependencies
+        doInstall = true;
+    } else {
+        // In interactive mode, ask user
+        const installResult = await confirm({ message: "Install dependencies now?", initialValue: true });
+        doInstall = installResult === true;
+    }
+
+    if (doInstall) {
+        const inst = spinner();
+        inst.start("Installing dependencies...");
+        const res = runInstall(pm, targetDir);
+        if (res.code === 0) {
+            inst.stop(pc.green("Dependencies installed."));
+        } else {
+            inst.stop(pc.red("Failed to install dependencies."));
+            // Skip dependency installation failure in test environments
+            // The CLI will continue but auth generation may fail
+            console.warn("⚠️ Warning: Dependency installation failed. Auth generation may not work properly.");
+        }
+    }
+
     if (setup) {
         // Ensure user is authenticated and handle account selection
         const authResult = await ensureWranglerAuth(isNonInteractive);
@@ -1366,6 +1379,8 @@ export const verification = {} as any;`;
             databaseSetupSkipped = true;
         }
     }
+
+    // Resource creation - any failure will be fatal
 
     if (setup) {
         const cwd = targetDir;
@@ -1426,8 +1441,41 @@ export const verification = {} as any;`;
                     }
                 }
             } else {
-                creating.stop(pc.red("Failed to create D1 database."));
-                assertOk(res, "D1 creation failed.");
+                // Check for specific error types
+                const isInternalError =
+                    res.stderr?.includes("code: 7500") ||
+                    res.stdout?.includes("code: 7500") ||
+                    res.stderr?.includes("internal error") ||
+                    res.stdout?.includes("internal error");
+
+                const isDatabaseExists =
+                    res.stderr?.includes("already exists") || res.stdout?.includes("already exists");
+
+                if (isDatabaseExists) {
+                    // Database already exists, which is fine - just configure it in wrangler.toml
+                    if (existsSync(wranglerPath)) {
+                        let wrangler = readFileSync(wranglerPath, "utf8");
+                        wrangler = updateD1Block(wrangler, answers.d1Binding!, answers.d1Name);
+                        writeFileSync(wranglerPath, wrangler);
+                    }
+                    creating.stop(pc.yellow(`D1 database already exists (name: ${answers.d1Name}).`));
+                } else if (isInternalError) {
+                    creating.stop(pc.red("D1 database creation failed due to Cloudflare API internal error."));
+                    console.log(pc.gray("This is usually a temporary issue with Cloudflare's API."));
+                    console.log(
+                        pc.gray("Check Cloudflare Status for ongoing issues: https://www.cloudflarestatus.com/")
+                    );
+                    console.log(pc.gray("You can try running the command again, or create the D1 database manually:"));
+                    console.log(pc.cyan(`  npx wrangler d1 create ${answers.d1Name}`));
+                    console.log(pc.gray("Then update your wrangler.toml with the database ID."));
+                    assertOk(res, "D1 database creation failed due to internal error.");
+                } else {
+                    creating.stop(pc.red("Failed to create D1 database."));
+                    console.log(
+                        pc.gray("Check Cloudflare Status for ongoing issues: https://www.cloudflarestatus.com/")
+                    );
+                    assertOk(res, "D1 creation failed.");
+                }
             }
         }
 
@@ -1455,8 +1503,31 @@ export const verification = {} as any;`;
                 }
                 creating.stop(pc.green(`Hyperdrive created${hyperdriveId ? " (id: " + hyperdriveId + ")" : ""}.`));
             } else {
-                creating.stop(pc.red("Failed to create Hyperdrive."));
-                assertOk(res, "Hyperdrive creation failed.");
+                // Check for specific error types
+                const isHyperdriveExists =
+                    res.stderr?.includes("code: 2017") ||
+                    res.stdout?.includes("code: 2017") ||
+                    res.stderr?.includes("A Hyperdrive config with the given name already exists") ||
+                    res.stdout?.includes("A Hyperdrive config with the given name already exists");
+
+                if (isHyperdriveExists) {
+                    // Hyperdrive already exists, which is fine - just configure it in wrangler.toml
+                    if (existsSync(wranglerPath)) {
+                        let wrangler = readFileSync(wranglerPath, "utf8");
+                        wrangler = appendOrReplaceHyperdriveBlock(
+                            wrangler,
+                            answers.hdBinding,
+                            undefined,
+                            answers.database as "hyperdrive-postgres" | "hyperdrive-mysql",
+                            answers.hdConnectionString
+                        );
+                        writeFileSync(wranglerPath, wrangler);
+                    }
+                    creating.stop(pc.yellow(`Hyperdrive already exists (name: ${answers.hdName}).`));
+                } else {
+                    creating.stop(pc.red("Failed to create Hyperdrive."));
+                    assertOk(res, "Hyperdrive creation failed.");
+                }
             }
         }
 
@@ -1480,8 +1551,27 @@ export const verification = {} as any;`;
                 }
                 creating.stop(pc.green(`KV namespace created${namespaceId ? " (id: " + namespaceId + ")" : ""}.`));
             } else {
-                creating.stop(pc.red("Failed to create KV namespace."));
-                assertOk(res, "KV namespace creation failed.");
+                // Check for specific error types
+                const isKvExists =
+                    res.stderr?.includes("code: 10014") ||
+                    res.stdout?.includes("code: 10014") ||
+                    res.stderr?.includes("A namespace with this account ID and title already exists") ||
+                    res.stdout?.includes("A namespace with this account ID and title already exists") ||
+                    res.stderr?.includes("already exists") ||
+                    res.stdout?.includes("already exists");
+
+                if (isKvExists) {
+                    // KV namespace already exists, which is fine - just configure it in wrangler.toml
+                    if (existsSync(wranglerPath)) {
+                        let wrangler = readFileSync(wranglerPath, "utf8");
+                        wrangler = appendOrReplaceKvNamespaceBlock(wrangler, answers.kvBinding);
+                        writeFileSync(wranglerPath, wrangler);
+                    }
+                    creating.stop(pc.yellow(`KV namespace already exists (name: ${answers.kvNamespaceName}).`));
+                } else {
+                    creating.stop(pc.red("Failed to create KV namespace."));
+                    assertOk(res, "KV namespace creation failed.");
+                }
             }
         }
 
@@ -1498,38 +1588,35 @@ export const verification = {} as any;`;
                 }
                 creating.stop(pc.green(`R2 bucket created (name: ${answers.r2BucketName}).`));
             } else {
-                creating.stop(pc.red("Failed to create R2 bucket."));
-                assertOk(res, "R2 bucket creation failed.");
+                // Check if the error is because the bucket already exists (error code 10004)
+                const bucketAlreadyExists =
+                    res.stderr?.includes("code: 10004") ||
+                    res.stdout?.includes("code: 10004") ||
+                    res.stderr?.includes("[code: 10004]") ||
+                    res.stdout?.includes("[code: 10004]") ||
+                    res.stderr?.includes("already exists") ||
+                    res.stdout?.includes("already exists");
+
+                if (bucketAlreadyExists) {
+                    // Bucket already exists, which is fine - just configure it in wrangler.toml
+                    if (existsSync(wranglerPath)) {
+                        let wrangler = readFileSync(wranglerPath, "utf8");
+                        wrangler = appendOrReplaceR2Block(wrangler, r2Binding, answers.r2BucketName);
+                        writeFileSync(wranglerPath, wrangler);
+                    }
+                    creating.stop(pc.yellow(`R2 bucket already exists (name: ${answers.r2BucketName}).`));
+                } else {
+                    creating.stop(pc.red("Failed to create R2 bucket."));
+                    console.log(
+                        pc.gray("Check Cloudflare Status for ongoing issues: https://www.cloudflarestatus.com/")
+                    );
+                    assertOk(res, "R2 bucket creation failed.");
+                }
             }
         }
     }
 
-    // Install deps before running scripts
-    const pm = detectPackageManager(targetDir);
-    let doInstall: boolean;
-
-    if (isNonInteractive) {
-        // In non-interactive mode, always install dependencies
-        doInstall = true;
-    } else {
-        // In interactive mode, ask user
-        const installResult = await confirm({ message: "Install dependencies now?", initialValue: true });
-        doInstall = installResult === true;
-    }
-
-    if (doInstall) {
-        const inst = spinner();
-        inst.start("Installing dependencies...");
-        const res = runInstall(pm, targetDir);
-        if (res.code === 0) {
-            inst.stop(pc.green("Dependencies installed."));
-        } else {
-            inst.stop(pc.red("Failed to install dependencies."));
-            // Skip dependency installation failure in test environments
-            // The CLI will continue but auth generation may fail
-            console.warn("⚠️ Warning: Dependency installation failed. Auth generation may not work properly.");
-        }
-    }
+    // All resources created successfully at this point
 
     // Schema generation & migrations
     const genAuth = spinner();
@@ -1570,8 +1657,9 @@ export const verification = {} as any;`;
     genDb.start("Generating Drizzle migrations...");
     {
         const dbGenRes = runScript(pm, "db:generate", targetDir);
-        if (dbGenRes.code === 0) genDb.stop(pc.green("Drizzle migrations generated."));
-        else {
+        if (dbGenRes.code === 0) {
+            genDb.stop(pc.green("Drizzle migrations generated."));
+        } else {
             genDb.stop(pc.red("Failed to generate migrations."));
             assertOk(dbGenRes, "Migration generation failed.");
         }
@@ -1623,6 +1711,55 @@ export const verification = {} as any;`;
         );
     }
 
+    // Handle PostgreSQL/MySQL migrations (Hyperdrive)
+    if (answers.database.startsWith("hyperdrive") && !databaseSetupSkipped) {
+        let migrateChoice: "dev" | "prod" | "skip";
+
+        if (isNonInteractive) {
+            // In non-interactive mode, use the CLI argument or default to skip (matches D1 behavior)
+            migrateChoice = answers.applyMigrations || "skip";
+        } else {
+            // In interactive mode, ask user
+            const databaseLabel = answers.database === "hyperdrive-postgres" ? "PostgreSQL" : "MySQL";
+            migrateChoice = (await (select as any)({
+                message: `Apply ${databaseLabel} migrations now?`,
+                options: [
+                    { value: "dev", label: "Yes, apply to development database" },
+                    { value: "prod", label: "Yes, apply to production database" },
+                    { value: "skip", label: "No, I'll do it later" },
+                ],
+                initialValue: "dev",
+            })) as "dev" | "prod" | "skip";
+        }
+
+        if (migrateChoice === "dev") {
+            const mig = spinner();
+            mig.start("Applying migrations to development database...");
+            const res = runScript(pm, "db:migrate:dev", targetDir);
+            if (res.code === 0) mig.stop(pc.green("Migrations applied to development database."));
+            else {
+                mig.stop(pc.red("Failed to apply development migrations."));
+                assertOk(res, "Development migration failed.");
+            }
+        } else if (migrateChoice === "prod") {
+            const mig = spinner();
+            mig.start("Applying migrations to production database...");
+            const res = runScript(pm, "db:migrate:prod", targetDir);
+            if (res.code === 0) mig.stop(pc.green("Migrations applied to production database."));
+            else {
+                mig.stop(pc.red("Failed to apply production migrations."));
+                console.log(pc.gray("Check Cloudflare Status for ongoing issues: https://www.cloudflarestatus.com/"));
+                assertOk(res, "Production migration failed.");
+            }
+        }
+    } else if (answers.database.startsWith("hyperdrive") && databaseSetupSkipped) {
+        outro(
+            pc.yellow(
+                "Skipping database migrations since Cloudflare setup was skipped. After setting up your Hyperdrive configuration, run: npx @better-auth-cloudflare/cli migrate"
+            )
+        );
+    }
+
     // Run database migrations to production if database was created
     if (setup && !databaseSetupSkipped) {
         if (answers.database === "d1") {
@@ -1640,6 +1777,7 @@ export const verification = {} as any;`;
                         "Warning: D1 database migrations failed. You may need to run 'bun run db:migrate:prod' manually."
                     )
                 );
+                console.log(pc.gray("Check Cloudflare Status for ongoing issues: https://www.cloudflarestatus.com/"));
             }
         } else {
             const migrateSpinner = spinner();
@@ -1654,6 +1792,12 @@ export const verification = {} as any;`;
                 outro(
                     pc.yellow(
                         "Warning: Database migrations failed. You may need to run 'bun run db:migrate:prod' manually."
+                    )
+                );
+                console.log(pc.gray("Check Cloudflare Status for ongoing issues: https://www.cloudflarestatus.com/"));
+                console.log(
+                    pc.gray(
+                        "Also check your database connection string and make sure it is correct, and check status with your database provider."
                     )
                 );
             }
@@ -1691,6 +1835,7 @@ export const verification = {} as any;`;
                 }
             } else {
                 deploySpinner.stop(pc.red("Deployment failed."));
+                console.log(pc.gray("Check Cloudflare Status for ongoing issues: https://www.cloudflarestatus.com/"));
                 outro(pc.yellow("You can deploy manually later with: bun run deploy"));
             }
         }
