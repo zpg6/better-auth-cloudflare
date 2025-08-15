@@ -156,6 +156,7 @@ function fatal(message: string, details?: string) {
     outro(pc.red(message));
     console.log(pc.gray("\nNeed help?"));
     console.log(pc.cyan("  Get help (usage, arguments): npx @better-auth-cloudflare/cli --help"));
+    console.log(pc.cyan("  Cloudflare Status: https://www.cloudflarestatus.com/"));
     console.log(pc.cyan("  Report issues: https://github.com/zpg6/better-auth-cloudflare/issues"));
     process.exit(1);
 }
@@ -209,12 +210,12 @@ function runWranglerCommand(args: string[], cwd: string, accountId?: string) {
     return bunSpawnSync("npx", ["wrangler", ...args], cwd, env);
 }
 
-function checkD1DatabaseExists(databaseId: string, cwd: string, accountId?: string): boolean {
-    if (!databaseId || databaseId.startsWith("YOUR_")) {
+function checkD1DatabaseExists(databaseName: string, cwd: string, accountId?: string): boolean {
+    if (!databaseName || databaseName.startsWith("YOUR_")) {
         return false;
     }
 
-    const result = runWranglerCommand(["d1", "info", databaseId], cwd, accountId);
+    const result = runWranglerCommand(["d1", "info", databaseName], cwd, accountId);
     return result.code === 0;
 }
 
@@ -604,7 +605,7 @@ async function migrate(cliArgs?: CliArgs) {
 
     // Determine migration target early to potentially skip database checks
     let migrateChoice: "dev" | "remote" | "skip" = "skip";
-    
+
     if (isNonInteractive) {
         if (cliArgs && cliArgs["migrate-target"]) {
             const target = cliArgs["migrate-target"] as string;
@@ -678,9 +679,9 @@ async function migrate(cliArgs?: CliArgs) {
     // Check if any D1 databases actually exist
     debugLog(`Checking existence of ${d1Databases.length} D1 database(s)`);
     const existingD1Databases = d1Databases.filter(db => {
-        if (!db.id) return false;
-        const exists = checkD1DatabaseExists(db.id, process.cwd());
-        debugLog(`D1 database ${db.binding} (${db.id}): ${exists ? "exists" : "not found"}`);
+        if (!db.name) return false;
+        const exists = checkD1DatabaseExists(db.name, process.cwd());
+        debugLog(`D1 database ${db.binding} (${db.name}): ${exists ? "exists" : "not found"}`);
         return exists;
     });
 
@@ -2042,6 +2043,7 @@ function printHelp() {
         `optionally creating Cloudflare D1, KV, R2, or Hyperdrive resources for you.\n` +
         `The migrate command runs auth:update, db:generate, and optionally db:migrate.\n` +
         `\n` +
+        `Cloudflare Status: https://www.cloudflarestatus.com/\n` +
         `Report issues: https://github.com/zpg6/better-auth-cloudflare/issues\n`;
     // eslint-disable-next-line no-console
     console.log(help);
