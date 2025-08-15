@@ -4,20 +4,11 @@ import authClient from "@/auth/authClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Github, Package } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 export default function Home() {
     const { data: session, error: sessionError } = authClient.useSession();
     const [isAuthActionInProgress, setIsAuthActionInProgress] = useState(false);
-    const router = useRouter();
-
-    // Redirect to dashboard if already logged in
-    useEffect(() => {
-        if (session) {
-            router.push("/dashboard");
-        }
-    }, [session, router]);
 
     const handleAnonymousLogin = async () => {
         setIsAuthActionInProgress(true);
@@ -29,9 +20,9 @@ export default function Home() {
                 setIsAuthActionInProgress(false);
                 alert(`Anonymous login failed: ${result.error.message}`);
             } else {
-                // Login succeeded, redirect to dashboard
-                // Don't reset loading state here - let the redirect happen
-                window.location.href = "/dashboard";
+                // Login succeeded - middleware will handle redirect to dashboard
+                // Force a page refresh to trigger middleware redirect
+                window.location.reload();
             }
         } catch (e: any) {
             setIsAuthActionInProgress(false);

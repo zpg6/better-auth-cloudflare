@@ -1,10 +1,10 @@
 import type { KVNamespace } from "@cloudflare/workers-types";
-import type { AuthContext } from "better-auth";
+import type { AuthContext, Session, User } from "better-auth";
 import type { DrizzleAdapterConfig } from "better-auth/adapters/drizzle";
 import type { FieldAttribute } from "better-auth/db";
 import type { drizzle as d1Drizzle } from "drizzle-orm/d1";
-import type { drizzle as postgresDrizzle } from "drizzle-orm/postgres-js";
 import type { drizzle as mysqlDrizzle } from "drizzle-orm/mysql2";
+import type { drizzle as postgresDrizzle } from "drizzle-orm/postgres-js";
 
 export interface CloudflarePluginOptions {
     /**
@@ -79,6 +79,29 @@ export interface CloudflareGeolocation {
     colo?: string | null;
     latitude?: string | null;
     longitude?: string | null;
+}
+
+/**
+ * Session type enhanced with Cloudflare geolocation data
+ * This is what gets returned by /api/auth/get-session when using better-auth-cloudflare
+ */
+export interface CloudflareSession extends Session {
+    timezone?: string | null;
+    city?: string | null;
+    country?: string | null;
+    region?: string | null;
+    regionCode?: string | null;
+    colo?: string | null;
+    latitude?: string | null;
+    longitude?: string | null;
+}
+
+/**
+ * The response structure from /api/auth/get-session
+ */
+export interface CloudflareSessionResponse {
+    session: CloudflareSession;
+    user: User;
 }
 
 /**
