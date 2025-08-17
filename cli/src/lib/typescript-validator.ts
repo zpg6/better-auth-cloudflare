@@ -79,7 +79,17 @@ export class TypeScriptValidator {
                 timeout: 30000, // 30 second timeout
             });
 
-            // If npx fails, try direct tsc command (global installation)
+            // If npx fails, try bunx tsc command
+            if (result.status !== 0 && result.error) {
+                result = spawnSync("bunx", ["tsc", "--project", this.tempDir, "--noEmit"], {
+                    cwd: cliProjectDir,
+                    encoding: "utf8",
+                    stdio: "pipe",
+                    timeout: 30000, // 30 second timeout
+                });
+            }
+
+            // If bunx fails, try direct tsc command (global installation)
             if (result.status !== 0 && result.error) {
                 result = spawnSync("tsc", ["--project", this.tempDir, "--noEmit"], {
                     cwd: cliProjectDir,

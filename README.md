@@ -77,27 +77,27 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 **Interactive mode** (asks questions and provides helpful defaults):
 
 ```bash
-npx @better-auth-cloudflare/cli generate
+npx @better-auth-cloudflare/cli@latest generate
 ```
 
 **Non-interactive mode** (use arguments):
 
 ```bash
-# Simple D1 app with KV (ready to run)
-npx @better-auth-cloudflare/cli generate \
+# Simple D1 app with KV (fully deployed to Cloudflare)
+npx @better-auth-cloudflare/cli@latest generate \
   --app-name=my-auth-app \
   --template=hono \
   --database=d1 \
   --kv=true \
   --r2=false \
-  --apply-migrations=dev
+  --apply-migrations=prod
 ```
 
 **Migration workflow**:
 
 ```bash
-npx @better-auth-cloudflare/cli migrate              # Interactive
-npx @better-auth-cloudflare/cli migrate --migrate-target=dev  # Non-interactive
+npx @better-auth-cloudflare/cli@latest migrate                         # Interactive
+npx @better-auth-cloudflare/cli@latest migrate --migrate-target=prod   # Non-interactive
 ```
 
 The CLI creates projects from Hono or Next.js templates and can automatically set up D1, KV, R2, and Hyperdrive resources. See [CLI Documentation](./cli/README.md) for full documentation and all available arguments.

@@ -119,6 +119,40 @@ export function getTestConfigurations(): TestConfig[] {
             databaseType: "sqlite",
             template: "hono",
         },
+        // 8. Pre-existing resources: Hono + D1 + KV (resources created first)
+        {
+            name: "Hono + D1 + KV Pre-existing Resources",
+            args: [
+                `--app-name=test-hono-preexisting-${timestamp}`,
+                "--template=hono",
+                "--database=d1",
+                "--kv=true",
+                "--r2=false",
+            ],
+            preCreateResources: true,
+            expectedResources: { d1: true, kv: true, r2: false, hyperdrive: false },
+            expectedFiles: ["wrangler.toml", "src/auth/index.ts", "drizzle.config.ts"],
+            databaseType: "sqlite",
+            template: "hono",
+        },
+        // 9. Pre-existing resources: Next.js + Hyperdrive + KV + R2 (resources created first)
+        {
+            name: "Next.js + Hyperdrive + KV + R2 Pre-existing Resources",
+            args: [
+                `--app-name=test-nextjs-preexisting-${timestamp}`,
+                "--template=nextjs",
+                "--database=hyperdrive-postgres",
+                "--kv=true",
+                "--r2=true",
+                "--r2-bucket-name=test-nextjs-preexisting-bucket",
+                "--apply-migrations=prod",
+            ],
+            preCreateResources: true,
+            expectedResources: { d1: false, kv: true, r2: true, hyperdrive: true },
+            expectedFiles: ["wrangler.toml", ".env", "src/auth/index.ts", "drizzle.config.ts", "next.config.ts"],
+            databaseType: "postgres",
+            template: "nextjs",
+        },
     ];
 }
 

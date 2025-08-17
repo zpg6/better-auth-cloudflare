@@ -170,12 +170,25 @@ export function extractD1DatabaseId(wranglerOutput: string): string | null {
             return tomlMatch[1];
         }
 
-        // Fallback: Look for JSON response with database_id
+        // Look for JSON response with database_id
         const jsonRegex = /\{[\s\S]*"database_id":\s*"([^"]+)"[\s\S]*\}/;
         const jsonMatch = jsonRegex.exec(wranglerOutput);
         if (jsonMatch) {
             return jsonMatch[1];
         }
+
+        // Parse table format from `wrangler d1 info` command
+        // The ID appears in the first row of the table without a label
+        const lines = wranglerOutput.split("\n");
+        for (const line of lines) {
+            // Look for a line that contains a UUID (36 characters with hyphens)
+            const uuidRegex = /│\s*([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\s*│/i;
+            const uuidMatch = uuidRegex.exec(line);
+            if (uuidMatch) {
+                return uuidMatch[1];
+            }
+        }
+
         return null;
     } catch {
         return null;

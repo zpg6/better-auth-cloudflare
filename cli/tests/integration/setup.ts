@@ -6,6 +6,7 @@ export interface TestConfig {
     name: string;
     args: string[];
     skipCloudflare?: boolean;
+    preCreateResources?: boolean;
     expectedResources: {
         d1?: boolean;
         kv?: boolean;
@@ -119,26 +120,43 @@ export class TestEnvironment {
         const appName = this.extractAppName(config.args);
 
         if (appName) {
-            this.createdResources.push({ type: "worker", name: appName });
+            // Helper function to check if resource already exists
+            const resourceExists = (type: string, name: string) =>
+                this.createdResources.some(r => r.type === type && r.name === name);
+
+            if (!resourceExists("worker", appName)) {
+                this.createdResources.push({ type: "worker", name: appName });
+            }
 
             if (config.expectedResources.d1) {
-                this.createdResources.push({ type: "d1", name: `${appName}-db` });
+                const d1Name = `${appName}-db`;
+                if (!resourceExists("d1", d1Name)) {
+                    this.createdResources.push({ type: "d1", name: d1Name });
+                }
             }
 
             if (config.expectedResources.kv) {
-                this.createdResources.push({ type: "kv", name: `${appName}-kv` });
+                const kvName = `${appName}-kv`;
+                if (!resourceExists("kv", kvName)) {
+                    this.createdResources.push({ type: "kv", name: kvName });
+                }
             }
 
             if (config.expectedResources.r2) {
                 const r2Match = config.args.find(arg => arg.startsWith("--r2-bucket-name="));
                 if (r2Match) {
                     const bucketName = r2Match.split("=")[1];
-                    this.createdResources.push({ type: "r2", name: bucketName });
+                    if (!resourceExists("r2", bucketName)) {
+                        this.createdResources.push({ type: "r2", name: bucketName });
+                    }
                 }
             }
 
             if (config.expectedResources.hyperdrive) {
-                this.createdResources.push({ type: "hyperdrive", name: `${appName}-hyperdrive` });
+                const hyperdriveName = `${appName}-hyperdrive`;
+                if (!resourceExists("hyperdrive", hyperdriveName)) {
+                    this.createdResources.push({ type: "hyperdrive", name: hyperdriveName });
+                }
             }
         }
     }
@@ -281,6 +299,132 @@ export class TestEnvironment {
 
     getProjectPath(appName: string): string {
         return join(TestEnvironment.TEST_DIR, appName);
+    }
+
+    /**
+     * Pre-creates Cloudflare resources before running the CLI to test "already exists" scenarios
+     */
+    async preCreateResources(config: TestConfig): Promise<void> {
+        if (!config.preCreateResources) {
+            return;
+        }
+
+        console.log("🔧 Pre-creating Cloudflare resources to test 'already exists' scenarios...");
+
+        const appName = this.extractAppName(config.args);
+        if (!appName) {
+            throw new Error("App name not found in config args");
+        }
+
+        const accountId = TestEnvironment.ACCOUNT_ID;
+
+        // Pre-create D1 database if needed
+        if (config.expectedResources.d1) {
+            const dbName = `${appName}-db`;
+            console.log(`📊 Pre-creating D1 database: ${dbName}`);
+
+            try {
+                execSync(`CLOUDFLARE_ACCOUNT_ID=${accountId} npx wrangler d1 create ${dbName}`, {
+                    stdio: "pipe",
+                    encoding: "utf8",
+                });
+
+                this.createdResources.push({ type: "d1", name: dbName });
+                console.log(`✅ Pre-created D1 database: ${dbName}`);
+            } catch (error) {
+                // If it already exists, that's fine for this test
+                if (error instanceof Error && error.message.includes("already exists")) {
+                    console.log(`ℹ️  D1 database ${dbName} already exists (expected for this test)`);
+                } else {
+                    throw error;
+                }
+            }
+        }
+
+        // Pre-create KV namespace if needed
+        if (config.expectedResources.kv) {
+            const kvName = `${appName}-kv`;
+            console.log(`🗂️  Pre-creating KV namespace: ${kvName}`);
+
+            try {
+                execSync(`CLOUDFLARE_ACCOUNT_ID=${accountId} npx wrangler kv namespace create ${kvName}`, {
+                    stdio: "pipe",
+                    encoding: "utf8",
+                });
+
+                this.createdResources.push({ type: "kv", name: kvName });
+                console.log(`✅ Pre-created KV namespace: ${kvName}`);
+            } catch (error) {
+                // If it already exists, that's fine for this test
+                if (error instanceof Error && error.message.includes("already exists")) {
+                    console.log(`ℹ️  KV namespace ${kvName} already exists (expected for this test)`);
+                } else {
+                    throw error;
+                }
+            }
+        }
+
+        // Pre-create R2 bucket if needed
+        if (config.expectedResources.r2) {
+            const r2BucketArg = config.args.find(arg => arg.startsWith("--r2-bucket-name="));
+            const bucketName = r2BucketArg ? r2BucketArg.split("=")[1] : `${appName}-files`;
+            console.log(`🪣 Pre-creating R2 bucket: ${bucketName}`);
+
+            try {
+                execSync(`CLOUDFLARE_ACCOUNT_ID=${accountId} npx wrangler r2 bucket create ${bucketName}`, {
+                    stdio: "pipe",
+                    encoding: "utf8",
+                });
+
+                this.createdResources.push({ type: "r2", name: bucketName });
+                console.log(`✅ Pre-created R2 bucket: ${bucketName}`);
+            } catch (error) {
+                // If it already exists, that's fine for this test
+                if (
+                    error instanceof Error &&
+                    (error.message.includes("already exists") || error.message.includes("code: 10004"))
+                ) {
+                    console.log(`ℹ️  R2 bucket ${bucketName} already exists (expected for this test)`);
+                    this.createdResources.push({ type: "r2", name: bucketName });
+                } else {
+                    throw error;
+                }
+            }
+        }
+
+        // Pre-create Hyperdrive if needed
+        if (config.expectedResources.hyperdrive) {
+            const hyperdriveName = `${appName}-hyperdrive`;
+            const connectionString = TestEnvironment.POSTGRES_URL;
+
+            if (!connectionString) {
+                throw new Error("DATABASE_URL environment variable required for Hyperdrive pre-creation");
+            }
+
+            console.log(`🚀 Pre-creating Hyperdrive: ${hyperdriveName}`);
+
+            try {
+                execSync(
+                    `CLOUDFLARE_ACCOUNT_ID=${accountId} npx wrangler hyperdrive create ${hyperdriveName} --connection-string="${connectionString}"`,
+                    {
+                        stdio: "pipe",
+                        encoding: "utf8",
+                    }
+                );
+
+                this.createdResources.push({ type: "hyperdrive", name: hyperdriveName });
+                console.log(`✅ Pre-created Hyperdrive: ${hyperdriveName}`);
+            } catch (error) {
+                // If it already exists, that's fine for this test
+                if (error instanceof Error && error.message.includes("already exists")) {
+                    console.log(`ℹ️  Hyperdrive ${hyperdriveName} already exists (expected for this test)`);
+                } else {
+                    throw error;
+                }
+            }
+        }
+
+        console.log("✅ Resource pre-creation completed");
     }
 
     async cleanup(skipCloudflare: boolean = false) {

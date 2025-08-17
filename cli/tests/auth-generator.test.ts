@@ -115,7 +115,7 @@ describe("Auth Generator", () => {
 
             // Check imports
             expect(result).toContain('import { getCloudflareContext } from "@opennextjs/cloudflare"');
-            expect(result).toContain('import { getDb } from "../db"');
+            expect(result).toContain('import { getDb, schema } from "../db"');
             expect(result).toContain('import { anonymous, openAPI } from "better-auth/plugins"');
 
             // Check D1 configuration

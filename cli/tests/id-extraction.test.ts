@@ -218,3 +218,187 @@ localConnectionString = "postgresql://user:pass@localhost:5432/db"`;
         expect(result).toContain('binding = "HYPERDRIVE"');
     });
 });
+
+describe("Existing Resource ID Retrieval", () => {
+    // Note: These tests would require mocking wrangler commands in a real test environment
+    // For now, we test the parsing logic with mock responses
+
+    test("should parse D1 database info response correctly", () => {
+        // Mock response from `wrangler d1 info <database-name>`
+        const mockD1InfoResponse = `
+ ⛅️ wrangler 4.28.1
+───────────────────
+📋 Database information for 'test-app-db':
+
+[[d1_databases]]
+binding = "DATABASE"
+database_name = "test-app-db"
+database_id = "existing-d1-id-456"
+`;
+
+        const result = extractD1DatabaseId(mockD1InfoResponse);
+        expect(result).toBe("existing-d1-id-456");
+    });
+
+    test("should parse D1 database info table format response correctly", () => {
+        // Mock response from `wrangler d1 info <database-name>` in table format
+        const mockD1InfoTableResponse = `
+ ⛅️ wrangler 4.30.0
+───────────────────
+┌───────────────────────┬──────────────────────────────────────┐
+│                       │ 1ecff3a2-1246-4349-894f-017f9ae1e8ca │
+├───────────────────────┼──────────────────────────────────────┤
+│ name                  │ profile-site-db                      │
+├───────────────────────┼──────────────────────────────────────┤
+│ created_at            │ 2025-08-16T19:46:00.243Z             │
+├───────────────────────┼──────────────────────────────────────┤
+│ num_tables            │ 5                                    │
+├───────────────────────┼──────────────────────────────────────┤
+│ running_in_region     │ ENAM                                 │
+└───────────────────────┴──────────────────────────────────────┘
+`;
+
+        const result = extractD1DatabaseId(mockD1InfoTableResponse);
+        expect(result).toBe("1ecff3a2-1246-4349-894f-017f9ae1e8ca");
+    });
+
+    test("should parse KV namespace list response correctly", () => {
+        // Mock response from `wrangler kv namespace list`
+        const mockKvListResponse = `[
+  {
+    "id": "existing-kv-id-789",
+    "title": "test-app-kv",
+    "supports_url_encoding": true
+  },
+  {
+    "id": "other-kv-id-123",
+    "title": "other-namespace",
+    "supports_url_encoding": true
+  }
+]`;
+
+        // Test the JSON parsing logic that would be used in getExistingKvNamespaceId
+        const namespaces = JSON.parse(mockKvListResponse);
+        const targetNamespace = namespaces.find((ns: any) => ns.title === "test-app-kv");
+        expect(targetNamespace?.id).toBe("existing-kv-id-789");
+    });
+
+    test("should parse Hyperdrive list response correctly", () => {
+        // Mock response from `wrangler hyperdrive list`
+        const mockHyperdriveListResponse = `[
+  {
+    "id": "existing-hyperdrive-id-abc",
+    "name": "test-app-hyperdrive",
+    "origin": {
+      "database": "postgres",
+      "host": "example.com",
+      "port": 5432,
+      "user": "user"
+    }
+  },
+  {
+    "id": "other-hyperdrive-id-def",
+    "name": "other-hyperdrive",
+    "origin": {
+      "database": "mysql",
+      "host": "example.com",
+      "port": 3306,
+      "user": "user"
+    }
+  }
+]`;
+
+        // Test the JSON parsing logic that would be used in getExistingHyperdriveId
+        const hyperdrives = JSON.parse(mockHyperdriveListResponse);
+        const targetHyperdrive = hyperdrives.find((hd: any) => hd.name === "test-app-hyperdrive");
+        expect(targetHyperdrive?.id).toBe("existing-hyperdrive-id-abc");
+    });
+});
+
+describe("Placeholder ID Replacement Integration", () => {
+    test("should replace D1 placeholder ID with actual ID when database already exists", () => {
+        const tomlWithPlaceholder = `name = "test-app"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
+
+[[d1_databases]]
+binding = "DATABASE"
+database_name = "test-app-db"
+database_id = "your-d1-database-id-here"
+migrations_dir = "drizzle"`;
+
+        const result = updateD1BlockWithId(tomlWithPlaceholder, "DATABASE", "test-app-db", "existing-d1-id-456");
+
+        expect(result).toContain('database_id = "existing-d1-id-456"');
+        expect(result).not.toContain("your-d1-database-id-here");
+        expect(result).toContain('database_name = "test-app-db"');
+        expect(result).toContain('binding = "DATABASE"');
+    });
+
+    test("should replace KV placeholder ID with actual ID when namespace already exists", () => {
+        const tomlWithPlaceholder = `name = "test-app"
+main = "src/index.ts"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "YOUR_KV_NAMESPACE_ID"`;
+
+        const result = updateKvBlockWithId(tomlWithPlaceholder, "KV", "existing-kv-id-789");
+
+        expect(result).toContain('id = "existing-kv-id-789"');
+        expect(result).not.toContain("YOUR_KV_NAMESPACE_ID");
+        expect(result).toContain('binding = "KV"');
+    });
+
+    test("should replace Hyperdrive placeholder ID with actual ID when hyperdrive already exists", () => {
+        const tomlWithPlaceholder = `name = "test-app"
+main = "src/index.ts"
+
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "your-hyperdrive-id-here"
+localConnectionString = "postgresql://postgres:password@localhost:5432/postgres"`;
+
+        const result = updateHyperdriveBlockWithId(tomlWithPlaceholder, "HYPERDRIVE", "existing-hyperdrive-id-abc");
+
+        expect(result).toContain('id = "existing-hyperdrive-id-abc"');
+        expect(result).not.toContain("your-hyperdrive-id-here");
+        expect(result).toContain('binding = "HYPERDRIVE"');
+        expect(result).toContain('localConnectionString = "postgresql://postgres:password@localhost:5432/postgres"');
+    });
+
+    test("should handle multiple resources with mixed placeholder and real IDs", () => {
+        const tomlWithMixedIds = `name = "test-app"
+main = "src/index.ts"
+
+[[d1_databases]]
+binding = "DATABASE"
+database_name = "test-app-db"
+database_id = "your-d1-database-id-here"
+migrations_dir = "drizzle"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "existing-kv-id-789"
+
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "your-hyperdrive-id-here"
+localConnectionString = "postgresql://postgres:password@localhost:5432/postgres"`;
+
+        // Replace D1 placeholder
+        let result = updateD1BlockWithId(tomlWithMixedIds, "DATABASE", "test-app-db", "existing-d1-id-456");
+
+        // Replace Hyperdrive placeholder
+        result = updateHyperdriveBlockWithId(result, "HYPERDRIVE", "existing-hyperdrive-id-abc");
+
+        // Verify all IDs are correctly set
+        expect(result).toContain('database_id = "existing-d1-id-456"');
+        expect(result).toContain('id = "existing-kv-id-789"'); // Should remain unchanged
+        expect(result).toContain('id = "existing-hyperdrive-id-abc"');
+
+        // Verify no placeholders remain
+        expect(result).not.toContain("your-d1-database-id-here");
+        expect(result).not.toContain("your-hyperdrive-id-here");
+    });
+});

@@ -50,6 +50,12 @@ for (const config of configurations) {
         });
 
         test("CLI execution succeeds", async () => {
+            // Pre-create resources if this is a pre-existing resources test
+            if (config.preCreateResources) {
+                console.log("\n🔧 Pre-creating resources to test 'already exists' scenario...");
+                await env.preCreateResources(config);
+            }
+
             console.log("\n📋 Running CLI...");
             cliOutput = await env.runCli(config);
 
@@ -59,16 +65,36 @@ for (const config of configurations) {
             // Check for success indicators
             if (!config.skipCloudflare) {
                 if (config.expectedResources.d1) {
-                    expect(cliOutput).toMatch(/created \(id:/i);
+                    if (config.preCreateResources) {
+                        // For pre-existing resources, expect "already exists" message with actual ID
+                        expect(cliOutput).toMatch(/D1 database already exists.*\(id:/i);
+                    } else {
+                        expect(cliOutput).toMatch(/created \(id:/i);
+                    }
                 }
                 if (config.expectedResources.kv) {
-                    expect(cliOutput).toMatch(/created \(id:|namespace.*created/i);
+                    if (config.preCreateResources) {
+                        // For pre-existing resources, expect "already exists" message with actual ID
+                        expect(cliOutput).toMatch(/KV namespace already exists.*\(id:/i);
+                    } else {
+                        expect(cliOutput).toMatch(/created \(id:|namespace.*created/i);
+                    }
                 }
                 if (config.expectedResources.r2) {
-                    expect(cliOutput).toMatch(/created \(id:|bucket.*created/i);
+                    if (config.preCreateResources) {
+                        // For pre-existing resources, expect "already exists" message
+                        expect(cliOutput).toMatch(/R2 bucket already exists/i);
+                    } else {
+                        expect(cliOutput).toMatch(/created \(id:|bucket.*created/i);
+                    }
                 }
                 if (config.expectedResources.hyperdrive) {
-                    expect(cliOutput).toMatch(/created \(id:|hyperdrive.*created/i);
+                    if (config.preCreateResources) {
+                        // For pre-existing resources, expect "already exists" message with actual ID
+                        expect(cliOutput).toMatch(/Hyperdrive already exists.*\(id:/i);
+                    } else {
+                        expect(cliOutput).toMatch(/created \(id:|hyperdrive.*created/i);
+                    }
                 }
 
                 // Check for successful project creation
@@ -105,6 +131,40 @@ for (const config of configurations) {
             expect(result.errors).toHaveLength(0);
             console.log("✅ wrangler.toml configuration is correct");
         });
+
+        if (config.preCreateResources) {
+            test("Placeholder IDs are replaced with actual resource IDs", async () => {
+                console.log("\n🔍 Validating placeholder ID replacement for pre-existing resources...");
+
+                const wranglerContent = validator.readProjectFile(projectPath, "wrangler.toml");
+
+                // Verify NO placeholder IDs remain
+                expect(wranglerContent).not.toContain("your-d1-database-id-here");
+                expect(wranglerContent).not.toContain("YOUR_KV_NAMESPACE_ID");
+                expect(wranglerContent).not.toContain("your-hyperdrive-id-here");
+
+                // Verify actual IDs are present for expected resources
+                if (config.expectedResources.d1) {
+                    // Should have a real database_id (UUID format)
+                    expect(wranglerContent).toMatch(/database_id = "[a-f0-9-]{36}"/);
+                    console.log("✅ D1 database has actual ID (not placeholder)");
+                }
+
+                if (config.expectedResources.kv) {
+                    // Should have a real KV namespace ID (hex format)
+                    expect(wranglerContent).toMatch(/id = "[a-f0-9]{32}"/);
+                    console.log("✅ KV namespace has actual ID (not placeholder)");
+                }
+
+                if (config.expectedResources.hyperdrive) {
+                    // Should have a real Hyperdrive ID (32-character hex string)
+                    expect(wranglerContent).toMatch(/id = "[a-f0-9]{32}"/);
+                    console.log("✅ Hyperdrive has actual ID (not placeholder)");
+                }
+
+                console.log("✅ All placeholder IDs successfully replaced with actual resource IDs");
+            });
+        }
 
         test("Auth schema is correctly configured", async () => {
             console.log("\n🔐 Validating auth schema...");
@@ -298,7 +358,6 @@ for (const config of configurations) {
                         cwd: projectPath,
                         encoding: "utf8",
                         stdio: "pipe",
-                        shell: true, // Ensure shell is available
                         env: {
                             ...process.env,
                             // localConnectionString is now properly set in wrangler.toml by CLI
@@ -310,7 +369,6 @@ for (const config of configurations) {
                         cwd: projectPath,
                         encoding: "utf8",
                         stdio: "pipe",
-                        shell: true, // Ensure shell is available
                         env: {
                             ...process.env,
                         },

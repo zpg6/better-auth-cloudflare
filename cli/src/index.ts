@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-
 import { cancel, confirm, group, intro, outro, select, spinner, text } from "@clack/prompts";
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
@@ -215,8 +214,16 @@ function checkD1DatabaseExists(databaseName: string, cwd: string, accountId?: st
         return false;
     }
 
-    const result = runWranglerCommand(["d1", "info", databaseName], cwd, accountId);
-    return result.code === 0;
+    const result = runWranglerCommand(["d1", "list", "--json"], cwd, accountId);
+    if (result.code === 0) {
+        try {
+            const databases = JSON.parse(result.stdout);
+            return databases.some((db: any) => db.name === databaseName);
+        } catch {
+            return false;
+        }
+    }
+    return false;
 }
 
 function checkHyperdriveExists(hyperdriveId: string, cwd: string, accountId?: string): boolean {
@@ -226,6 +233,68 @@ function checkHyperdriveExists(hyperdriveId: string, cwd: string, accountId?: st
 
     const result = runWranglerCommand(["hyperdrive", "get", hyperdriveId], cwd, accountId);
     return result.code === 0;
+}
+
+// Functions to get IDs of existing resources
+function getExistingD1DatabaseId(databaseName: string, cwd: string, accountId?: string): string | null {
+    try {
+        console.log(`[DEBUG] Attempting to get D1 ID for database: ${databaseName}`);
+        const result = runWranglerCommand(["d1", "list", "--json"], cwd, accountId);
+        console.log(`[DEBUG] D1 list command result - code: ${result.code}`);
+        console.log(`[DEBUG] D1 list stderr: ${result.stderr}`);
+        console.log(`[DEBUG] D1 list stdout: ${result.stdout}`);
+        if (result.code === 0) {
+            // Parse the JSON output to find the database by name
+            const databases = JSON.parse(result.stdout);
+            const database = databases.find((db: any) => db.name === databaseName);
+            const extractedId = database?.uuid || null;
+            console.log(`[DEBUG] Extracted D1 ID: ${extractedId}`);
+            return extractedId;
+        }
+        console.log(`[DEBUG] D1 list command failed with code: ${result.code}`);
+        return null;
+    } catch (error) {
+        console.log(`[DEBUG] D1 list command threw error: ${error}`);
+        return null;
+    }
+}
+
+function getExistingKvNamespaceId(namespaceName: string, cwd: string, accountId?: string): string | null {
+    try {
+        const result = runWranglerCommand(["kv", "namespace", "list"], cwd, accountId);
+        if (result.code === 0) {
+            // Parse the JSON output to find the namespace by name
+            const namespaces = JSON.parse(result.stdout);
+            const namespace = namespaces.find((ns: any) => ns.title === namespaceName);
+            return namespace?.id || null;
+        }
+        return null;
+    } catch {
+        return null;
+    }
+}
+
+function getExistingHyperdriveId(hyperdriveName: string, cwd: string, accountId?: string): string | null {
+    try {
+        const result = runWranglerCommand(["hyperdrive", "list"], cwd, accountId);
+        if (result.code === 0) {
+            // Parse the table format from `wrangler hyperdrive list` command
+            const lines = result.stdout.split("\n");
+            for (const line of lines) {
+                // Look for a line that contains the hyperdrive name and extract the ID from the first column
+                if (line.includes(hyperdriveName)) {
+                    // Extract ID from first column: │ id │ name │ ...
+                    const idMatch = /│\s*([0-9a-f]{32})\s*│/.exec(line);
+                    if (idMatch) {
+                        return idMatch[1];
+                    }
+                }
+            }
+        }
+        return null;
+    } catch {
+        return null;
+    }
 }
 
 function parseAvailableAccounts(stderr: string): Array<{ name: string; id: string }> {
@@ -1527,13 +1596,24 @@ export const verification = {} as any;`;
                     res.stderr?.includes("already exists") || res.stdout?.includes("already exists");
 
                 if (isDatabaseExists) {
-                    // Database already exists, which is fine - just configure it in wrangler.toml
-                    if (existsSync(wranglerPath)) {
-                        let wrangler = readFileSync(wranglerPath, "utf8");
-                        wrangler = updateD1Block(wrangler, answers.d1Binding!, answers.d1Name);
-                        writeFileSync(wranglerPath, wrangler);
+                    // Database already exists, which is fine - get its ID and configure it in wrangler.toml
+                    const existingDatabaseId = getExistingD1DatabaseId(answers.d1Name, cwd, answers.accountId);
+                    if (existingDatabaseId && existsSync(wranglerPath)) {
+                        debugLog(`Updating wrangler.toml with existing D1 database ID: ${existingDatabaseId}`);
+                        const currentWrangler = readFileSync(wranglerPath, "utf-8");
+                        const updatedWrangler = updateD1BlockWithId(
+                            currentWrangler,
+                            answers.d1Binding || "DATABASE",
+                            answers.d1Name,
+                            existingDatabaseId
+                        );
+                        writeFileSync(wranglerPath, updatedWrangler);
                     }
-                    creating.stop(pc.yellow(`D1 database already exists (name: ${answers.d1Name}).`));
+                    creating.stop(
+                        pc.yellow(
+                            `D1 database already exists (name: ${answers.d1Name})${existingDatabaseId ? " (id: " + existingDatabaseId + ")" : ""}.`
+                        )
+                    );
                 } else if (isInternalError) {
                     creating.stop(pc.red("D1 database creation failed due to Cloudflare API internal error."));
                     console.log(pc.gray("This is usually a temporary issue with Cloudflare's API."));
@@ -1589,19 +1669,24 @@ export const verification = {} as any;`;
                     res.stdout?.includes("A Hyperdrive config with the given name already exists");
 
                 if (isHyperdriveExists) {
-                    // Hyperdrive already exists, which is fine - just configure it in wrangler.toml
-                    if (existsSync(wranglerPath)) {
-                        let wrangler = readFileSync(wranglerPath, "utf8");
-                        wrangler = appendOrReplaceHyperdriveBlock(
-                            wrangler,
+                    // Hyperdrive already exists, which is fine - get its ID and configure it in wrangler.toml
+                    const existingHyperdriveId = getExistingHyperdriveId(answers.hdName, cwd, answers.accountId);
+                    if (existingHyperdriveId && existsSync(wranglerPath)) {
+                        debugLog(`Updating wrangler.toml with existing Hyperdrive ID: ${existingHyperdriveId}`);
+                        const currentWrangler = readFileSync(wranglerPath, "utf-8");
+                        const updatedWrangler = updateHyperdriveBlockWithId(
+                            currentWrangler,
                             answers.hdBinding,
-                            undefined,
-                            answers.database as "hyperdrive-postgres" | "hyperdrive-mysql",
+                            existingHyperdriveId,
                             answers.hdConnectionString
                         );
-                        writeFileSync(wranglerPath, wrangler);
+                        writeFileSync(wranglerPath, updatedWrangler);
                     }
-                    creating.stop(pc.yellow(`Hyperdrive already exists (name: ${answers.hdName}).`));
+                    creating.stop(
+                        pc.yellow(
+                            `Hyperdrive already exists (name: ${answers.hdName})${existingHyperdriveId ? " (id: " + existingHyperdriveId + ")" : ""}.`
+                        )
+                    );
                 } else {
                     creating.stop(pc.red("Failed to create Hyperdrive."));
                     assertOk(res, "Hyperdrive creation failed.");
@@ -1641,13 +1726,27 @@ export const verification = {} as any;`;
                     res.stdout?.includes("already exists");
 
                 if (isKvExists) {
-                    // KV namespace already exists, which is fine - just configure it in wrangler.toml
-                    if (existsSync(wranglerPath)) {
-                        let wrangler = readFileSync(wranglerPath, "utf8");
-                        wrangler = appendOrReplaceKvNamespaceBlock(wrangler, answers.kvBinding);
-                        writeFileSync(wranglerPath, wrangler);
+                    // KV namespace already exists, which is fine - get its ID and configure it in wrangler.toml
+                    const existingNamespaceId = getExistingKvNamespaceId(
+                        answers.kvNamespaceName,
+                        cwd,
+                        answers.accountId
+                    );
+                    if (existingNamespaceId && existsSync(wranglerPath)) {
+                        debugLog(`Updating wrangler.toml with existing KV namespace ID: ${existingNamespaceId}`);
+                        const currentWrangler = readFileSync(wranglerPath, "utf-8");
+                        const updatedWrangler = updateKvBlockWithId(
+                            currentWrangler,
+                            answers.kvBinding,
+                            existingNamespaceId
+                        );
+                        writeFileSync(wranglerPath, updatedWrangler);
                     }
-                    creating.stop(pc.yellow(`KV namespace already exists (name: ${answers.kvNamespaceName}).`));
+                    creating.stop(
+                        pc.yellow(
+                            `KV namespace already exists (name: ${answers.kvNamespaceName})${existingNamespaceId ? " (id: " + existingNamespaceId + ")" : ""}.`
+                        )
+                    );
                 } else {
                     creating.stop(pc.red("Failed to create KV namespace."));
                     assertOk(res, "KV namespace creation failed.");

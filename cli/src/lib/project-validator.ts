@@ -45,7 +45,17 @@ export async function validateProject(projectPath: string): Promise<ProjectValid
             timeout: 60000, // 60 second timeout for full project compilation
         });
 
-        // If npx fails, try direct tsc command
+        // If npx fails, try bunx tsc command
+        if (result.status !== 0) {
+            result = spawnSync("bunx", ["tsc", "--noEmit"], {
+                cwd: projectPath,
+                encoding: "utf8",
+                stdio: "pipe",
+                timeout: 60000, // 60 second timeout for full project compilation
+            });
+        }
+
+        // If bunx fails, try direct tsc command
         if (result.status !== 0) {
             result = spawnSync("tsc", ["--noEmit"], {
                 cwd: projectPath,
