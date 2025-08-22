@@ -34,6 +34,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - [x] R2
 - [ ] Cloudflare Images
 - [ ] Durable Objects
+- [ ] D1 Multi-Tenancy
 
 **CLI:**
 
