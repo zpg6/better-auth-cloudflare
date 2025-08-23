@@ -13,13 +13,17 @@
         "better-auth",
         "auth",
         "plugin",
+        "cf",
         "cloudflare",
         "workers",
         "kv",
         "d1",
+        "multi-tenancy",
+        "hyperdrive",
         "r2",
         "files",
-        "storage"
+        "storage",
+        "drizzle"
     ],
     "license": "MIT",
     "files": [
