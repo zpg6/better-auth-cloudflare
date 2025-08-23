@@ -3,7 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { anonymous, openAPI } from "better-auth/plugins";
+import { anonymous, openAPI, organization } from "better-auth/plugins";
 import { getDb } from "../db";
 
 // Define an asynchronous function to build your auth configuration
@@ -101,7 +101,7 @@ async function authBuilder() {
                     enabled: true,
                     // ... other rate limiting options
                 },
-                plugins: [openAPI(), anonymous()],
+                plugins: [openAPI(), anonymous(), organization()],
                 // ... other Better Auth options
             }
         )
@@ -165,7 +165,7 @@ export const auth = betterAuth({
             // Include only configurations that influence the Drizzle schema,
             // e.g., if certain features add tables or columns.
             // socialProviders: { /* ... */ } // If they add specific tables/columns
-            plugins: [openAPI(), anonymous()],
+            plugins: [openAPI(), anonymous(), organization()],
         }
     ),
 

@@ -220,6 +220,19 @@ export const withCloudflare = <T extends BetterAuthOptions>(
 
     // Add D1 multi-tenancy plugin if configured
     if (cloudFlareOptions.d1?.multiTenancy) {
+        // If organization mode is enabled, ensure the organization plugin is present
+        if (cloudFlareOptions.d1.multiTenancy.mode === "organization") {
+            const hasOrganizationPlugin = options.plugins?.some(plugin => plugin.id === "organization");
+
+            if (!hasOrganizationPlugin) {
+                throw new Error(
+                    "Organization mode for D1 multi-tenancy requires the 'organization' plugin to be enabled. " +
+                        "Please add the organization plugin to your Better Auth configuration: " +
+                        "import { organization } from 'better-auth/plugins' and include it in your plugins array."
+                );
+            }
+        }
+
         plugins.push(cloudflareD1MultiTenancy(cloudFlareOptions.d1.multiTenancy));
     }
 
