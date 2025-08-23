@@ -168,10 +168,18 @@ function detectPackageManager(cwd: string): PackageManager {
     if (existsSync(join(cwd, "bun.lockb")) && commandAvailable("bun")) return "bun";
     if (existsSync(join(cwd, "pnpm-lock.yaml")) && commandAvailable("pnpm")) return "pnpm";
     if (existsSync(join(cwd, "yarn.lock")) && commandAvailable("yarn")) return "yarn";
+    if (commandAvailable("npm")) return "npm";
     if (commandAvailable("bun")) return "bun";
     if (commandAvailable("pnpm")) return "pnpm";
     if (commandAvailable("yarn")) return "yarn";
     return "npm";
+}
+
+function detectPackageManagerForAuth(cwd: string): PackageManager {
+    // Always use npm for auth commands to ensure consistency
+    if (commandAvailable("npm")) return "npm";
+    // Fallback to regular detection if npm is not available
+    return detectPackageManager(cwd);
 }
 
 function runScript(pm: PackageManager, script: string, cwd: string) {
@@ -687,11 +695,13 @@ async function migrate(cliArgs?: CliArgs) {
         }
     }
 
-    // Run auth:update
+    // Run auth:update - use npm specifically for auth commands
     debugLog("Running auth:update script");
     const authSpinner = spinner();
     authSpinner.start("Running auth:update...");
-    const authRes = runScript(pm, "auth:update", process.cwd());
+    const authPm = detectPackageManagerForAuth(process.cwd());
+    debugLog(`Using package manager for auth commands: ${authPm}`);
+    const authRes = runScript(authPm, "auth:update", process.cwd());
     if (authRes.code === 0) {
         authSpinner.stop(pc.green("Auth schema updated."));
     } else {
@@ -1804,7 +1814,9 @@ export const verification = {} as any;`;
     const genAuth = spinner();
     genAuth.start("Generating auth schema...");
     {
-        const authRes = runScript(pm, "auth:update", targetDir);
+        const authPm = detectPackageManagerForAuth(targetDir);
+        debugLog(`Using package manager for auth commands: ${authPm}`);
+        const authRes = runScript(authPm, "auth:update", targetDir);
         if (authRes.code === 0) {
             genAuth.stop(pc.green("Auth schema updated."));
 
