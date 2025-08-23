@@ -9,6 +9,7 @@ export * from "./client";
 export * from "./schema";
 export * from "./types";
 export * from "./r2";
+export * from "./d1-multi-tenancy";
 
 /**
  * Cloudflare integration for Better Auth
