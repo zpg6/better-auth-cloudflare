@@ -21,6 +21,34 @@ async function authBuilder() {
                         usePlural: true, // Optional: Use plural table names (e.g., "users" instead of "user")
                         debugLogs: true, // Optional
                     },
+                    multiTenancy: {
+                        cloudflareD1Api: {
+                            apiToken: process.env.CLOUDFLARE_API_TOKEN!,
+                            accountId: process.env.CLOUDFLARE_ACCOUNT_ID!,
+                        },
+                        mode: "organization", // Create a separate database for each organization
+                        databasePrefix: "org_tenant_", // Customize database naming
+                        hooks: {
+                            beforeCreate: async ({ tenantId, mode, user }) => {
+                                console.log(`🚀 Creating tenant database for ${mode} ${tenantId}`);
+                            },
+                            afterCreate: async ({ tenantId, databaseName, databaseId, user }) => {
+                                console.log(`✅ Created tenant database ${databaseName} for organization ${tenantId}`);
+                                // Perfect place to run migrations on the new organization database
+                                // await runMigrationsOnOrganizationDatabase(databaseId);
+                            },
+                            beforeDelete: async ({ tenantId, databaseName, user }) => {
+                                console.log(
+                                    `🗑️ About to delete tenant database ${databaseName} for organization ${tenantId}`
+                                );
+                                // Backup organization data before deletion if needed
+                                // await backupOrganizationData(tenantId, databaseName);
+                            },
+                            afterDelete: async ({ tenantId, user }) => {
+                                console.log(`🧹 Cleaned up tenant database for organization ${tenantId}`);
+                            },
+                        },
+                    },
                 },
                 // Make sure "KV" is the binding in your wrangler.toml
                 kv: process.env.KV as KVNamespace<string>,
@@ -106,6 +134,22 @@ export const auth = betterAuth({
             autoDetectIpAddress: true,
             geolocationTracking: true,
             cf: {},
+            d1: {
+                db: {} as any, // Mock database for schema generation
+                options: {
+                    usePlural: true,
+                    debugLogs: true,
+                },
+                // Include multi-tenancy for schema generation
+                multiTenancy: {
+                    cloudflareD1Api: {
+                        apiToken: "mock-token",
+                        accountId: "mock-account-id",
+                    },
+                    mode: "organization",
+                    databasePrefix: "org_tenant_",
+                },
+            },
             // R2 configuration for schema generation
             r2: {
                 bucket: {} as any, // Mock bucket for schema generation

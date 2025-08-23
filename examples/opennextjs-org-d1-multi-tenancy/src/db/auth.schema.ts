@@ -48,8 +48,12 @@ export const accounts = sqliteTable("accounts", {
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
     idToken: text("id_token"),
-    accessTokenExpiresAt: integer("access_token_expires_at", { mode: "timestamp" }),
-    refreshTokenExpiresAt: integer("refresh_token_expires_at", { mode: "timestamp" }),
+    accessTokenExpiresAt: integer("access_token_expires_at", {
+        mode: "timestamp",
+    }),
+    refreshTokenExpiresAt: integer("refresh_token_expires_at", {
+        mode: "timestamp",
+    }),
     scope: text("scope"),
     password: text("password"),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
@@ -79,4 +83,17 @@ export const userFiles = sqliteTable("user_files", {
     category: text("category"),
     isPublic: integer("is_public", { mode: "boolean" }),
     description: text("description"),
+});
+
+export const tenant_databases = sqliteTable("tenant_databases", {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id").notNull(),
+    tenantType: text("tenant_type").notNull(),
+    databaseName: text("database_name").notNull(),
+    databaseId: text("database_id").notNull(),
+    status: text("status").default("creating").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .$defaultFn(() => new Date())
+        .notNull(),
+    deletedAt: integer("deleted_at", { mode: "timestamp" }),
 });

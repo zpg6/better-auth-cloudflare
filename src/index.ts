@@ -4,6 +4,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
 import { schema } from "./schema";
 import { createR2Storage, createR2Endpoints } from "./r2";
+import { cloudflareD1MultiTenancy } from "./d1-multi-tenancy";
 import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types";
 export * from "./client";
 export * from "./schema";
@@ -214,11 +215,22 @@ export const withCloudflare = <T extends BetterAuthOptions>(
         });
     }
 
+    // Collect plugins to include
+    const plugins: BetterAuthPlugin[] = [cloudflare(cloudFlareOptions)];
+
+    // Add D1 multi-tenancy plugin if configured
+    if (cloudFlareOptions.d1?.multiTenancy) {
+        plugins.push(cloudflareD1MultiTenancy(cloudFlareOptions.d1.multiTenancy));
+    }
+
+    // Add user-provided plugins
+    plugins.push(...(options.plugins ?? []));
+
     return {
         ...options,
         database,
         secondaryStorage: cloudFlareOptions.kv ? createKVStorage(cloudFlareOptions.kv) : undefined,
-        plugins: [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])],
+        plugins,
         advanced: updatedAdvanced,
         session: updatedSession,
     } as WithCloudflareAuth<T>;
