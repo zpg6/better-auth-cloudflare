@@ -55,18 +55,11 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
     const mergedSchema = mergeSchema(baseSchema, schemaOptions);
 
     /**
-     * Generates a tenant database name
-     */
-    const getTenantDatabaseName = (tenantId: string): string => {
-        return `${databasePrefix}${tenantId}`;
-    };
-
-    /**
      * Creates a tenant database for the given tenant ID
      */
     const createTenantDatabase = async (tenantId: string, adapter: any, user?: User): Promise<void> => {
         try {
-            const databaseName = getTenantDatabaseName(tenantId);
+            const databaseName = getCloudflareD1TenantDatabaseName(tenantId, databasePrefix);
 
             // Check if database already exists
             const existing = (await adapter.findOne({
