@@ -12,7 +12,9 @@ import {
     Building,
     CheckCircle,
     Crown,
+    Lock,
     Mail,
+    Play,
     Plus,
     RefreshCw,
     Settings,
@@ -53,6 +55,11 @@ export default function OrganizationDemo() {
     const [inviteRole, setInviteRole] = useState("member");
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
     const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+    const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{
+        isOpen: boolean;
+        organizationId: string;
+        organizationName: string;
+    }>({ isOpen: false, organizationId: "", organizationName: "" });
 
     const loadOrganizations = async () => {
         setIsLoading(true);
@@ -244,12 +251,51 @@ export default function OrganizationDemo() {
         }
     };
 
+    const deleteOrganization = async (organizationId: string) => {
+        setIsLoading(true);
+        setOperationResult(null);
+
+        try {
+            const result = await authClient.organization.delete({
+                organizationId,
+            });
+
+            if (result.error) {
+                setOperationResult({ error: result.error.message || "Failed to delete organization" });
+            } else {
+                setOperationResult({ success: true, message: "Organization deleted successfully!" });
+                setDeleteConfirmDialog({ isOpen: false, organizationId: "", organizationName: "" });
+
+                // Refresh data after deletion
+                loadOrganizations();
+                loadActiveOrganization();
+            }
+        } catch (error) {
+            console.error("Failed to delete organization:", error);
+            setOperationResult({ error: "Failed to delete organization" });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const openDeleteConfirmation = (organizationId: string, organizationName: string) => {
+        setDeleteConfirmDialog({
+            isOpen: true,
+            organizationId,
+            organizationName,
+        });
+    };
+
+    const closeDeleteConfirmation = () => {
+        setDeleteConfirmDialog({ isOpen: false, organizationId: "", organizationName: "" });
+    };
+
     const getRoleIcon = (role: string) => {
         switch (role.toLowerCase()) {
             case "owner":
                 return <Crown className="h-4 w-4 text-yellow-600" />;
             case "admin":
-                return <Shield className="h-4 w-4 text-blue-600" />;
+                return <Lock className="h-4 w-4 text-blue-600" />;
             default:
                 return <User className="h-4 w-4 text-gray-600" />;
         }
@@ -516,7 +562,7 @@ export default function OrganizationDemo() {
                                     <div className="flex gap-2">
                                         {activeOrganization?.id !== org.id && (
                                             <Button onClick={() => setActiveOrg(org.id)} variant="outline" size="sm">
-                                                <Settings className="h-4 w-4 mr-2" />
+                                                <Play className="h-4 w-4 mr-2" />
                                                 Set Active
                                             </Button>
                                         )}
@@ -525,6 +571,14 @@ export default function OrganizationDemo() {
                                                 Active
                                             </span>
                                         )}
+                                        <Button
+                                            onClick={() => openDeleteConfirmation(org.id, org.name)}
+                                            variant="destructive"
+                                            size="sm"
+                                            disabled={isLoading}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
                                     </div>
                                 </div>
                             ))}
@@ -581,6 +635,41 @@ export default function OrganizationDemo() {
                     </CardContent>
                 </Card>
             )}
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={deleteConfirmDialog.isOpen} onOpenChange={closeDeleteConfirmation}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-red-600">
+                            <AlertCircle className="h-5 w-5" />
+                            Delete Organization
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                            <p className="text-red-800 font-medium">
+                                Are you sure you want to delete "{deleteConfirmDialog.organizationName}"?
+                            </p>
+                            <p className="text-red-700 text-sm mt-2">
+                                This action cannot be undone. All members, invitations, and organization data will be
+                                permanently removed.
+                            </p>
+                        </div>
+                        <div className="flex gap-3 justify-end">
+                            <Button onClick={closeDeleteConfirmation} variant="outline" disabled={isLoading}>
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={() => deleteOrganization(deleteConfirmDialog.organizationId)}
+                                variant="destructive"
+                                disabled={isLoading}
+                            >
+                                {isLoading ? "Deleting..." : "Delete Organization"}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

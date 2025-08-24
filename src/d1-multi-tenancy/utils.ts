@@ -115,13 +115,15 @@ export const deleteD1Database = async (config: CloudflareD1ApiConfig, databaseId
         );
 
         if (!apiResponse.ok) {
-            throw new Error(`Cloudflare API error: ${apiResponse.status} ${apiResponse.statusText}`);
+            const errorBody = await apiResponse.text();
+            throw new Error(`Cloudflare API error: ${apiResponse.status} ${apiResponse.statusText} - ${errorBody}`);
         }
 
         const apiData: CloudflareD1DeleteResponse = await apiResponse.json();
 
         if (!apiData.success && apiData.errors?.length) {
-            throw new Error(`Cloudflare D1 API error: ${apiData.errors.map(e => e.message).join(", ")}`);
+            const errorMessages = apiData.errors.map(e => `${e.code}: ${e.message}`).join(", ");
+            throw new Error(`Cloudflare D1 API error: ${errorMessages}`);
         }
     } catch (apiError: any) {
         if (apiError.message?.includes("authentication") || apiError.message?.includes("unauthorized")) {

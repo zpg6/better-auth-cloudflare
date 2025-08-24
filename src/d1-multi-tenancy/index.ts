@@ -111,8 +111,8 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
 
             await hooks?.beforeDelete?.({
                 tenantId,
-                databaseName: existing.database_name,
-                databaseId: existing.database_id,
+                databaseName: existing.databaseName,
+                databaseId: existing.databaseId,
                 mode,
                 user,
             });
@@ -123,7 +123,7 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
                 update: { status: TenantDatabaseStatus.DELETING },
             });
 
-            await deleteD1Database(cloudflareD1Api, existing.database_id);
+            await deleteD1Database(cloudflareD1Api, existing.databaseId);
 
             await adapter.update({
                 model,
