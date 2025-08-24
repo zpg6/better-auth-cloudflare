@@ -5,7 +5,7 @@ import type { FieldAttribute } from "better-auth/db";
 import type { drizzle as d1Drizzle } from "drizzle-orm/d1";
 import type { drizzle as mysqlDrizzle } from "drizzle-orm/mysql2";
 import type { drizzle as postgresDrizzle } from "drizzle-orm/postgres-js";
-import type { CloudflareD1MultiTenancyOptions } from "./d1-multi-tenancy/types";
+import type { CloudflareD1MultiTenancyOptions } from "./d1-multi-tenancy/types.js";
 
 export interface CloudflarePluginOptions {
     /**

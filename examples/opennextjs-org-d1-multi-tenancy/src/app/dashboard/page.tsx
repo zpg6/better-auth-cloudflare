@@ -6,6 +6,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import SignOutButton from "./SignOutButton"; // Import the client component
 import FileUploadDemo from "@/components/FileUploadDemo";
+import OrganizationDemo from "@/components/OrganizationDemo";
 import { Github, Package, FileText, MapPin, Clock, Globe, Building, Server, Navigation } from "lucide-react";
 
 export default async function DashboardPage() {
@@ -33,8 +34,9 @@ export default async function DashboardPage() {
                     </div>
 
                     <Tabs defaultValue="user" className="w-full">
-                        <TabsList className="grid w-full grid-cols-3 mb-6">
+                        <TabsList className="grid w-full grid-cols-4 mb-6">
                             <TabsTrigger value="user">User Info</TabsTrigger>
+                            <TabsTrigger value="organization">Organization</TabsTrigger>
                             <TabsTrigger value="geolocation">Geolocation</TabsTrigger>
                             <TabsTrigger value="upload">File Upload</TabsTrigger>
                         </TabsList>
@@ -71,6 +73,10 @@ export default async function DashboardPage() {
                                     <SignOutButton /> {/* Use the client component for sign out */}
                                 </CardContent>
                             </Card>
+                        </TabsContent>
+
+                        <TabsContent value="organization" className="space-y-6">
+                            <OrganizationDemo />
                         </TabsContent>
 
                         <TabsContent value="geolocation" className="space-y-6">

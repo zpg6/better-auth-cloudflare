@@ -1,6 +1,6 @@
 import type { AuthPluginSchema } from "better-auth";
 import type { FieldAttribute, FieldType } from "better-auth/db";
-import type { CloudflarePluginOptions } from "./types";
+import type { CloudflarePluginOptions } from "./types.js";
 
 /**
  * Type for geolocation database fields

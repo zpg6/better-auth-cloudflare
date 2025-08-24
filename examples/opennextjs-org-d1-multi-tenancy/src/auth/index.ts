@@ -23,8 +23,8 @@ async function authBuilder() {
                     },
                     multiTenancy: {
                         cloudflareD1Api: {
-                            apiToken: process.env.CLOUDFLARE_API_TOKEN!,
-                            accountId: process.env.CLOUDFLARE_ACCOUNT_ID!,
+                            apiToken: process.env.CLOUDFLARE_D1_API_TOKEN!,
+                            accountId: process.env.CLOUDFLARE_ACCT_ID!,
                         },
                         mode: "organization", // Create a separate database for each organization
                         databasePrefix: "org_tenant_", // Customize database naming

@@ -69,9 +69,9 @@ export interface CloudflareD1MultiTenancyHooks {
  * Cloudflare D1 multi-tenancy schema customization options
  */
 export interface CloudflareD1MultiTenancySchema {
-    tenantDatabase?: {
+    tenantDatabases?: {
         modelName?: string;
-        fields?: Record<string, string>;
+        fields?: Record<string, FieldAttribute>;
     };
 }
 
@@ -109,4 +109,25 @@ export interface CloudflareD1MultiTenancyOptions {
      * Additional fields for the tenant database table
      */
     additionalFields?: Record<string, FieldAttribute>;
+}
+
+/**
+ * Type definition for Cloudflare D1 API response using fetch
+ */
+export interface CloudflareD1CreateResponse {
+    result?: {
+        uuid?: string;
+        name?: string;
+    };
+    success?: boolean;
+    errors?: Array<{ code: number; message: string }>;
+}
+
+/**
+ * Type definition for Cloudflare D1 API response using fetch
+ */
+export interface CloudflareD1DeleteResponse {
+    result?: null;
+    success?: boolean;
+    errors?: Array<{ code: number; message: string }>;
 }

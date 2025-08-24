@@ -1,24 +1,18 @@
-import type { AuthContext, BetterAuthPlugin, User } from "better-auth";
+import { type AuthContext, type BetterAuthPlugin, type User } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
-import { mergeSchema } from "better-auth/db";
-import Cloudflare from "cloudflare";
-import { tenantDatabaseSchema, TenantDatabaseStatus, type TenantDatabase } from "./schema";
-import type { CloudflareD1MultiTenancyOptions } from "./types";
+import {
+    CloudflareD1MultiTenancyError,
+    createD1Database,
+    deleteD1Database,
+    getCloudflareD1TenantDatabaseName,
+    validateCloudflareCredentials,
+} from "./utils.js";
+import { tenantDatabaseSchema, TenantDatabaseStatus, type Tenant } from "./schema.js";
+import type { CloudflareD1MultiTenancyOptions } from "./types.js";
 
 // Export all types and schema
-export * from "./schema";
-export * from "./types";
-
-/**
- * Error codes for the Cloudflare D1 multi-tenancy plugin
- */
-export const CLOUDFLARE_D1_MULTI_TENANCY_ERROR_CODES = {
-    DATABASE_ALREADY_EXISTS: "Tenant database already exists",
-    DATABASE_NOT_FOUND: "Tenant database not found",
-    DATABASE_CREATION_FAILED: "Failed to create tenant database",
-    DATABASE_DELETION_FAILED: "Failed to delete tenant database",
-    CLOUDFLARE_D1_API_ERROR: "Cloudflare D1 API error",
-} as const;
+export * from "./schema.js";
+export * from "./types.js";
 
 /**
  * Cloudflare D1 Multi-tenancy plugin for Better Auth
@@ -27,90 +21,52 @@ export const CLOUDFLARE_D1_MULTI_TENANCY_ERROR_CODES = {
  * Only one mode can be active at a time.
  */
 export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOptions) => {
-    const {
-        cloudflareD1Api,
-        mode,
-        databasePrefix = "tenant_",
-        hooks,
-        schema: schemaOptions,
-        additionalFields = {},
-    } = options;
+    const { cloudflareD1Api, mode, databasePrefix = "tenant_", hooks } = options;
 
-    // Initialize Cloudflare client
-    const cf = new Cloudflare({
-        apiToken: cloudflareD1Api.apiToken,
-    });
-
-    // Merge schema with additional fields
-    const baseSchema = { ...tenantDatabaseSchema };
-    if (Object.keys(additionalFields).length > 0) {
-        baseSchema.tenantDatabase = {
-            ...baseSchema.tenantDatabase,
-            fields: {
-                ...baseSchema.tenantDatabase.fields,
-                ...additionalFields,
-            },
-        };
-    }
-    const mergedSchema = mergeSchema(baseSchema, schemaOptions);
+    // Always use the singular schema key - Better Auth handles pluralization
+    const model = Object.keys(tenantDatabaseSchema)[0]; // "tenant" -> table becomes "tenants" with usePlural: true
 
     /**
      * Creates a tenant database for the given tenant ID
      */
     const createTenantDatabase = async (tenantId: string, adapter: any, user?: User): Promise<void> => {
         try {
+            validateCloudflareCredentials(cloudflareD1Api);
             const databaseName = getCloudflareD1TenantDatabaseName(tenantId, databasePrefix);
 
-            // Check if database already exists
-            const existing = (await adapter.findOne({
-                model: "tenantDatabase",
+            const existing = await adapter.findOne({
+                model,
                 where: [
-                    { field: "tenantId", value: tenantId },
-                    { field: "tenantType", value: mode },
+                    { field: "tenantId", value: tenantId, operator: "eq" },
+                    { field: "tenantType", value: mode, operator: "eq" },
                 ],
-            })) as TenantDatabase | null;
+            });
 
             if (existing && existing.status !== TenantDatabaseStatus.DELETED) {
-                console.log(
-                    `${CLOUDFLARE_D1_MULTI_TENANCY_ERROR_CODES.DATABASE_ALREADY_EXISTS} for tenant ${tenantId}`
-                );
                 return;
             }
 
             await hooks?.beforeCreate?.({ tenantId, mode, user });
 
-            // Record database as creating
-            const dbRecord = (await adapter.create({
-                model: "tenantDatabase",
+            const dbRecord = await adapter.create({
+                model,
                 data: {
-                    tenantId,
+                    tenantId: tenantId,
                     tenantType: mode,
-                    databaseName,
+                    databaseName: databaseName,
                     databaseId: "",
                     status: TenantDatabaseStatus.CREATING,
                     createdAt: new Date(),
                 },
-            })) as TenantDatabase;
-
-            // Create database via Cloudflare API
-            const response = await cf.d1.database.create({
-                account_id: cloudflareD1Api.accountId,
-                name: databaseName,
             });
 
-            const databaseId = response.uuid;
-            if (!databaseId) {
-                throw new Error(
-                    `${CLOUDFLARE_D1_MULTI_TENANCY_ERROR_CODES.CLOUDFLARE_D1_API_ERROR}: Failed to get database ID from response`
-                );
-            }
+            const databaseId = await createD1Database(cloudflareD1Api, databaseName);
 
-            // Update record with actual database ID
             await adapter.update({
-                model: "tenantDatabase",
-                where: [{ field: "id", value: dbRecord.id }],
+                model,
+                where: [{ field: "id", value: dbRecord.id, operator: "eq" }],
                 update: {
-                    databaseId,
+                    databaseId: databaseId,
                     status: TenantDatabaseStatus.ACTIVE,
                 },
             });
@@ -122,16 +78,14 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
                 mode,
                 user,
             });
-
-            console.log(
-                `Successfully created Cloudflare D1 tenant database ${databaseName} (${databaseId}) for tenant ${tenantId}`
-            );
         } catch (error) {
-            console.error(
-                `${CLOUDFLARE_D1_MULTI_TENANCY_ERROR_CODES.DATABASE_CREATION_FAILED} for tenant ${tenantId}:`,
-                error
+            if (error instanceof CloudflareD1MultiTenancyError) {
+                throw error;
+            }
+            throw new CloudflareD1MultiTenancyError(
+                "DATABASE_CREATION_FAILED",
+                `Unexpected error creating tenant database: ${error instanceof Error ? error.message : "Unknown error"}`
             );
-            // Note: We don't throw here to avoid breaking the parent operation
         }
     };
 
@@ -140,45 +94,40 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
      */
     const deleteTenantDatabase = async (tenantId: string, adapter: any, user?: User): Promise<void> => {
         try {
-            // Find existing database
-            const existing = (await adapter.findOne({
-                model: "tenantDatabase",
+            validateCloudflareCredentials(cloudflareD1Api);
+
+            const existing: Tenant | null = await adapter.findOne({
+                model,
                 where: [
-                    { field: "tenantId", value: tenantId },
-                    { field: "tenantType", value: mode },
-                    { field: "status", value: TenantDatabaseStatus.ACTIVE },
+                    { field: "tenantId", value: tenantId, operator: "eq" },
+                    { field: "tenantType", value: mode, operator: "eq" },
+                    { field: "status", value: TenantDatabaseStatus.ACTIVE, operator: "eq" },
                 ],
-            })) as TenantDatabase | null;
+            });
 
             if (!existing) {
-                console.log(`${CLOUDFLARE_D1_MULTI_TENANCY_ERROR_CODES.DATABASE_NOT_FOUND} for tenant ${tenantId}`);
                 return;
             }
 
             await hooks?.beforeDelete?.({
                 tenantId,
-                databaseName: existing.databaseName,
-                databaseId: existing.databaseId,
+                databaseName: existing.database_name,
+                databaseId: existing.database_id,
                 mode,
                 user,
             });
 
-            // Mark as deleting
             await adapter.update({
-                model: "tenantDatabase",
+                model,
                 where: [{ field: "id", value: existing.id }],
                 update: { status: TenantDatabaseStatus.DELETING },
             });
 
-            // Delete via Cloudflare API
-            await cf.d1.database.delete(existing.databaseId, {
-                account_id: cloudflareD1Api.accountId,
-            });
+            await deleteD1Database(cloudflareD1Api, existing.database_id);
 
-            // Mark as deleted
             await adapter.update({
-                model: "tenantDatabase",
-                where: [{ field: "id", value: existing.id }],
+                model,
+                where: [{ field: "id", value: existing.id, operator: "eq" }],
                 update: {
                     status: TenantDatabaseStatus.DELETED,
                     deletedAt: new Date(),
@@ -186,21 +135,20 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
             });
 
             await hooks?.afterDelete?.({ tenantId, mode, user });
-
-            console.log(`Successfully deleted Cloudflare D1 tenant database for tenant ${tenantId}`);
         } catch (error) {
-            console.error(
-                `${CLOUDFLARE_D1_MULTI_TENANCY_ERROR_CODES.DATABASE_DELETION_FAILED} for tenant ${tenantId}:`,
-                error
+            if (error instanceof CloudflareD1MultiTenancyError) {
+                throw error;
+            }
+            throw new CloudflareD1MultiTenancyError(
+                "DATABASE_DELETION_FAILED",
+                `Unexpected error deleting tenant database: ${error instanceof Error ? error.message : "Unknown error"}`
             );
-            // Note: We don't throw here to avoid breaking the parent operation
         }
     };
 
     return {
         id: "cloudflare-d1-multi-tenancy",
-
-        schema: mergedSchema,
+        schema: tenantDatabaseSchema,
 
         // User-based multi-tenancy
         ...(mode === "user" && {
@@ -220,7 +168,7 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
                     {
                         matcher: context => context.path === "/delete-user",
                         handler: createAuthMiddleware(async ctx => {
-                            const returned = ctx.context.returned as any;
+                            const returned: any = ctx.context.returned;
                             const deletedUser = returned?.user;
                             if (deletedUser?.id) {
                                 await deleteTenantDatabase(deletedUser.id, ctx.context.adapter, deletedUser);
@@ -239,8 +187,9 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
                     {
                         matcher: context => context.path === "/organization/create",
                         handler: createAuthMiddleware(async ctx => {
-                            const returned = ctx.context.returned as any;
-                            const organization = returned?.data;
+                            const returned: any = ctx.context.returned;
+                            const organization = returned?.data || returned?.organization || returned;
+
                             if (organization?.id) {
                                 await createTenantDatabase(
                                     organization.id,
@@ -268,14 +217,6 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
             },
         }),
     } satisfies BetterAuthPlugin;
-};
-
-/**
- * Helper function to get the Cloudflare D1 tenant database name for a given tenant ID
- * Useful for connecting to the correct tenant database in your application
- */
-export const getCloudflareD1TenantDatabaseName = (tenantId: string, prefix = "tenant_"): string => {
-    return `${prefix}${tenantId}`;
 };
 
 /**

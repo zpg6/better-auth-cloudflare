@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
     id: text("id").primaryKey(),
@@ -36,6 +36,7 @@ export const sessions = sqliteTable("sessions", {
     colo: text("colo"),
     latitude: text("latitude"),
     longitude: text("longitude"),
+    activeOrganizationId: text("active_organization_id"),
 });
 
 export const accounts = sqliteTable("accounts", {
@@ -85,7 +86,7 @@ export const userFiles = sqliteTable("user_files", {
     description: text("description"),
 });
 
-export const tenant_databases = sqliteTable("tenant_databases", {
+export const tenants = sqliteTable("tenants", {
     id: text("id").primaryKey(),
     tenantId: text("tenant_id").notNull(),
     tenantType: text("tenant_type").notNull(),
@@ -96,4 +97,39 @@ export const tenant_databases = sqliteTable("tenant_databases", {
         .$defaultFn(() => new Date())
         .notNull(),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
+});
+
+export const organizations = sqliteTable("organizations", {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    slug: text("slug").unique(),
+    logo: text("logo"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    metadata: text("metadata"),
+});
+
+export const members = sqliteTable("members", {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+        .notNull()
+        .references(() => organizations.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+        .notNull()
+        .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").default("member").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+export const invitations = sqliteTable("invitations", {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+        .notNull()
+        .references(() => organizations.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    role: text("role"),
+    status: text("status").default("pending").notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    inviterId: text("inviter_id")
+        .notNull()
+        .references(() => users.id, { onDelete: "cascade" }),
 });
