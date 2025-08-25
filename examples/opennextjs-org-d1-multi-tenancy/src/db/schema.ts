@@ -1,7 +1,8 @@
-import * as authSchema from "./auth.schema"; // This will be generated in a later step
+import * as authSchema from "./auth.schema"; // Core auth tables (main database)
+import * as tenantSchema from "./tenant.schema"; // Tenant tables (tenant databases)
 
 // Combine all schemas here for migrations
 export const schema = {
-    ...authSchema, // Re-enabled after schema generation
-    // ... your other application schemas
+    ...authSchema,
+    ...tenantSchema,
 } as const;
