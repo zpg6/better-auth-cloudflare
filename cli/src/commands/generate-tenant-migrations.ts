@@ -52,7 +52,7 @@ export async function generateTenantMigrations(): Promise<void> {
     splitSpinner.start("Splitting auth schema for multi-tenancy...");
 
     try {
-        splitAuthSchema(process.cwd());
+        await splitAuthSchema(process.cwd());
         splitSpinner.stop(pc.green("Schema successfully split!"));
 
         outro(

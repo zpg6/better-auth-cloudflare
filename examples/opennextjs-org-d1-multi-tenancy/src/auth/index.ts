@@ -5,6 +5,7 @@ import { withCloudflare } from "better-auth-cloudflare";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { anonymous, openAPI, organization } from "better-auth/plugins";
 import { getDb } from "../db";
+import { birthdayPlugin } from "./plugins/birthday";
 
 // Define an asynchronous function to build your auth configuration
 async function authBuilder() {
@@ -101,7 +102,15 @@ async function authBuilder() {
                     enabled: true,
                     // ... other rate limiting options
                 },
-                plugins: [openAPI(), anonymous(), organization()],
+                plugins: [
+                    openAPI(),
+                    anonymous(),
+                    organization(),
+                    birthdayPlugin({
+                        enableReminders: true,
+                        reminderDaysBefore: 7,
+                    }),
+                ],
                 // ... other Better Auth options
             }
         )
@@ -165,7 +174,15 @@ export const auth = betterAuth({
             // Include only configurations that influence the Drizzle schema,
             // e.g., if certain features add tables or columns.
             // socialProviders: { /* ... */ } // If they add specific tables/columns
-            plugins: [openAPI(), anonymous(), organization()],
+            plugins: [
+                openAPI(),
+                anonymous(),
+                organization(),
+                birthdayPlugin({
+                    enableReminders: true,
+                    reminderDaysBefore: 7,
+                }),
+            ],
         }
     ),
 

@@ -712,7 +712,7 @@ async function migrate(cliArgs?: CliArgs) {
             const splitSpinner = spinner();
             splitSpinner.start("Splitting schema for multi-tenancy...");
             try {
-                splitAuthSchema(process.cwd());
+                await splitAuthSchema(process.cwd());
                 splitSpinner.stop(
                     pc.green("Schema split into auth.schema.ts (core) and tenant.schema.ts (tenant-specific).")
                 );
