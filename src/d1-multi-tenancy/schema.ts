@@ -48,6 +48,18 @@ export const tenantDatabaseSchema = {
                 required: false,
                 input: false,
             } satisfies FieldAttribute,
+            lastMigrationVersion: {
+                type: "string",
+                required: false,
+                input: false,
+                defaultValue: "0000",
+            } satisfies FieldAttribute,
+            migrationHistory: {
+                type: "string", // JSON array of applied migrations
+                required: false,
+                input: false,
+                defaultValue: "[]",
+            } satisfies FieldAttribute,
         },
     },
 } as AuthPluginSchema;
@@ -65,6 +77,8 @@ export type Tenant = {
     status: "creating" | "active" | "deleting" | "deleted";
     createdAt: Date;
     deletedAt?: Date;
+    lastMigrationVersion?: string;
+    migrationHistory?: string; // JSON array of applied migrations
 };
 
 /**

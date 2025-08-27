@@ -4,7 +4,7 @@ import { createAuthClient } from "better-auth/react";
 import { birthdayClient } from "./plugins/birthday-client";
 
 const client = createAuthClient({
-    baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
+    // baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
     plugins: [cloudflareClient(), anonymousClient(), organizationClient(), birthdayClient()],
 });
 

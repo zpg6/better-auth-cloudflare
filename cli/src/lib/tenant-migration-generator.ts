@@ -10,6 +10,7 @@ import { tmpdir } from "os";
 const CORE_AUTH_TABLES = new Set([
     "users",
     "accounts",
+    "sessions",
     "organizations",
     "members",
     "invitations",

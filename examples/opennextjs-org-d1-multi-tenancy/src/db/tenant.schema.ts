@@ -4,27 +4,6 @@ import { users } from "./auth.schema";
 // Tenant-specific Better Auth tables for tenant databases
 // These tables contain tenant-scoped data like sessions, files, and organization data
 
-export const sessions = sqliteTable("sessions", {
-    id: text("id").primaryKey(),
-    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-    token: text("token").notNull().unique(),
-    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-    ipAddress: text("ip_address"),
-    userAgent: text("user_agent"),
-    userId: text("user_id")
-        .notNull()
-        .references(() => users.id, { onDelete: "cascade" }),
-    timezone: text("timezone"),
-    city: text("city"),
-    country: text("country"),
-    region: text("region"),
-    regionCode: text("region_code"),
-    colo: text("colo"),
-    latitude: text("latitude"),
-    longitude: text("longitude"),
-    activeOrganizationId: text("active_organization_id"),
-});
 export const userFiles = sqliteTable("user_files", {
     id: text("id").primaryKey(),
     userId: text("user_id")
@@ -67,38 +46,9 @@ export const birthdayWishs = sqliteTable("birthday_wishs", {
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
-export const tenantMigrations = sqliteTable("tenant_migrations", {
-    id: text("id").primaryKey(),
-    version: text("version").notNull().unique(),
-    name: text("name").notNull(),
-    appliedAt: integer("applied_at", { mode: "timestamp" }).notNull(),
-    checksum: text("checksum"),
-});
-
 // Raw SQL statements for creating tenant tables
 // This is used for just-in-time migration when creating new tenant databases
-export const raw = `CREATE TABLE \`sessions\` (
-  \`id\` text PRIMARY KEY,
-  \`expires_at\` integer NOT NULL,
-  \`token\` text NOT NULL UNIQUE,
-  \`created_at\` integer NOT NULL,
-  \`updated_at\` integer NOT NULL,
-  \`ip_address\` text,
-  \`user_agent\` text,
-  \`user_id\` text NOT NULL,
-  \`timezone\` text,
-  \`city\` text,
-  \`country\` text,
-  \`region\` text,
-  \`region_code\` text,
-  \`colo\` text,
-  \`latitude\` text,
-  \`longitude\` text,
-  \`active_organization_id\` text,
-  FOREIGN KEY (\`user_id\`) REFERENCES \`users\`(\`id\`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE TABLE \`user_files\` (
+export const raw = `CREATE TABLE \`user_files\` (
   \`id\` text PRIMARY KEY,
   \`user_id\` text NOT NULL,
   \`filename\` text NOT NULL,
@@ -140,12 +90,4 @@ CREATE TABLE \`birthday_wishs\` (
   \`message\` text NOT NULL,
   \`is_public\` integer DEFAULT 1,
   \`created_at\` integer NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE \`tenant_migrations\` (
-  \`id\` text PRIMARY KEY,
-  \`version\` text NOT NULL UNIQUE,
-  \`name\` text NOT NULL,
-  \`applied_at\` integer NOT NULL,
-  \`checksum\` text
 );`;

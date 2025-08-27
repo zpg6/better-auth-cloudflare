@@ -6,6 +6,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { anonymous, openAPI, organization } from "better-auth/plugins";
 import { getDb } from "../db";
 import { birthdayPlugin } from "./plugins/birthday";
+import { raw } from "../db/tenant.schema";
 
 // Define an asynchronous function to build your auth configuration
 async function authBuilder() {
@@ -29,14 +30,18 @@ async function authBuilder() {
                         },
                         mode: "organization", // Create a separate database for each organization
                         databasePrefix: "org_tenant_", // Customize database naming
+                        // Automatic schema initialization for new tenant databases
+                        migrations: {
+                            currentSchema: raw, // Current schema with all tables as they exist now
+                            currentVersion: "v1.0.0", // Version identifier for tracking
+                        },
                         hooks: {
                             beforeCreate: async ({ tenantId, mode, user }) => {
                                 console.log(`🚀 Creating tenant database for ${mode} ${tenantId}`);
                             },
                             afterCreate: async ({ tenantId, databaseName, databaseId, user }) => {
                                 console.log(`✅ Created tenant database ${databaseName} for organization ${tenantId}`);
-                                // Perfect place to run migrations on the new organization database
-                                // await runMigrationsOnOrganizationDatabase(databaseId);
+                                console.log(`🔄 Migrations automatically applied during database creation`);
                             },
                             beforeDelete: async ({ tenantId, databaseName, user }) => {
                                 console.log(

@@ -36,6 +36,34 @@
             "when": 1756238947064,
             "tag": "0004_stale_rafael_vega",
             "breakpoints": true
+        },
+        {
+            "idx": 5,
+            "version": "6",
+            "when": 1756249939733,
+            "tag": "0005_cheerful_mathemanic",
+            "breakpoints": true
+        },
+        {
+            "idx": 6,
+            "version": "6",
+            "when": 1756250006042,
+            "tag": "0006_curvy_the_twelve",
+            "breakpoints": true
+        },
+        {
+            "idx": 7,
+            "version": "6",
+            "when": 1756250152642,
+            "tag": "0007_fancy_captain_flint",
+            "breakpoints": true
+        },
+        {
+            "idx": 8,
+            "version": "6",
+            "when": 1756252338311,
+            "tag": "0008_common_firebird",
+            "breakpoints": true
         }
     ]
 }

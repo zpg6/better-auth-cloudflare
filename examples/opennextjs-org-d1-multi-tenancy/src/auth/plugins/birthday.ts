@@ -1,4 +1,5 @@
-import { z, type BetterAuthPlugin } from "better-auth";
+import { type BetterAuthPlugin } from "better-auth";
+import { z } from "zod";
 import { createAuthEndpoint, sessionMiddleware, APIError } from "better-auth/api";
 
 export interface BirthdayPluginOptions {

@@ -1,5 +1,6 @@
 import type { User } from "better-auth";
 import type { FieldAttribute } from "better-auth/db";
+import type { TenantMigrationConfig } from "./d1-utils.js";
 
 /**
  * Cloudflare D1 API configuration for database management
@@ -109,6 +110,11 @@ export interface CloudflareD1MultiTenancyOptions {
      * Additional fields for the tenant database table
      */
     additionalFields?: Record<string, FieldAttribute>;
+
+    /**
+     * Migration configuration for tenant databases
+     */
+    migrations?: TenantMigrationConfig;
 }
 
 /**

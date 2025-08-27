@@ -7,12 +7,14 @@ import {
     getCloudflareD1TenantDatabaseName,
     validateCloudflareCredentials,
 } from "./utils.js";
+import { initializeTenantDatabase } from "./d1-utils.js";
 import { tenantDatabaseSchema, TenantDatabaseStatus, type Tenant } from "./schema.js";
 import type { CloudflareD1MultiTenancyOptions } from "./types.js";
 
 // Export all types and schema
 export * from "./schema.js";
 export * from "./types.js";
+export * from "./d1-utils.js";
 
 /**
  * Cloudflare D1 Multi-tenancy plugin for Better Auth
@@ -21,7 +23,7 @@ export * from "./types.js";
  * Only one mode can be active at a time.
  */
 export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOptions) => {
-    const { cloudflareD1Api, mode, databasePrefix = "tenant_", hooks } = options;
+    const { cloudflareD1Api, mode, databasePrefix = "tenant_", hooks, migrations } = options;
 
     // Always use the singular schema key - Better Auth handles pluralization
     const model = Object.keys(tenantDatabaseSchema)[0]; // "tenant" -> table becomes "tenants" with usePlural: true
@@ -62,13 +64,40 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
 
             const databaseId = await createD1Database(cloudflareD1Api, databaseName);
 
+            // Initialize the tenant database with current schema if provided
+            let resolvedVersion = "unknown";
+
+            if (migrations) {
+                const { version } = await initializeTenantDatabase(cloudflareD1Api, databaseId, migrations);
+                resolvedVersion = version;
+                // Note: New databases get the current schema, so no need to apply migrations
+                // Migrations are only for bringing existing databases up to the current level
+            } else {
+                console.log(`⚠️ No migrations config found - tenant database will be empty`);
+            }
+
+            // Update the tenant record with the database ID and migration info
+            const updateData: any = {
+                databaseId: databaseId,
+                status: TenantDatabaseStatus.ACTIVE,
+            };
+
+            if (migrations) {
+                // New databases start with the resolved current version
+                updateData.lastMigrationVersion = resolvedVersion;
+                updateData.migrationHistory = JSON.stringify([
+                    {
+                        version: resolvedVersion,
+                        name: `Current Schema (${resolvedVersion})`,
+                        appliedAt: new Date().toISOString(),
+                    },
+                ]);
+            }
+
             await adapter.update({
                 model,
                 where: [{ field: "id", value: dbRecord.id, operator: "eq" }],
-                update: {
-                    databaseId: databaseId,
-                    status: TenantDatabaseStatus.ACTIVE,
-                },
+                update: updateData,
             });
 
             await hooks?.afterCreate?.({
