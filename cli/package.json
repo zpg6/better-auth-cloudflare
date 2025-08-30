@@ -27,10 +27,7 @@
         "dist/**/*"
     ],
     "scripts": {
-        "prebuild": "cd .. && bun install && bun run build",
         "build": "tsc -p tsconfig.json",
-        "pretest": "cd .. && bun install && bun run build",
-        "pretypecheck": "cd .. && bun install && bun run build",
         "dev": "node --enable-source-maps dist/index.js",
         "typecheck": "tsc -p tsconfig.json --noEmit",
         "test": "bun test --timeout 60000",
@@ -40,7 +37,7 @@
     },
     "dependencies": {
         "@clack/prompts": "^0.7.0",
-        "better-auth-cloudflare": "file:..",
+        "@zpg6-test-pkgs/drizzle-orm": "0.44.5-d1-http-test.2",
         "picocolors": "^1.0.0"
     },
     "devDependencies": {

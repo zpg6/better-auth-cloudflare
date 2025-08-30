@@ -7,16 +7,7 @@ import { tmpdir } from "os";
  * Core Better Auth tables that should remain in the main database
  * These handle authentication, user identity, and multi-tenancy management
  */
-const CORE_AUTH_TABLES = new Set([
-    "users",
-    "accounts",
-    "sessions",
-    "organizations",
-    "members",
-    "invitations",
-    "verifications",
-    "tenants",
-]);
+const CORE_AUTH_TABLES = new Set(["users", "accounts", "verifications", "tenants", "invitations"]);
 
 /**
  * Check if a table should be moved to tenant databases

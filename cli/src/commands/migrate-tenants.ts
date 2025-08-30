@@ -3,8 +3,66 @@ import { cancel, confirm, intro, outro, select, spinner } from "@clack/prompts";
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import pc from "picocolors";
-import { applyTenantMigrations } from "better-auth-cloudflare/d1-multi-tenancy";
-import type { CloudflareD1ApiConfig } from "better-auth-cloudflare/d1-multi-tenancy";
+import { drizzle } from "@zpg6-test-pkgs/drizzle-orm/d1-http";
+import { sql } from "@zpg6-test-pkgs/drizzle-orm";
+
+// Simple type definition for Cloudflare D1 API configuration
+interface CloudflareD1ApiConfig {
+    apiToken: string;
+    accountId: string;
+    debugLogs?: boolean;
+}
+
+/**
+ * Apply migrations to a tenant database using drizzle D1-HTTP
+ */
+async function applyTenantMigrations(
+    config: CloudflareD1ApiConfig,
+    databaseId: string,
+    migrations: string[]
+): Promise<void> {
+    if (!migrations || migrations.length === 0) {
+        return;
+    }
+
+    try {
+        // Create D1-HTTP connection
+        const db = drizzle(
+            {
+                accountId: config.accountId,
+                databaseId: databaseId,
+                token: config.apiToken,
+            },
+            {
+                logger: config.debugLogs,
+            }
+        );
+
+        // Apply each migration to the tenant database
+        for (const migration of migrations) {
+            // Split SQL by statement breakpoints and execute each statement
+            const statements = migration
+                .split("--> statement-breakpoint")
+                .map(s => s.trim())
+                .filter(s => s.length > 0);
+
+            if (config.debugLogs) {
+                console.log(`📋 Executing ${statements.length} SQL statement(s) on tenant database`);
+                for (const statement of statements) {
+                    console.log(`  > ${statement}`);
+                }
+            }
+
+            for (const statement of statements) {
+                await db.run(sql.raw(statement));
+            }
+        }
+    } catch (error) {
+        throw new Error(
+            `Failed to apply tenant migrations: ${error instanceof Error ? error.message : "Unknown error"}`
+        );
+    }
+}
 
 // Get package version from package.json
 function getPackageVersion(): string {

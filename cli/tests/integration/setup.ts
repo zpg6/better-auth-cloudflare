@@ -7,6 +7,7 @@ export interface TestConfig {
     args: string[];
     skipCloudflare?: boolean;
     preCreateResources?: boolean;
+    multiTenancy?: boolean;
     expectedResources: {
         d1?: boolean;
         kv?: boolean;

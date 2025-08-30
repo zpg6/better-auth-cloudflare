@@ -123,12 +123,13 @@ export const schema = {
             writeFileSync(join(testProjectPath, "src", "db", "schema.ts"), mockSchemaFile);
         });
 
-        it("should split auth schema into core and tenant files", () => {
-            splitAuthSchema(testProjectPath);
+        it("should split auth schema into core and tenant files", async () => {
+            await splitAuthSchema(testProjectPath);
 
-            // Check that both files exist
+            // Check that all three files exist
             expect(existsSync(join(testProjectPath, "src", "db", "auth.schema.ts"))).toBe(true);
             expect(existsSync(join(testProjectPath, "src", "db", "tenant.schema.ts"))).toBe(true);
+            expect(existsSync(join(testProjectPath, "src", "db", "tenant.raw.ts"))).toBe(true);
 
             // Check core schema contains only core tables
             const coreSchema = readFileSync(join(testProjectPath, "src", "db", "auth.schema.ts"), "utf8");
@@ -152,6 +153,11 @@ export const schema = {
 
             // Check that tenant schema imports users from auth.schema
             expect(tenantSchema).toContain('import { users } from "./auth.schema"');
+
+            // Check tenant raw SQL file exists and has correct structure
+            const tenantRaw = readFileSync(join(testProjectPath, "src", "db", "tenant.raw.ts"), "utf8");
+            expect(tenantRaw).toContain("export const raw = `");
+            expect(tenantRaw).toContain("Raw SQL statements for creating tenant tables");
 
             // Check main schema file is updated
             const mainSchema = readFileSync(join(testProjectPath, "src", "db", "schema.ts"), "utf8");

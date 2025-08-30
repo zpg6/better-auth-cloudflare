@@ -153,6 +153,29 @@ export function getTestConfigurations(): TestConfig[] {
             databaseType: "postgres",
             template: "nextjs",
         },
+        // 10. Multi-tenancy test: Hono + D1 with multi-tenancy enabled
+        {
+            name: "Hono + D1 Multi-tenancy",
+            args: [
+                `--app-name=test-hono-multitenancy-${timestamp}`,
+                "--template=hono",
+                "--database=d1",
+                "--kv=true",
+                "--r2=false",
+            ],
+            expectedResources: { d1: true, kv: true, r2: false, hyperdrive: false },
+            expectedFiles: [
+                "wrangler.toml",
+                "src/auth/index.ts",
+                "drizzle.config.ts",
+                "src/db/auth.schema.ts",
+                "src/db/tenant.schema.ts",
+                "src/db/tenant.raw.ts",
+            ],
+            databaseType: "sqlite",
+            template: "hono",
+            multiTenancy: true,
+        },
     ];
 }
 

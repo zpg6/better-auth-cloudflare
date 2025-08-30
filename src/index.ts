@@ -332,7 +332,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(
                                 multiTenancyConfig.cloudflareD1Api.accountId,
                                 tenantRecord.databaseId,
                                 multiTenancyConfig.cloudflareD1Api.apiToken,
-                                multiTenancyConfig.cloudflareD1Api.debugLogs,
+                                multiTenancyConfig.cloudflareD1Api.debugLogs
                             );
 
                             // Get tenant-specific Drizzle schema (exclude core auth tables)

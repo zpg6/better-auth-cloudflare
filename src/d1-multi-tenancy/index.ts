@@ -254,7 +254,12 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
  */
 export type CloudflareD1MultiTenancyPlugin = ReturnType<typeof cloudflareD1MultiTenancy>;
 
-export const createTenantDatabaseClient = (accountId: string, databaseId: string, token: string, debugLogs?: boolean) => {
+export const createTenantDatabaseClient = (
+    accountId: string,
+    databaseId: string,
+    token: string,
+    debugLogs?: boolean
+) => {
     return drizzle(
         {
             accountId,
