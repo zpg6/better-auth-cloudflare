@@ -15,6 +15,38 @@ CREATE TABLE `accounts` (
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE TABLE `invitations` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`email` text NOT NULL,
+	`role` text,
+	`status` text DEFAULT 'pending' NOT NULL,
+	`expires_at` integer NOT NULL,
+	`inviter_id` text NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organizations`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`inviter_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE TABLE `members` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`user_id` text NOT NULL,
+	`role` text DEFAULT 'member' NOT NULL,
+	`created_at` integer NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organizations`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE TABLE `organizations` (
+	`id` text PRIMARY KEY NOT NULL,
+	`name` text NOT NULL,
+	`slug` text,
+	`logo` text,
+	`created_at` integer NOT NULL,
+	`metadata` text
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `organizations_slug_unique` ON `organizations` (`slug`);--> statement-breakpoint
 CREATE TABLE `sessions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`expires_at` integer NOT NULL,
@@ -32,23 +64,22 @@ CREATE TABLE `sessions` (
 	`colo` text,
 	`latitude` text,
 	`longitude` text,
+	`active_organization_id` text,
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `sessions_token_unique` ON `sessions` (`token`);--> statement-breakpoint
-CREATE TABLE `user_files` (
+CREATE TABLE `tenants` (
 	`id` text PRIMARY KEY NOT NULL,
-	`user_id` text NOT NULL,
-	`filename` text NOT NULL,
-	`original_name` text NOT NULL,
-	`content_type` text NOT NULL,
-	`size` integer NOT NULL,
-	`r2_key` text NOT NULL,
-	`uploaded_at` integer NOT NULL,
-	`category` text,
-	`is_public` integer,
-	`description` text,
-	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+	`tenant_id` text NOT NULL,
+	`tenant_type` text NOT NULL,
+	`database_name` text NOT NULL,
+	`database_id` text NOT NULL,
+	`status` text DEFAULT 'creating' NOT NULL,
+	`created_at` integer NOT NULL,
+	`deleted_at` integer,
+	`last_migration_version` text DEFAULT '0000',
+	`migration_history` text DEFAULT '[]'
 );
 --> statement-breakpoint
 CREATE TABLE `users` (

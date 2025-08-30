@@ -48,11 +48,16 @@ async function resolveValue(value: ResolvableValue): Promise<string> {
  * Creates a D1-HTTP database connection
  */
 function createD1HttpConnection(config: CloudflareD1ApiConfig, databaseId: string) {
-    return drizzle({
-        accountId: config.accountId,
-        databaseId: databaseId,
-        token: config.apiToken,
-    });
+    return drizzle(
+        {
+            accountId: config.accountId,
+            databaseId: databaseId,
+            token: config.apiToken,
+        },
+        {
+            logger: config.debugLogs,
+        }
+    );
 }
 
 /**
@@ -71,7 +76,12 @@ export const executeD1SQL = async (
             .split("--> statement-breakpoint")
             .map(s => s.trim())
             .filter(s => s.length > 0);
-        console.log(`📋 Executing ${statements.length} SQL statement(s) on tenant database`);
+        if (config.debugLogs) {
+            console.log(`📋 Executing ${statements.length} SQL statement(s) on tenant database`);
+            for (const statement of statements) {
+                console.log(`  > ${statement}`);
+            }
+        }
 
         for (const statement of statements) {
             await db.run(sql.raw(statement));

@@ -1,16 +1,23 @@
 import type { KVNamespace } from "@cloudflare/workers-types";
-import { type BetterAuthOptions, type BetterAuthPlugin, type SecondaryStorage, type Session } from "better-auth";
+import {
+    type AdapterInstance,
+    type BetterAuthOptions,
+    type BetterAuthPlugin,
+    type SecondaryStorage,
+    type Session,
+} from "better-auth";
+import { adapterRouter } from "better-auth/adapters/adapter-router";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
+import { cloudflareD1MultiTenancy, createTenantDatabaseClient } from "./d1-multi-tenancy/index.js";
+import { createR2Endpoints, createR2Storage } from "./r2.js";
 import { schema } from "./schema.js";
-import { createR2Storage, createR2Endpoints } from "./r2.js";
-import { cloudflareD1MultiTenancy } from "./d1-multi-tenancy/index.js";
 import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types.js";
 export * from "./client.js";
+export * from "./d1-multi-tenancy/index.js";
+export * from "./r2.js";
 export * from "./schema.js";
 export * from "./types.js";
-export * from "./r2.js";
-export * from "./d1-multi-tenancy/index.js";
 
 /**
  * Cloudflare integration for Better Auth
@@ -197,7 +204,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(
     }
 
     // Determine which database configuration to use
-    let database;
+    let database: AdapterInstance | null = null;
     if (cloudFlareOptions.postgres) {
         database = drizzleAdapter(cloudFlareOptions.postgres.db, {
             provider: "pg",
@@ -219,7 +226,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(
     const plugins: BetterAuthPlugin[] = [cloudflare(cloudFlareOptions)];
 
     // Add D1 multi-tenancy plugin if configured
-    if (cloudFlareOptions.d1?.multiTenancy) {
+    if (cloudFlareOptions.d1 && cloudFlareOptions.d1.multiTenancy) {
         // If organization mode is enabled, ensure the organization plugin is present
         if (cloudFlareOptions.d1.multiTenancy.mode === "organization") {
             const hasOrganizationPlugin = options.plugins?.some(plugin => plugin.id === "organization");
@@ -233,7 +240,131 @@ export const withCloudflare = <T extends BetterAuthOptions>(
             }
         }
 
+        // If D1 multi-tenancy is enabled, assert we have the main D1 configuration
+        if (!cloudFlareOptions.d1.db) {
+            throw new Error("D1 multi-tenancy requires the main D1 configuration to be provided.");
+        }
+
+        // Note: tenantSchema is optional with table-based routing
+        // The adapter will automatically filter the unified schema for tenant tables
+
+        const d1Config = cloudFlareOptions.d1;
+        const multiTenancyConfig = d1Config.multiTenancy!;
+
+        // Define which tables belong in the main database vs tenant databases
+        const CORE_AUTH_TABLES = new Set([
+            "user",
+            "users",
+            "account",
+            "accounts",
+            "session",
+            "sessions",
+            "organization",
+            "organizations",
+            "member",
+            "members",
+            "invitation",
+            "invitations",
+            "verification",
+            "verifications",
+            "tenant",
+            "tenants",
+        ]);
+
+        // Add any additional core tables that might be used by plugins
+        // Note: userBirthday, userFile, etc. are tenant tables and should NOT be here
+
+        database = adapterRouter({
+            fallbackAdapter: drizzleAdapter(d1Config.db, {
+                provider: "sqlite",
+                ...d1Config.options,
+            }),
+            routes: [
+                async ({ modelName, operation, data, isCoreBetterAuthModel, fallbackAdapter }) => {
+                    try {
+                        // Extract tenantId from data based on operation type
+                        let tenantId: string | undefined;
+                        if (operation === "create" && data && typeof data === "object" && !Array.isArray(data)) {
+                            // For create operations, data is the object with the fields
+                            if ("tenantId" in data && data.tenantId) {
+                                tenantId = data.tenantId as string;
+                            } else if ("data" in data && data.data && "tenantId" in data.data && data.data.tenantId) {
+                                tenantId = data.data.tenantId as string;
+                            }
+                        } else if (data && Array.isArray(data)) {
+                            // For findOne/findMany operations, data is directly the where array
+                            const tenantIdWhere = data.find(
+                                (w: any) => w.field === "tenantId" || w.field === "tenant_id"
+                            );
+                            if (tenantIdWhere?.value) {
+                                tenantId = tenantIdWhere.value as string;
+                            }
+                        } else if (data && "where" in data && data.where) {
+                            // For other operations, data might have a where property
+                            const tenantIdWhere = data.where.find(
+                                (w: any) => w.field === "tenantId" || w.field === "tenant_id"
+                            );
+                            if (tenantIdWhere?.value) {
+                                tenantId = tenantIdWhere.value as string;
+                            }
+                        }
+
+                        // Route to tenant database if:
+                        // 1. There's a tenantId in the operation
+                        // 2. The table is NOT a core auth table
+                        if (tenantId && !isCoreBetterAuthModel && !CORE_AUTH_TABLES.has(modelName)) {
+                            // Look up the actual database ID from the tenant record
+                            const tenantRecord: { databaseId: string } | null = await fallbackAdapter.findOne({
+                                model: "tenant",
+                                where: [
+                                    { field: "tenantId", value: tenantId, operator: "eq" },
+                                    { field: "tenantType", value: multiTenancyConfig.mode, operator: "eq" },
+                                    { field: "status", value: "active", operator: "eq" },
+                                ],
+                                select: ["databaseId", "tenantId", "status"],
+                            });
+
+                            if (!tenantRecord?.databaseId) {
+                                return null;
+                            }
+
+                            const tenantDb = createTenantDatabaseClient(
+                                multiTenancyConfig.cloudflareD1Api.accountId,
+                                tenantRecord.databaseId,
+                                multiTenancyConfig.cloudflareD1Api.apiToken,
+                                multiTenancyConfig.cloudflareD1Api.debugLogs,
+                            );
+
+                            // Get tenant-specific Drizzle schema (exclude core auth tables)
+                            const tenantDrizzleSchema = Object.fromEntries(
+                                Object.entries(d1Config.options?.schema || {}).filter(
+                                    ([tableName]) => !CORE_AUTH_TABLES.has(tableName)
+                                )
+                            );
+
+                            return drizzleAdapter(tenantDb, {
+                                provider: "sqlite",
+                                schema: tenantDrizzleSchema,
+                                usePlural: true,
+                                debugLogs: true,
+                            });
+                        }
+
+                        // All core auth tables and operations without tenantId go to main database
+                        return null;
+                    } catch (error) {
+                        console.error(`[AdapterRouter] Error in route for ${modelName}:`, error);
+                        return null;
+                    }
+                },
+            ],
+            debugLogs: true,
+        });
+
         plugins.push(cloudflareD1MultiTenancy(cloudFlareOptions.d1.multiTenancy));
+    }
+    if (!database) {
+        throw new Error("No database configuration provided. Please provide one of postgres, mysql, or d1.");
     }
 
     // Add user-provided plugins

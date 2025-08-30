@@ -5,64 +5,8 @@
         {
             "idx": 0,
             "version": "6",
-            "when": 1749946877776,
-            "tag": "0000_aspiring_supreme_intelligence",
-            "breakpoints": true
-        },
-        {
-            "idx": 1,
-            "version": "6",
-            "when": 1755975531384,
-            "tag": "0001_wakeful_lady_vermin",
-            "breakpoints": true
-        },
-        {
-            "idx": 2,
-            "version": "6",
-            "when": 1756011438887,
-            "tag": "0002_uneven_miracleman",
-            "breakpoints": true
-        },
-        {
-            "idx": 3,
-            "version": "6",
-            "when": 1756066953390,
-            "tag": "0003_ambitious_christian_walker",
-            "breakpoints": true
-        },
-        {
-            "idx": 4,
-            "version": "6",
-            "when": 1756238947064,
-            "tag": "0004_stale_rafael_vega",
-            "breakpoints": true
-        },
-        {
-            "idx": 5,
-            "version": "6",
-            "when": 1756249939733,
-            "tag": "0005_cheerful_mathemanic",
-            "breakpoints": true
-        },
-        {
-            "idx": 6,
-            "version": "6",
-            "when": 1756250006042,
-            "tag": "0006_curvy_the_twelve",
-            "breakpoints": true
-        },
-        {
-            "idx": 7,
-            "version": "6",
-            "when": 1756250152642,
-            "tag": "0007_fancy_captain_flint",
-            "breakpoints": true
-        },
-        {
-            "idx": 8,
-            "version": "6",
-            "when": 1756252338311,
-            "tag": "0008_common_firebird",
+            "when": 1756568782447,
+            "tag": "0000_clumsy_ultimates",
             "breakpoints": true
         }
     ]

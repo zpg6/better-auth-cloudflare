@@ -7,7 +7,8 @@ import { redirect } from "next/navigation";
 import SignOutButton from "./SignOutButton"; // Import the client component
 import FileUploadDemo from "@/components/FileUploadDemo";
 import OrganizationDemo from "@/components/OrganizationDemo";
-import { Github, Package, FileText, MapPin, Clock, Globe, Building, Server, Navigation } from "lucide-react";
+import { BirthdayExample } from "@/components/BirthdayExample";
+import { Github, Package, FileText, MapPin, Clock, Globe, Building, Server, Navigation, Calendar } from "lucide-react";
 
 export default async function DashboardPage() {
     const authInstance = await initAuth();
@@ -34,11 +35,12 @@ export default async function DashboardPage() {
                     </div>
 
                     <Tabs defaultValue="user" className="w-full">
-                        <TabsList className="grid w-full grid-cols-4 mb-6">
+                        <TabsList className="grid w-full grid-cols-5 mb-6">
                             <TabsTrigger value="user">User Info</TabsTrigger>
                             <TabsTrigger value="organization">Organization</TabsTrigger>
                             <TabsTrigger value="geolocation">Geolocation</TabsTrigger>
                             <TabsTrigger value="upload">File Upload</TabsTrigger>
+                            <TabsTrigger value="birthday">Birthday</TabsTrigger>
                         </TabsList>
 
                         <TabsContent value="user" className="space-y-6">
@@ -176,6 +178,23 @@ export default async function DashboardPage() {
 
                         <TabsContent value="upload" className="space-y-6">
                             <FileUploadDemo />
+                        </TabsContent>
+
+                        <TabsContent value="birthday" className="space-y-6">
+                            <Card className="w-full">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 text-xl font-semibold">
+                                        <Calendar className="h-5 w-5" />
+                                        Birthday Plugin Demo
+                                    </CardTitle>
+                                    <p className="text-sm text-gray-600">
+                                        Demonstrates custom plugin functionality with type-safe endpoints
+                                    </p>
+                                </CardHeader>
+                                <CardContent>
+                                    <BirthdayExample />
+                                </CardContent>
+                            </Card>
                         </TabsContent>
                     </Tabs>
                 </div>

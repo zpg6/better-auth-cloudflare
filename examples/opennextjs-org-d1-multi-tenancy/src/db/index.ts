@@ -18,5 +18,4 @@ export async function getDb() {
 export * from "drizzle-orm";
 
 // Re-export the feature schemas for use in other files
-export * from "@/db/auth.schema";
 export * from "./schema";

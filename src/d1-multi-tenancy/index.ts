@@ -1,5 +1,9 @@
+import { drizzle } from "@zpg6-test-pkgs/drizzle-orm/d1-http";
 import { type AuthContext, type BetterAuthPlugin, type User } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
+import { initializeTenantDatabase } from "./d1-utils.js";
+import { tenantDatabaseSchema, TenantDatabaseStatus, type Tenant } from "./schema.js";
+import type { CloudflareD1MultiTenancyOptions } from "./types.js";
 import {
     CloudflareD1MultiTenancyError,
     createD1Database,
@@ -7,14 +11,11 @@ import {
     getCloudflareD1TenantDatabaseName,
     validateCloudflareCredentials,
 } from "./utils.js";
-import { initializeTenantDatabase } from "./d1-utils.js";
-import { tenantDatabaseSchema, TenantDatabaseStatus, type Tenant } from "./schema.js";
-import type { CloudflareD1MultiTenancyOptions } from "./types.js";
 
 // Export all types and schema
+export * from "./d1-utils.js";
 export * from "./schema.js";
 export * from "./types.js";
-export * from "./d1-utils.js";
 
 /**
  * Cloudflare D1 Multi-tenancy plugin for Better Auth
@@ -252,3 +253,16 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
  * Type helper for inferring the Cloudflare D1 multi-tenancy plugin configuration
  */
 export type CloudflareD1MultiTenancyPlugin = ReturnType<typeof cloudflareD1MultiTenancy>;
+
+export const createTenantDatabaseClient = (accountId: string, databaseId: string, token: string, debugLogs?: boolean) => {
+    return drizzle(
+        {
+            accountId,
+            databaseId,
+            token,
+        },
+        {
+            logger: debugLogs,
+        }
+    );
+};

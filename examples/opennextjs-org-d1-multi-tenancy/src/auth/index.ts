@@ -4,9 +4,9 @@ import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { anonymous, openAPI, organization } from "better-auth/plugins";
-import { getDb } from "../db";
+import { getDb, schema } from "../db";
+import { raw } from "../db/tenant.raw";
 import { birthdayPlugin } from "./plugins/birthday";
-import { raw } from "../db/tenant.schema";
 
 // Define an asynchronous function to build your auth configuration
 async function authBuilder() {
@@ -22,6 +22,7 @@ async function authBuilder() {
                     options: {
                         usePlural: true, // Optional: Use plural table names (e.g., "users" instead of "user")
                         debugLogs: true, // Optional
+                        schema, // Include the full schema for tenant table filtering
                     },
                     multiTenancy: {
                         cloudflareD1Api: {
@@ -35,6 +36,7 @@ async function authBuilder() {
                             currentSchema: raw, // Current schema with all tables as they exist now
                             currentVersion: "v1.0.0", // Version identifier for tracking
                         },
+
                         hooks: {
                             beforeCreate: async ({ tenantId, mode, user }) => {
                                 console.log(`🚀 Creating tenant database for ${mode} ${tenantId}`);
@@ -86,7 +88,7 @@ async function authBuilder() {
                             },
                             after: async (file, ctx) => {
                                 // Track your analytics (for example)
-                                console.log("File uploaded:", file);
+                                // File uploaded successfully
                             },
                         },
                         download: {
@@ -153,12 +155,12 @@ export const auth = betterAuth({
                 options: {
                     usePlural: true,
                     debugLogs: true,
+                    schema, // Include the full schema for tenant table filtering
                 },
-                // Include multi-tenancy for schema generation
                 multiTenancy: {
                     cloudflareD1Api: {
-                        apiToken: "mock-token",
-                        accountId: "mock-account-id",
+                        apiToken: "mock-token", // Mock for schema generation
+                        accountId: "mock-account", // Mock for schema generation
                     },
                     mode: "organization",
                     databasePrefix: "org_tenant_",

@@ -14,6 +14,11 @@ export interface CloudflareD1ApiConfig {
      * Cloudflare account ID
      */
     accountId: string;
+
+    /**
+     * Enable extended console logs
+     */
+    debugLogs?: boolean;
 }
 
 /**
@@ -115,6 +120,11 @@ export interface CloudflareD1MultiTenancyOptions {
      * Migration configuration for tenant databases
      */
     migrations?: TenantMigrationConfig;
+
+    /**
+     * Enable extended console logs
+     */
+    debugLogs?: boolean;
 }
 
 /**

@@ -695,6 +695,13 @@ async function migrate(cliArgs?: CliArgs) {
         }
     }
 
+    // Check if multi-tenancy is enabled and create placeholder files if needed
+    const { detectMultiTenancy, createPlaceholderTenantFiles } = await import("./lib/tenant-migration-generator.js");
+    if (detectMultiTenancy(process.cwd())) {
+        debugLog("Multi-tenancy detected, ensuring placeholder tenant files exist");
+        createPlaceholderTenantFiles(process.cwd());
+    }
+
     // Run auth:update - use npm specifically for auth commands
     debugLog("Running auth:update script");
     const authSpinner = spinner();
@@ -706,7 +713,7 @@ async function migrate(cliArgs?: CliArgs) {
         authSpinner.stop(pc.green("Auth schema updated."));
 
         // Check if multi-tenancy is enabled and split schemas if needed
-        const { detectMultiTenancy, splitAuthSchema } = await import("./lib/tenant-migration-generator.js");
+        const { splitAuthSchema } = await import("./lib/tenant-migration-generator.js");
         if (detectMultiTenancy(process.cwd())) {
             debugLog("Multi-tenancy detected, splitting auth schema");
             const splitSpinner = spinner();
@@ -1828,6 +1835,16 @@ export const verification = {} as any;`;
 
     // Schema generation & migrations
     debugLog("Starting auth schema generation");
+
+    // Check if multi-tenancy is enabled and create placeholder files if needed
+    const { detectMultiTenancy: detectMT, createPlaceholderTenantFiles: createPlaceholders } = await import(
+        "./lib/tenant-migration-generator.js"
+    );
+    if (detectMT(targetDir)) {
+        debugLog("Multi-tenancy detected during setup, ensuring placeholder tenant files exist");
+        createPlaceholders(targetDir);
+    }
+
     const genAuth = spinner();
     genAuth.start("Generating auth schema...");
     {
@@ -2102,6 +2119,7 @@ function printHelp() {
         `  npx @better-auth-cloudflare/cli generate                Run interactive generator\n` +
         `  npx @better-auth-cloudflare/cli migrate                 Run migration workflow\n` +
         `  npx @better-auth-cloudflare/cli generate-tenant-migrations  Split schemas for multi-tenancy\n` +
+        `  npx @better-auth-cloudflare/cli migrate:tenants         Migrate all tenant databases\n` +
         `  npx @better-auth-cloudflare/cli version                 Show version information\n` +
         `  npx @better-auth-cloudflare/cli --version               Show version information\n` +
         `  npx @better-auth-cloudflare/cli -v                      Show version information\n` +
@@ -2199,6 +2217,17 @@ if (cmd === "version" || cmd === "--version" || (cmd === "-v" && process.argv.le
     import("./commands/generate-tenant-migrations.js")
         .then(({ generateTenantMigrations }) => {
             generateTenantMigrations().catch(err => {
+                fatal(String(err?.message ?? err));
+            });
+        })
+        .catch(err => {
+            fatal(String(err?.message ?? err));
+        });
+} else if (cmd === "migrate:tenants") {
+    // Handle migrate:tenants command
+    import("./commands/migrate-tenants.js")
+        .then(({ migrateTenants }) => {
+            migrateTenants().catch(err => {
                 fatal(String(err?.message ?? err));
             });
         })
