@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-import { cancel, intro, outro, spinner, select, confirm } from "@clack/prompts";
+import { cancel, confirm, intro, outro, select, spinner } from "@clack/prompts";
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import pc from "picocolors";
-import { applyTenantMigrations } from "../../../dist/d1-multi-tenancy/d1-utils.js";
-import type { CloudflareD1ApiConfig } from "../../../dist/d1-multi-tenancy/types.js";
+import { applyTenantMigrations } from "../../../src/d1-multi-tenancy/d1-utils.js";
+import type { CloudflareD1ApiConfig } from "../../../src/d1-multi-tenancy/types.js";
 
 // Get package version from package.json
 function getPackageVersion(): string {
