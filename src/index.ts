@@ -205,45 +205,21 @@ export const withCloudflare = <T extends BetterAuthOptions>(
 
     // Determine which database configuration to use
     let database: AdapterInstance | null = null;
-
-    try {
-        if (cloudFlareOptions.postgres) {
-            database = drizzleAdapter(cloudFlareOptions.postgres.db, {
-                provider: "pg",
-                ...cloudFlareOptions.postgres.options,
-            });
-        } else if (cloudFlareOptions.mysql) {
-            database = drizzleAdapter(cloudFlareOptions.mysql.db, {
-                provider: "mysql",
-                ...cloudFlareOptions.mysql.options,
-            });
-        } else if (cloudFlareOptions.d1) {
-            database = drizzleAdapter(cloudFlareOptions.d1.db, {
-                provider: "sqlite",
-                ...cloudFlareOptions.d1.options,
-            });
-        }
-    } catch (error) {
-        console.error("Error creating database adapter:", error);
-
-        // During build time or when database connections aren't available,
-        // create a mock adapter to pass validation
-        if (cloudFlareOptions.d1) {
-            database = drizzleAdapter({} as any, {
-                provider: "sqlite",
-                ...cloudFlareOptions.d1.options,
-            });
-        } else if (cloudFlareOptions.postgres) {
-            database = drizzleAdapter({} as any, {
-                provider: "pg",
-                ...cloudFlareOptions.postgres.options,
-            });
-        } else if (cloudFlareOptions.mysql) {
-            database = drizzleAdapter({} as any, {
-                provider: "mysql",
-                ...cloudFlareOptions.mysql.options,
-            });
-        }
+    if (cloudFlareOptions.postgres) {
+        database = drizzleAdapter(cloudFlareOptions.postgres.db, {
+            provider: "pg",
+            ...cloudFlareOptions.postgres.options,
+        });
+    } else if (cloudFlareOptions.mysql) {
+        database = drizzleAdapter(cloudFlareOptions.mysql.db, {
+            provider: "mysql",
+            ...cloudFlareOptions.mysql.options,
+        });
+    } else if (cloudFlareOptions.d1) {
+        database = drizzleAdapter(cloudFlareOptions.d1.db, {
+            provider: "sqlite",
+            ...cloudFlareOptions.d1.options,
+        });
     }
 
     // Collect plugins to include
@@ -388,7 +364,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(
         plugins.push(cloudflareD1MultiTenancy(cloudFlareOptions.d1.multiTenancy));
     }
     if (!database) {
-        throw new Error("No database configuration provided. Please provide one of postgres, mysql, or d1.");
+        console.warn("⚠️ No database configuration provided. Please provide one of postgres, mysql, or d1.");
     }
 
     // Add user-provided plugins
