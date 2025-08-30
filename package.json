@@ -59,6 +59,10 @@
         "./client": {
             "types": "./dist/client.d.ts",
             "default": "./dist/client.js"
+        },
+        "./d1-multi-tenancy": {
+            "types": "./dist/d1-multi-tenancy/index.d.ts",
+            "default": "./dist/d1-multi-tenancy/index.js"
         }
     },
     "publishConfig": {

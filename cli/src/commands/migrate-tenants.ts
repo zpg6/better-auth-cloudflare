@@ -3,8 +3,8 @@ import { cancel, confirm, intro, outro, select, spinner } from "@clack/prompts";
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import pc from "picocolors";
-import { applyTenantMigrations } from "../../../src/d1-multi-tenancy/d1-utils.js";
-import type { CloudflareD1ApiConfig } from "../../../src/d1-multi-tenancy/types.js";
+import { applyTenantMigrations } from "better-auth-cloudflare/d1-multi-tenancy";
+import type { CloudflareD1ApiConfig } from "better-auth-cloudflare/d1-multi-tenancy";
 
 // Get package version from package.json
 function getPackageVersion(): string {

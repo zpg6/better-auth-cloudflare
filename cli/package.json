@@ -22,7 +22,7 @@
     "bin": {
         "better-auth-cloudflare": "dist/index.js"
     },
-    "type": "commonjs",
+    "type": "module",
     "files": [
         "dist/**/*"
     ],
@@ -37,6 +37,7 @@
     },
     "dependencies": {
         "@clack/prompts": "^0.7.0",
+        "better-auth-cloudflare": "file:..",
         "picocolors": "^1.0.0"
     },
     "devDependencies": {
