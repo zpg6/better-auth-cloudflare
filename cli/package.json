@@ -27,7 +27,10 @@
         "dist/**/*"
     ],
     "scripts": {
+        "prebuild": "cd .. && bun run build",
         "build": "tsc -p tsconfig.json",
+        "pretest": "cd .. && bun run build",
+        "pretypecheck": "cd .. && bun run build",
         "dev": "node --enable-source-maps dist/index.js",
         "typecheck": "tsc -p tsconfig.json --noEmit",
         "test": "bun test --timeout 60000",
