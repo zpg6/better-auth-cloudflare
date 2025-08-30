@@ -22,7 +22,7 @@
     "bin": {
         "better-auth-cloudflare": "dist/index.js"
     },
-    "type": "commonjs",
+    "type": "module",
     "files": [
         "dist/**/*"
     ],
@@ -37,6 +37,7 @@
     },
     "dependencies": {
         "@clack/prompts": "^0.7.0",
+        "@zpg6-test-pkgs/drizzle-orm": "0.44.5-d1-http-test.2",
         "picocolors": "^1.0.0"
     },
     "devDependencies": {

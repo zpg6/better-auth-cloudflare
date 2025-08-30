@@ -2,7 +2,7 @@ import type { AuthContext } from "better-auth";
 import { createAuthEndpoint, getSessionFromCtx, sessionMiddleware } from "better-auth/api";
 import type { FieldAttribute } from "better-auth/db";
 import { z, type ZodRawShape, type ZodTypeAny } from "zod";
-import type { FileMetadata, R2Config } from "./types";
+import type { FileMetadata, R2Config } from "./types.js";
 
 export const R2_ERROR_CODES = {
     FILE_TOO_LARGE: "File is too large. Please choose a smaller file",

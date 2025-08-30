@@ -8,8 +8,8 @@
         "jsx": "react-jsx",
         "allowJs": true,
 
-        // Bundler mode
-        "moduleResolution": "bundler",
+        // Node.js ESM mode
+        "moduleResolution": "node",
         "verbatimModuleSyntax": true,
         "declaration": true,
 

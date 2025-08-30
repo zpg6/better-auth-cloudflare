@@ -1,0 +1,52 @@
+name: Build Example (OpenNextJS Org D1 Multi-Tenancy)
+
+on:
+    push:
+        branches: [main]
+        paths:
+            - "package.json"
+            - "src/**"
+            - "tsconfig.json"
+            - "examples/opennextjs-org-d1-multi-tenancy/**"
+            - ".github/workflows/build-opennextjs-org-d1-multi-tenancy-example.yml" # This file
+    pull_request:
+        branches: [main]
+        paths:
+            - "package.json"
+            - "src/**"
+            - "tsconfig.json"
+            - "examples/opennextjs-org-d1-multi-tenancy/**"
+            - ".github/workflows/build-opennextjs-org-d1-multi-tenancy-example.yml" # This file
+    workflow_dispatch:
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 10.10.0
+                  run_install: false
+
+            - name: Install root dependencies
+              run: pnpm install
+
+            - name: Build root package
+              run: pnpm build
+
+            - name: Install example dependencies
+              working-directory: examples/opennextjs-org-d1-multi-tenancy
+              run: pnpm install
+
+            - name: Build Example (OpenNextJS Org D1 Multi-Tenancy)
+              working-directory: examples/opennextjs-org-d1-multi-tenancy
+              run: pnpm build:cf

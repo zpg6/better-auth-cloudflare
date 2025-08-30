@@ -695,6 +695,13 @@ async function migrate(cliArgs?: CliArgs) {
         }
     }
 
+    // Check if multi-tenancy is enabled and create placeholder files if needed
+    const { detectMultiTenancy, createPlaceholderTenantFiles } = await import("./lib/tenant-migration-generator.js");
+    if (detectMultiTenancy(process.cwd())) {
+        debugLog("Multi-tenancy detected, ensuring placeholder tenant files exist");
+        createPlaceholderTenantFiles(process.cwd());
+    }
+
     // Run auth:update - use npm specifically for auth commands
     debugLog("Running auth:update script");
     const authSpinner = spinner();
@@ -704,6 +711,23 @@ async function migrate(cliArgs?: CliArgs) {
     const authRes = runScript(authPm, "auth:update", process.cwd());
     if (authRes.code === 0) {
         authSpinner.stop(pc.green("Auth schema updated."));
+
+        // Check if multi-tenancy is enabled and split schemas if needed
+        const { splitAuthSchema } = await import("./lib/tenant-migration-generator.js");
+        if (detectMultiTenancy(process.cwd())) {
+            debugLog("Multi-tenancy detected, splitting auth schema");
+            const splitSpinner = spinner();
+            splitSpinner.start("Splitting schema for multi-tenancy...");
+            try {
+                await splitAuthSchema(process.cwd());
+                splitSpinner.stop(
+                    pc.green("Schema split into auth.schema.ts (core) and tenant.schema.ts (tenant-specific).")
+                );
+            } catch (error) {
+                splitSpinner.stop(pc.yellow("Schema splitting failed, continuing with single schema."));
+                debugLog(`Schema splitting error: ${error}`);
+            }
+        }
     } else {
         authSpinner.stop(pc.red("Failed to update auth schema."));
         assertOk(authRes, "Auth schema update failed.");
@@ -1811,6 +1835,16 @@ export const verification = {} as any;`;
 
     // Schema generation & migrations
     debugLog("Starting auth schema generation");
+
+    // Check if multi-tenancy is enabled and create placeholder files if needed
+    const { detectMultiTenancy: detectMT, createPlaceholderTenantFiles: createPlaceholders } = await import(
+        "./lib/tenant-migration-generator.js"
+    );
+    if (detectMT(targetDir)) {
+        debugLog("Multi-tenancy detected during setup, ensuring placeholder tenant files exist");
+        createPlaceholders(targetDir);
+    }
+
     const genAuth = spinner();
     genAuth.start("Generating auth schema...");
     {
@@ -2084,6 +2118,8 @@ function printHelp() {
         `  npx @better-auth-cloudflare/cli                         Run interactive generator\n` +
         `  npx @better-auth-cloudflare/cli generate                Run interactive generator\n` +
         `  npx @better-auth-cloudflare/cli migrate                 Run migration workflow\n` +
+        `  npx @better-auth-cloudflare/cli generate-tenant-migrations  Split schemas for multi-tenancy\n` +
+        `  npx @better-auth-cloudflare/cli migrate:tenants         Migrate all tenant databases\n` +
         `  npx @better-auth-cloudflare/cli version                 Show version information\n` +
         `  npx @better-auth-cloudflare/cli --version               Show version information\n` +
         `  npx @better-auth-cloudflare/cli -v                      Show version information\n` +
@@ -2153,6 +2189,7 @@ function printHelp() {
         `Creates a new Better Auth Cloudflare project from Hono or OpenNext.js templates,\n` +
         `optionally creating Cloudflare D1, KV, R2, or Hyperdrive resources for you.\n` +
         `The migrate command runs auth:update, db:generate, and optionally db:migrate.\n` +
+        `The generate-tenant-migrations command splits auth schemas for multi-tenancy.\n` +
         `\n` +
         `Cloudflare Status: https://www.cloudflarestatus.com/\n` +
         `Report issues: https://github.com/zpg6/better-auth-cloudflare/issues\n`;
@@ -2175,6 +2212,28 @@ if (cmd === "version" || cmd === "--version" || (cmd === "-v" && process.argv.le
     migrate(cliArgs).catch(err => {
         fatal(String(err?.message ?? err));
     });
+} else if (cmd === "generate-tenant-migrations") {
+    // Handle generate-tenant-migrations command
+    import("./commands/generate-tenant-migrations.js")
+        .then(({ generateTenantMigrations }) => {
+            generateTenantMigrations().catch(err => {
+                fatal(String(err?.message ?? err));
+            });
+        })
+        .catch(err => {
+            fatal(String(err?.message ?? err));
+        });
+} else if (cmd === "migrate:tenants") {
+    // Handle migrate:tenants command
+    import("./commands/migrate-tenants.js")
+        .then(({ migrateTenants }) => {
+            migrateTenants().catch(err => {
+                fatal(String(err?.message ?? err));
+            });
+        })
+        .catch(err => {
+            fatal(String(err?.message ?? err));
+        });
 } else {
     // Check if we have CLI arguments (starts with -- or -v)
     const hasCliArgs = process.argv.slice(2).some(arg => arg.startsWith("--") || arg === "-v");
