@@ -49,6 +49,7 @@ export function BirthdayExample() {
     const [currentBirthday, setCurrentBirthday] = useState<BirthdayData | null>(null);
     const [upcomingBirthdays, setUpcomingBirthdays] = useState<UpcomingBirthday[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [operationResult, setOperationResult] = useState<{
         success?: boolean;
         error?: string;
@@ -71,7 +72,7 @@ export function BirthdayExample() {
         setIsLoading(true);
         try {
             // Use no userId to get current user's birthday (defaults to session user)
-            const result = await authClient.birthday.read({});
+            const result = await authClient.birthday.get({});
             if (result.data) {
                 setCurrentBirthday({
                     userId: result.data.userId,
@@ -86,12 +87,13 @@ export function BirthdayExample() {
             setCurrentBirthday(null);
         } finally {
             setIsLoading(false);
+            setIsInitialLoading(false);
         }
     };
 
     const loadUpcomingBirthdays = async () => {
         try {
-            const result = await authClient.birthday.upcoming();
+            const result = await authClient.birthday.upcoming({});
             if (result.data) {
                 setUpcomingBirthdays(
                     result.data.birthdays.map((b: any) => ({
@@ -170,16 +172,21 @@ export function BirthdayExample() {
     };
 
     const formatBirthdayDate = (date: Date): string => {
-        return date.toLocaleDateString("en-US", {
+        // Use UTC methods to avoid timezone conversion issues
+        // The date is stored as a local date, so we want to display it as-is
+        return new Date(date.getTime() + date.getTimezoneOffset() * 60000).toLocaleDateString("en-US", {
             month: "long",
             day: "numeric",
             year: "numeric",
+            timeZone: "UTC",
         });
     };
 
     const getBirthdayThisYear = (birthday: Date): Date => {
         const now = new Date();
-        return new Date(now.getFullYear(), birthday.getMonth(), birthday.getDate());
+        // Use UTC methods to get the actual stored date values
+        const utcDate = new Date(birthday.getTime() + birthday.getTimezoneOffset() * 60000);
+        return new Date(now.getFullYear(), utcDate.getUTCMonth(), utcDate.getUTCDate());
     };
 
     const getDaysUntilBirthday = (birthday: Date): number => {
@@ -234,7 +241,17 @@ export function BirthdayExample() {
                     </CardTitle>
                     <Dialog open={isBirthdayDialogOpen} onOpenChange={setIsBirthdayDialogOpen}>
                         <DialogTrigger asChild>
-                            <Button>
+                            <Button
+                                onClick={() => {
+                                    if (currentBirthday) {
+                                        // Pre-fill form with current values for updates
+                                        const dateStr = currentBirthday.birthday.toISOString().split("T")[0];
+                                        setBirthdayDate(dateStr);
+                                        setTimezone(currentBirthday.timezone);
+                                        setIsPublic(currentBirthday.isPublic);
+                                    }
+                                }}
+                            >
                                 <Calendar className="h-4 w-4 mr-2" />
                                 {currentBirthday ? "Update Birthday" : "Set Birthday"}
                             </Button>
@@ -251,6 +268,7 @@ export function BirthdayExample() {
                                         type="date"
                                         value={birthdayDate}
                                         onChange={e => setBirthdayDate(e.target.value)}
+                                        className="focus-visible:border-input focus-visible:ring-0 focus-visible:ring-offset-0"
                                     />
                                 </div>
                                 <div>
@@ -293,7 +311,26 @@ export function BirthdayExample() {
                     </Dialog>
                 </CardHeader>
                 <CardContent>
-                    {currentBirthday ? (
+                    {isInitialLoading ? (
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                        <div className="h-5 w-5 bg-gray-200 rounded animate-pulse" />
+                                        <div className="h-6 w-40 bg-gray-200 rounded animate-pulse" />
+                                        <div className="h-4 w-4 bg-gray-200 rounded animate-pulse" />
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <div className="h-4 w-4 bg-gray-200 rounded animate-pulse" />
+                                        <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
+                                        <div className="h-4 w-1 bg-gray-200 rounded animate-pulse" />
+                                        <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+                                    </div>
+                                </div>
+                                <div className="h-8 w-8 bg-gray-200 rounded animate-pulse" />
+                            </div>
+                        </div>
+                    ) : currentBirthday ? (
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
                                 <div>
@@ -405,6 +442,7 @@ export function BirthdayExample() {
                                 placeholder="Enter user ID"
                                 value={targetUserId}
                                 onChange={e => setTargetUserId(e.target.value)}
+                                className="focus-visible:border-input focus-visible:ring-0 focus-visible:ring-offset-0"
                             />
                         </div>
                         <div>
@@ -414,6 +452,7 @@ export function BirthdayExample() {
                                 placeholder="Happy Birthday! 🎉"
                                 value={wishMessage}
                                 onChange={e => setWishMessage(e.target.value)}
+                                className="focus-visible:border-input focus-visible:ring-0 focus-visible:ring-offset-0"
                             />
                         </div>
                         <div className="flex items-center space-x-2">

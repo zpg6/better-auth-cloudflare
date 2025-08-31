@@ -148,7 +148,12 @@ export const birthdayPlugin = (options: BirthdayPluginOptions = {}) => {
                     method: "POST",
                     use: [sessionMiddleware], // Require authentication
                     body: z.object({
-                        birthday: z.string().transform(str => new Date(str)),
+                        birthday: z.string().transform(str => {
+                            // Parse date string as local date to avoid timezone conversion issues
+                            // Input format: "YYYY-MM-DD"
+                            const [year, month, day] = str.split("-").map(Number);
+                            return new Date(year, month - 1, day); // month is 0-indexed
+                        }),
                         isPublic: z.boolean(),
                         timezone: z.string(),
                     }),
@@ -219,17 +224,13 @@ export const birthdayPlugin = (options: BirthdayPluginOptions = {}) => {
                 }
             ),
 
-            read: createAuthEndpoint(
-                "/birthday/read",
+            getBirthday: createAuthEndpoint(
+                "/birthday/get",
                 {
-                    method: "POST",
+                    method: "GET",
                     use: [sessionMiddleware], // Require authentication
-                    body: z.object({
-                        userId: z.string().optional(),
-                    }),
                 },
                 async ctx => {
-                    const { userId } = ctx.body;
                     const session = ctx.context.session;
 
                     if (!session) {
@@ -245,7 +246,7 @@ export const birthdayPlugin = (options: BirthdayPluginOptions = {}) => {
                     }
 
                     // Use the provided userId or default to current session user
-                    const targetUserId = userId || session.user?.id;
+                    const targetUserId = session.user?.id;
 
                     const birthday = await ctx.context.adapter.findOne<{
                         birthday: Date;
@@ -279,10 +280,10 @@ export const birthdayPlugin = (options: BirthdayPluginOptions = {}) => {
                 }
             ),
 
-            upcoming: createAuthEndpoint(
+            upcomingBirthdays: createAuthEndpoint(
                 "/birthday/upcoming",
                 {
-                    method: "POST",
+                    method: "GET",
                     use: [sessionMiddleware], // Require authentication
                 },
                 async ctx => {
