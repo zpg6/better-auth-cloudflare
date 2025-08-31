@@ -11,14 +11,11 @@ import {
     AlertCircle,
     Building,
     CheckCircle,
-    Crown,
     Lock,
     Mail,
     Play,
     Plus,
     RefreshCw,
-    Settings,
-    Shield,
     Trash2,
     User,
     Users,
@@ -293,7 +290,7 @@ export default function OrganizationDemo() {
     const getRoleIcon = (role: string) => {
         switch (role.toLowerCase()) {
             case "owner":
-                return <Crown className="h-4 w-4 text-yellow-600" />;
+                return <Lock className="h-4 w-4 text-yellow-600" />;
             case "admin":
                 return <Lock className="h-4 w-4 text-blue-600" />;
             default:
@@ -567,9 +564,10 @@ export default function OrganizationDemo() {
                                             </Button>
                                         )}
                                         {activeOrganization?.id === org.id && (
-                                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">
+                                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 text-emerald-700 rounded-full text-xs font-medium shadow-sm">
+                                                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                                                 Active
-                                            </span>
+                                            </div>
                                         )}
                                         <Button
                                             onClick={() => openDeleteConfirmation(org.id, org.name)}

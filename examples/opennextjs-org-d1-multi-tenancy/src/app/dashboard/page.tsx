@@ -1,14 +1,14 @@
 import { initAuth } from "@/auth";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import SignOutButton from "./SignOutButton"; // Import the client component
-import FileUploadDemo from "@/components/FileUploadDemo";
-import OrganizationDemo from "@/components/OrganizationDemo";
+// import FileUploadDemo from "@/components/FileUploadDemo";
 import { BirthdayExample } from "@/components/BirthdayExample";
-import { Github, Package, FileText, MapPin, Clock, Globe, Building, Server, Navigation, Calendar } from "lucide-react";
+import OrganizationDemo from "@/components/OrganizationDemo";
+import { Building, Calendar, Clock, FileText, Github, Globe, MapPin, Navigation, Package, Server } from "lucide-react";
 
 export default async function DashboardPage() {
     const authInstance = await initAuth();
@@ -177,7 +177,24 @@ export default async function DashboardPage() {
                         </TabsContent>
 
                         <TabsContent value="upload" className="space-y-6">
-                            <FileUploadDemo />
+                            <Card className="w-full">
+                                <CardContent className="flex flex-col items-center justify-center py-16">
+                                    <div className="text-center space-y-4">
+                                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
+                                            <Server className="h-8 w-8 text-gray-400" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                                                R2 Multi-tenancy coming soon
+                                            </h3>
+                                            <p className="text-gray-500 max-w-md">
+                                                We're working on bringing multi-tenant file storage capabilities to R2.
+                                                Stay tuned for updates!
+                                            </p>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
                         </TabsContent>
 
                         <TabsContent value="birthday" className="space-y-6">

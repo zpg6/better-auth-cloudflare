@@ -8,17 +8,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
     AlertCircle,
+    Cake,
     Calendar,
     CheckCircle,
+    Clock,
+    Eye,
+    EyeOff,
     Gift,
+    Globe,
     Heart,
     RefreshCw,
     Users,
-    Cake,
-    Clock,
-    Globe,
-    Eye,
-    EyeOff,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -33,15 +33,6 @@ interface UpcomingBirthday {
     userId: string;
     birthday: Date;
     timezone: string;
-}
-
-interface BirthdayWish {
-    wishId: string;
-    fromUserId: string;
-    toUserId: string;
-    message: string;
-    isPublic: boolean;
-    createdAt: Date;
 }
 
 export function BirthdayExample() {
@@ -474,34 +465,6 @@ export function BirthdayExample() {
                     </div>
                 </DialogContent>
             </Dialog>
-
-            {/* Quick Actions */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <RefreshCw className="h-5 w-5" />
-                        Quick Actions
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Button onClick={loadCurrentBirthday} variant="outline" disabled={isLoading} className="w-full">
-                            <Cake className="h-4 w-4 mr-2" />
-                            Refresh My Birthday
-                        </Button>
-
-                        <Button
-                            onClick={loadUpcomingBirthdays}
-                            variant="outline"
-                            disabled={isLoading}
-                            className="w-full"
-                        >
-                            <Clock className="h-4 w-4 mr-2" />
-                            Refresh Upcoming
-                        </Button>
-                    </div>
-                </CardContent>
-            </Card>
         </div>
     );
 }
