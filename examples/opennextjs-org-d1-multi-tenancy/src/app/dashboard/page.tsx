@@ -202,10 +202,10 @@ export default async function DashboardPage() {
                                 <CardHeader>
                                     <CardTitle className="flex items-center gap-2 text-xl font-semibold">
                                         <Calendar className="h-5 w-5" />
-                                        Birthday Plugin Demo
+                                        Multi-tenancy with Birthdays
                                     </CardTitle>
                                     <p className="text-sm text-gray-600">
-                                        Demonstrates custom plugin functionality with type-safe endpoints
+                                        Demonstrates birthdays stored in active organization's tenant database
                                     </p>
                                 </CardHeader>
                                 <CardContent>
