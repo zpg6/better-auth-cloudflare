@@ -1,7 +1,7 @@
 import { KVNamespace } from "@cloudflare/workers-types";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { betterAuth } from "better-auth";
-import { withCloudflare } from "better-auth-cloudflare";
+import { withCloudflare, type TenantRoutingCallback } from "better-auth-cloudflare";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { anonymous, openAPI, organization } from "better-auth/plugins";
 import { getDb, schema } from "../db";
@@ -36,7 +36,22 @@ async function authBuilder() {
                             currentSchema: raw, // Current schema with all tables as they exist now
                             currentVersion: "v1.0.0", // Version identifier for tracking
                         },
-
+                        // Custom tenant routing logic - takes priority over default tenantId field lookup
+                        tenantRouting: ({ modelName, operation, data }) => {
+                            // Example: For apiKey model, extract tenant ID from the first half of the API key
+                            if (modelName === "apiKey" && operation === "findOne" && Array.isArray(data)) {
+                                const apiKeyWhere = data.find((w: any) => w.field === "key");
+                                if (apiKeyWhere?.value && typeof apiKeyWhere.value === "string") {
+                                    const parts = apiKeyWhere.value.split("_");
+                                    if (parts.length >= 2 && parts[0]) {
+                                        return parts[0]; // Return first part as tenant ID
+                                    }
+                                }
+                            }
+                            // Return undefined to fall back to default tenantId field lookup
+                            return undefined;
+                        },
+                        // Extend the tenant database creation and deletion with your own logic
                         hooks: {
                             beforeCreate: async ({ tenantId, mode, user }) => {
                                 console.log(`🚀 Creating tenant database for ${mode} ${tenantId}`);

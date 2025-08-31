@@ -6,7 +6,7 @@ import {
     type SecondaryStorage,
     type Session,
 } from "better-auth";
-import { adapterRouter } from "better-auth/adapters/adapter-router";
+import { adapterRouter, type AdapterRouterParams } from "better-auth/adapters/adapter-router";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
 import { cloudflareD1MultiTenancy, createTenantDatabaseClient } from "./d1-multi-tenancy/index.js";
@@ -15,6 +15,7 @@ import { schema } from "./schema.js";
 import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types.js";
 export * from "./client.js";
 export * from "./d1-multi-tenancy/index.js";
+export type { TenantRoutingCallback } from "./d1-multi-tenancy/types.js";
 export * from "./r2.js";
 export * from "./schema.js";
 export * from "./types.js";
@@ -252,7 +253,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(
         const multiTenancyConfig = d1Config.multiTenancy!;
 
         // Define which tables belong in the main database vs tenant databases
-        const CORE_AUTH_TABLES = new Set([
+        const defaultCoreModels = [
             "user",
             "users",
             "account",
@@ -269,10 +270,15 @@ export const withCloudflare = <T extends BetterAuthOptions>(
             "verifications",
             "tenant",
             "tenants",
-        ]);
+        ];
 
-        // Add any additional core tables that might be used by plugins
-        // Note: userBirthday, userFile, etc. are tenant tables and should NOT be here
+        // Handle both array and callback configurations for core models
+        const coreModels: string[] =
+            typeof multiTenancyConfig.coreModels === "function"
+                ? multiTenancyConfig.coreModels(defaultCoreModels)
+                : (multiTenancyConfig.coreModels ?? defaultCoreModels);
+
+        const CORE_AUTH_TABLES = new Set(coreModels);
 
         database = adapterRouter({
             fallbackAdapter: drizzleAdapter(d1Config.db, {
@@ -282,30 +288,60 @@ export const withCloudflare = <T extends BetterAuthOptions>(
             routes: [
                 async ({ modelName, operation, data, fallbackAdapter }) => {
                     try {
-                        // Extract tenantId from data based on operation type
+                        // Extract tenantId from data - first try custom callback, then fall back to default logic
                         let tenantId: string | undefined;
-                        if (operation === "create" && data && typeof data === "object" && !Array.isArray(data)) {
-                            // For create operations, data is the object with the fields
-                            if ("tenantId" in data && data.tenantId) {
-                                tenantId = data.tenantId as string;
-                            } else if ("data" in data && data.data && "tenantId" in data.data && data.data.tenantId) {
-                                tenantId = data.data.tenantId as string;
+
+                        // Try custom tenant routing callback first
+                        if (multiTenancyConfig.tenantRouting) {
+                            try {
+                                const customTenantId = await multiTenancyConfig.tenantRouting({
+                                    modelName,
+                                    operation,
+                                    data,
+                                    fallbackAdapter,
+                                } as AdapterRouterParams);
+                                if (customTenantId) {
+                                    tenantId = customTenantId;
+                                }
+                            } catch (error) {
+                                console.error(
+                                    `[AdapterRouter] Error in custom tenant routing for ${modelName}:`,
+                                    error
+                                );
+                                // Continue to fallback logic
                             }
-                        } else if (data && Array.isArray(data)) {
-                            // For findOne/findMany operations, data is directly the where array
-                            const tenantIdWhere = data.find(
-                                (w: any) => w.field === "tenantId" || w.field === "tenant_id"
-                            );
-                            if (tenantIdWhere?.value) {
-                                tenantId = tenantIdWhere.value as string;
-                            }
-                        } else if (data && "where" in data && data.where) {
-                            // For other operations, data might have a where property
-                            const tenantIdWhere = data.where.find(
-                                (w: any) => w.field === "tenantId" || w.field === "tenant_id"
-                            );
-                            if (tenantIdWhere?.value) {
-                                tenantId = tenantIdWhere.value as string;
+                        }
+
+                        // Fall back to default tenant ID extraction if custom callback didn't return a value
+                        if (!tenantId) {
+                            if (operation === "create" && data && typeof data === "object" && !Array.isArray(data)) {
+                                // For create operations, data is the object with the fields
+                                if ("tenantId" in data && data.tenantId) {
+                                    tenantId = data.tenantId as string;
+                                } else if (
+                                    "data" in data &&
+                                    data.data &&
+                                    "tenantId" in data.data &&
+                                    data.data.tenantId
+                                ) {
+                                    tenantId = data.data.tenantId as string;
+                                }
+                            } else if (data && Array.isArray(data)) {
+                                // For findOne/findMany operations, data is directly the where array
+                                const tenantIdWhere = data.find(
+                                    (w: any) => w.field === "tenantId" || w.field === "tenant_id"
+                                );
+                                if (tenantIdWhere?.value) {
+                                    tenantId = tenantIdWhere.value as string;
+                                }
+                            } else if (data && "where" in data && data.where) {
+                                // For other operations, data might have a where property
+                                const tenantIdWhere = data.where.find(
+                                    (w: any) => w.field === "tenantId" || w.field === "tenant_id"
+                                );
+                                if (tenantIdWhere?.value) {
+                                    tenantId = tenantIdWhere.value as string;
+                                }
                             }
                         }
 
