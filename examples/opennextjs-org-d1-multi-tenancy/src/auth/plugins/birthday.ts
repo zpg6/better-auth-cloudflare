@@ -104,40 +104,6 @@ export const birthdayPlugin = (options: BirthdayPluginOptions = {}) => {
                     },
                 },
             }),
-
-            // Birthday wishes - tenant-scoped social data
-            birthdayWish: {
-                fields: {
-                    fromUserId: {
-                        type: "string",
-                        required: true,
-                        // No references - users table is in main DB, this is in tenant DB
-                    },
-                    toUserId: {
-                        type: "string",
-                        required: true,
-                        // No references - users table is in main DB, this is in tenant DB
-                    },
-                    tenantId: {
-                        type: "string",
-                        required: true,
-                        // References the organization/tenant this wish belongs to
-                    },
-                    message: {
-                        type: "string",
-                        required: true,
-                    },
-                    isPublic: {
-                        type: "boolean",
-                        required: false,
-                        defaultValue: true,
-                    },
-                    createdAt: {
-                        type: "date",
-                        required: true,
-                    },
-                },
-            },
         },
 
         // Plugin endpoints for birthday management

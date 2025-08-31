@@ -80,8 +80,7 @@ export const tenants = sqliteTable("tenants", {
         .$defaultFn(() => new Date())
         .notNull(),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
-    lastMigrationVersion: text("last_migration_version").default("0000"),
-    migrationHistory: text("migration_history").default("[]"),
+    lastMigratedAt: integer("last_migrated_at", { mode: "timestamp" }),
 });
 export const organizations = sqliteTable("organizations", {
     id: text("id").primaryKey(),
