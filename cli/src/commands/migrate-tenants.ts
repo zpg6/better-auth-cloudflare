@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-import { cancel, confirm, intro, outro, select, spinner } from "@clack/prompts";
+import { cancel, confirm, intro, outro, spinner } from "@clack/prompts";
+import { drizzle, migrate } from "@zpg6-test-pkgs/drizzle-orm/d1-http";
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import pc from "picocolors";
-import { drizzle } from "@zpg6-test-pkgs/drizzle-orm/d1-http";
-import { sql } from "@zpg6-test-pkgs/drizzle-orm";
 
 // Simple type definition for Cloudflare D1 API configuration
 interface CloudflareD1ApiConfig {
@@ -13,55 +12,86 @@ interface CloudflareD1ApiConfig {
     debugLogs?: boolean;
 }
 
+// Configuration for main database access
+interface MainDatabaseConfig {
+    apiToken: string;
+    accountId: string;
+    databaseId: string;
+    debugLogs?: boolean;
+}
+
 /**
- * Apply migrations to a tenant database using drizzle D1-HTTP
+ * Apply migrations to a tenant database using drizzle D1-HTTP migrator
  */
 async function applyTenantMigrations(
     config: CloudflareD1ApiConfig,
     databaseId: string,
-    migrations: string[]
+    migrationsFolder: string,
+    retryCount: number = 2
 ): Promise<void> {
-    if (!migrations || migrations.length === 0) {
-        return;
-    }
+    let lastError: Error | undefined;
 
-    try {
-        // Create D1-HTTP connection
-        const db = drizzle(
-            {
-                accountId: config.accountId,
-                databaseId: databaseId,
-                token: config.apiToken,
-            },
-            {
-                logger: config.debugLogs,
-            }
-        );
-
-        // Apply each migration to the tenant database
-        for (const migration of migrations) {
-            // Split SQL by statement breakpoints and execute each statement
-            const statements = migration
-                .split("--> statement-breakpoint")
-                .map(s => s.trim())
-                .filter(s => s.length > 0);
+    for (let attempt = 1; attempt <= retryCount; attempt++) {
+        try {
+            // Create D1-HTTP connection
+            const db = drizzle(
+                {
+                    accountId: config.accountId,
+                    databaseId: databaseId,
+                    token: config.apiToken,
+                },
+                {
+                    logger: config.debugLogs,
+                }
+            );
 
             if (config.debugLogs) {
-                console.log(`📋 Executing ${statements.length} SQL statement(s) on tenant database`);
-                for (const statement of statements) {
-                    console.log(`  > ${statement}`);
-                }
+                console.log(`📋 Running migrations from ${migrationsFolder} (attempt ${attempt}/${retryCount})`);
             }
 
-            for (const statement of statements) {
-                await db.run(sql.raw(statement));
+            // Use the built-in migrator - this will handle user prompts automatically
+            await migrate(db, { migrationsFolder });
+
+            // If we get here, the migration was successful
+            return;
+        } catch (error) {
+            lastError = error instanceof Error ? error : new Error(String(error));
+
+            // Check if this is a non-fatal error that should trigger retry
+            const isRetryable = isRetryableError(lastError);
+
+            if (attempt < retryCount && isRetryable) {
+                if (config.debugLogs) {
+                    console.log(`⚠️ Migration attempt ${attempt} failed with retryable error, retrying...`);
+                }
+                // Wait a bit before retrying (exponential backoff)
+                await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
+            } else if (!isRetryable) {
+                // Don't retry for non-retryable errors
+                break;
             }
         }
-    } catch (error) {
-        throw new Error(
-            `Failed to apply tenant migrations: ${error instanceof Error ? error.message : "Unknown error"}`
-        );
     }
+
+    throw new Error(
+        `Failed to apply tenant migrations after ${retryCount} attempts: ${lastError?.message || "Unknown error"}`
+    );
+}
+
+/**
+ * Determine if an error is retryable (network issues, temporary failures)
+ */
+function isRetryableError(error: Error): boolean {
+    const message = error.message.toLowerCase();
+    return (
+        message.includes("network") ||
+        message.includes("timeout") ||
+        message.includes("rate limit") ||
+        message.includes("temporary") ||
+        message.includes("503") ||
+        message.includes("502") ||
+        message.includes("429")
+    );
 }
 
 // Get package version from package.json
@@ -90,8 +120,7 @@ interface TenantDatabase {
     databaseName: string;
     databaseId: string;
     status: string;
-    lastMigrationVersion?: string;
-    migrationHistory?: string;
+    lastMigrationCheck?: string;
 }
 
 interface MigrationFile {
@@ -102,14 +131,20 @@ interface MigrationFile {
 
 /**
  * Get Cloudflare D1 API configuration from environment variables
+ * Uses the same variables as the multitenancy plugin configuration
  */
 function getCloudflareConfig(debugLogs?: boolean): CloudflareD1ApiConfig {
-    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
-    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const apiToken = process.env.CLOUDFLARE_D1_API_TOKEN;
+    const accountId = process.env.CLOUDFLARE_ACCT_ID;
 
     if (!apiToken || !accountId) {
         fatal(
-            "Missing Cloudflare credentials. Please set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID environment variables."
+            "Missing Cloudflare multitenancy credentials.\n" +
+                "Please set the following environment variables:\n" +
+                "  CLOUDFLARE_D1_API_TOKEN - API token with D1:edit permissions for tenant account\n" +
+                "  CLOUDFLARE_ACCT_ID - Account ID where tenant databases are managed\n\n" +
+                "These should match your multitenancy plugin configuration and may be\n" +
+                "different from your main CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID."
         );
     }
 
@@ -117,55 +152,73 @@ function getCloudflareConfig(debugLogs?: boolean): CloudflareD1ApiConfig {
 }
 
 /**
- * Load migration files from the drizzle migrations directory
+ * Get main database configuration from environment variables
+ * These can be the same as tenant config or separate for different accounts
  */
-function loadMigrationFiles(projectRoot: string): MigrationFile[] {
-    const migrationsDir = join(projectRoot, "drizzle");
+function getMainDatabaseConfig(debugLogs?: boolean): MainDatabaseConfig {
+    // Try main database specific env vars first, fall back to tenant vars for same-account setups
+    const apiToken = process.env.CLOUDFLARE_MAIN_D1_API_TOKEN || process.env.CLOUDFLARE_D1_API_TOKEN;
+    const accountId = process.env.CLOUDFLARE_MAIN_ACCT_ID || process.env.CLOUDFLARE_ACCT_ID;
+    const databaseId = process.env.CLOUDFLARE_MAIN_DATABASE_ID || process.env.CLOUDFLARE_DATABASE_ID;
 
-    if (!existsSync(migrationsDir)) {
-        fatal("No drizzle migrations directory found. Please run 'npm run db:generate' first.");
+    if (!apiToken || !accountId || !databaseId) {
+        fatal(
+            "Missing main database credentials.\n" +
+                "Please set the following environment variables:\n" +
+                "  CLOUDFLARE_MAIN_D1_API_TOKEN (or CLOUDFLARE_D1_API_TOKEN) - API token for main database\n" +
+                "  CLOUDFLARE_MAIN_ACCT_ID (or CLOUDFLARE_ACCT_ID) - Account ID for main database\n" +
+                "  CLOUDFLARE_MAIN_DATABASE_ID (or CLOUDFLARE_DATABASE_ID) - Main database ID\n\n" +
+                "Use MAIN_ prefixed vars if main and tenant databases are in different accounts."
+        );
     }
 
-    const files = readdirSync(migrationsDir)
-        .filter(file => file.endsWith(".sql"))
-        .sort(); // Sort to ensure proper order
-
-    return files.map(filename => {
-        const content = readFileSync(join(migrationsDir, filename), "utf8");
-        // Extract version from filename (e.g., "0001_initial.sql" -> "0001")
-        const version = filename.split("_")[0];
-
-        return {
-            filename,
-            version,
-            content,
-        };
-    });
+    return { apiToken: apiToken!, accountId: accountId!, databaseId: databaseId!, debugLogs };
 }
 
 /**
- * Get all tenant databases from the main database
+ * Check if tenant migrations directory exists
  */
-async function getTenantDatabases(auth: any, orgPrefix?: string): Promise<TenantDatabase[]> {
+function checkTenantMigrationsExist(projectRoot: string): boolean {
+    const migrationsDir = join(projectRoot, "drizzle-tenant");
+    return existsSync(migrationsDir) && readdirSync(migrationsDir).some(file => file.endsWith(".sql"));
+}
+
+/**
+ * Get all tenant databases from the main database using direct D1-HTTP client
+ */
+async function getTenantDatabases(mainDbConfig: MainDatabaseConfig): Promise<TenantDatabase[]> {
     try {
-        const adapter = auth.options.database;
+        // Create direct D1-HTTP connection to main database
+        const mainDb = drizzle(
+            {
+                accountId: mainDbConfig.accountId,
+                databaseId: mainDbConfig.databaseId,
+                token: mainDbConfig.apiToken,
+            },
+            {
+                logger: mainDbConfig.debugLogs,
+            }
+        );
 
-        // Build where clause
-        const whereClause: any[] = [];
+        // Query tenants table directly using raw SQL
+        const rawTenants = await mainDb.all(`SELECT * FROM tenants WHERE status = 'active'`);
 
-        if (orgPrefix) {
-            // Filter by organization prefix
-            whereClause.push({ field: "tenantType", value: "organization", operator: "eq" });
-            // Add prefix filter for tenantId
-            whereClause.push({ field: "tenantId", value: orgPrefix, operator: "startsWith" });
+        if (mainDbConfig.debugLogs) {
+            console.log("🔍 Raw tenant query result:", JSON.stringify(rawTenants, null, 2));
         }
 
-        const tenants = await adapter.findMany({
-            model: "tenant",
-            where: whereClause.length > 0 ? whereClause : undefined,
-        });
+        // Map snake_case columns to camelCase for our interface
+        const tenants = (rawTenants as any[]).map(tenant => ({
+            id: tenant.id,
+            tenantId: tenant.tenant_id,
+            tenantType: tenant.tenant_type,
+            databaseName: tenant.database_name,
+            databaseId: tenant.database_id,
+            status: tenant.status,
+            lastMigrationCheck: tenant.last_migration_version, // Use the actual column name
+        }));
 
-        return tenants.filter((tenant: any) => tenant.status === "active");
+        return tenants as TenantDatabase[];
     } catch (error) {
         throw new Error(
             `Failed to fetch tenant databases: ${error instanceof Error ? error.message : "Unknown error"}`
@@ -174,76 +227,141 @@ async function getTenantDatabases(auth: any, orgPrefix?: string): Promise<Tenant
 }
 
 /**
- * Determine which migrations need to be applied to a tenant
- */
-function getMigrationsToApply(tenant: TenantDatabase, allMigrations: MigrationFile[]): MigrationFile[] {
-    const lastVersion = tenant.lastMigrationVersion || "0000";
-
-    return allMigrations.filter(migration => migration.version > lastVersion);
-}
-
-/**
- * Apply migrations to a single tenant database
+ * Apply migrations to a single tenant database using Drizzle's built-in migrator
  */
 async function migrateTenant(
     tenant: TenantDatabase,
-    migrations: MigrationFile[],
     cloudflareConfig: CloudflareD1ApiConfig,
-    auth: any
-): Promise<void> {
-    if (migrations.length === 0) {
-        console.log(pc.gray(`  ✓ ${tenant.tenantId} - Already up to date`));
-        return;
-    }
+    mainDbConfig: MainDatabaseConfig,
+    migrationsFolder: string
+): Promise<{ success: boolean; error?: string }> {
+    console.log(pc.cyan(`  → ${tenant.tenantId} - Checking for migrations`));
 
-    console.log(pc.cyan(`  → ${tenant.tenantId} - Applying ${migrations.length} migration(s)`));
+    // Update status to indicate migration in progress
+    const statusUpdateSuccess = await updateTenantStatus(tenant, mainDbConfig, "migrating");
 
     try {
-        // Apply each migration
-        const migrationSqls = migrations.map(m => m.content);
-        await applyTenantMigrations(cloudflareConfig, tenant.databaseId, migrationSqls);
+        // Apply migrations using built-in migrator with retry logic (up to 2 retries)
+        await applyTenantMigrations(cloudflareConfig, tenant.databaseId, migrationsFolder, 2);
 
-        // Update migration tracking in main database
-        const adapter = auth.options.database;
-        const latestVersion = migrations[migrations.length - 1].version;
-
-        // Parse existing migration history
-        const existingHistory = tenant.migrationHistory ? JSON.parse(tenant.migrationHistory) : [];
-
-        // Add new migrations to history
-        const newHistory = [
-            ...existingHistory,
-            ...migrations.map(m => ({
-                version: m.version,
-                name: m.filename,
-                appliedAt: new Date().toISOString(),
-            })),
-        ];
-
-        await adapter.update({
-            model: "tenant",
-            where: [{ field: "id", value: tenant.id, operator: "eq" }],
-            update: {
-                lastMigrationVersion: latestVersion,
-                migrationHistory: JSON.stringify(newHistory),
-            },
+        // Update status to success in main database
+        const finalUpdateSuccess = await updateTenantStatus(tenant, mainDbConfig, "active", {
+            lastMigratedAt: new Date().toISOString(),
         });
 
-        console.log(pc.green(`  ✓ ${tenant.tenantId} - Successfully migrated to version ${latestVersion}`));
+        if (!statusUpdateSuccess || !finalUpdateSuccess) {
+            console.log(pc.yellow(`  ⚠️ ${tenant.tenantId} - Migrations applied but status update failed`));
+            return { success: false, error: "Status update failed" };
+        }
+
+        console.log(pc.green(`  ✓ ${tenant.tenantId} - Migrations applied successfully`));
+        return { success: true };
     } catch (error) {
-        console.log(
-            pc.red(
-                `  ✗ ${tenant.tenantId} - Migration failed: ${error instanceof Error ? error.message : "Unknown error"}`
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        console.log(pc.red(`  ✗ ${tenant.tenantId} - Migration failed: ${errorMessage}`));
+
+        // Update status to indicate failure
+        await updateTenantStatus(tenant, mainDbConfig, "migration_failed", {
+            lastMigratedAt: new Date().toISOString(),
+        });
+
+        return { success: false, error: errorMessage };
+    }
+}
+
+/**
+ * Update tenant status in main database
+ */
+async function updateTenantStatus(
+    tenant: TenantDatabase,
+    mainDbConfig: MainDatabaseConfig,
+    status: string,
+    additionalFields?: Record<string, any>
+): Promise<boolean> {
+    try {
+        // Create direct D1-HTTP connection to main database
+        const mainDb = drizzle(
+            {
+                accountId: mainDbConfig.accountId,
+                databaseId: mainDbConfig.databaseId,
+                token: mainDbConfig.apiToken,
+            },
+            {
+                logger: mainDbConfig.debugLogs,
+            }
+        );
+
+        // Build SET clause dynamically with snake_case column names
+        const setFields = [`status = '${status}'`];
+
+        if (additionalFields) {
+            for (const [key, value] of Object.entries(additionalFields)) {
+                // Convert camelCase to snake_case for database columns
+                const dbColumn = key.replace(/([A-Z])/g, "_$1").toLowerCase();
+
+                if (typeof value === "string") {
+                    setFields.push(`${dbColumn} = '${value.replace(/'/g, "''")}'`); // Escape single quotes
+                } else if (typeof value === "number") {
+                    setFields.push(`${dbColumn} = ${value}`);
+                } else if (value === null) {
+                    setFields.push(`${dbColumn} = NULL`);
+                }
+            }
+        }
+
+        // Update tenant status using raw SQL
+        const updateQuery = `UPDATE tenants SET ${setFields.join(", ")} WHERE id = '${tenant.id}'`;
+
+        if (mainDbConfig.debugLogs) {
+            console.log(`🔧 Status update query: ${updateQuery}`);
+        }
+
+        const result = await mainDb.run(updateQuery);
+
+        if (mainDbConfig.debugLogs) {
+            console.log(`🔧 Update result:`, JSON.stringify(result, null, 2));
+        }
+
+        return true;
+    } catch (error) {
+        console.warn(
+            pc.yellow(
+                `⚠️ Failed to update tenant ${tenant.tenantId} status: ${error instanceof Error ? error.message : "Unknown error"}`
             )
         );
-        throw error;
+        return false;
     }
+}
+
+interface MigrateTenantsArgs {
+    verbose?: boolean;
+    autoConfirm?: boolean;
+    dryRun?: boolean;
+}
+
+/**
+ * Parse CLI arguments for migrate-tenants command
+ */
+export function parseMigrateTenantsArgs(argv: string[]): MigrateTenantsArgs {
+    const args: MigrateTenantsArgs = {};
+
+    for (const arg of argv) {
+        if (arg === "--verbose" || arg === "-v") {
+            args.verbose = true;
+        } else if (arg === "--auto-confirm" || arg === "-y") {
+            args.autoConfirm = true;
+        } else if (arg === "--dry-run") {
+            args.dryRun = true;
+        }
+    }
+
+    return args;
 }
 
 /**
  * Command to migrate all tenant databases
  */
-export async function migrateTenants(): Promise<void> {
+export async function migrateTenants(cliArgs?: MigrateTenantsArgs): Promise<void> {
     const version = getPackageVersion();
     intro(`${pc.bold("Better Auth Cloudflare")} ${pc.gray("v" + version + " · migrate:tenants")}`);
 
@@ -260,83 +378,26 @@ export async function migrateTenants(): Promise<void> {
         fatal("Auth configuration not found at src/auth/index.ts");
     }
 
-    // Get Cloudflare configuration
-    const cloudflareConfig = getCloudflareConfig();
+    // Get Cloudflare configuration for tenant operations
+    const cloudflareConfig = getCloudflareConfig(cliArgs?.verbose);
 
-    // Load migration files
-    const migrationSpinner = spinner();
-    migrationSpinner.start("Loading migration files...");
+    // Get main database configuration
+    const mainDbConfig = getMainDatabaseConfig(cliArgs?.verbose);
 
-    let migrations: MigrationFile[] = [];
-    try {
-        migrations = loadMigrationFiles(projectRoot);
-        migrationSpinner.stop(pc.green(`Found ${migrations.length} migration file(s)`));
-    } catch (error) {
-        migrationSpinner.stop(pc.red("Failed to load migration files"));
-        fatal(`Migration loading failed: ${error instanceof Error ? error.message : String(error)}`);
-    }
-
-    if (migrations.length === 0) {
-        outro(pc.yellow("No migration files found. Run 'npm run db:generate' to create migrations."));
+    // Check if tenant migrations exist
+    if (!checkTenantMigrationsExist(projectRoot)) {
+        outro(pc.yellow("No tenant migration files found. Run the migrate command first to set up tenant migrations."));
         return;
     }
 
-    // Initialize auth to access the database
-    const authSpinner = spinner();
-    authSpinner.start("Initializing auth configuration...");
-
-    let auth: any;
-    try {
-        // Import the auth configuration dynamically
-        const authModule = await import(join(projectRoot, "src/auth/index.ts"));
-        auth = authModule.auth || authModule.default;
-
-        if (!auth) {
-            throw new Error("No auth export found in src/auth/index.ts");
-        }
-
-        authSpinner.stop(pc.green("Auth configuration loaded"));
-    } catch (error) {
-        authSpinner.stop(pc.red("Failed to load auth configuration"));
-        fatal(`Auth loading failed: ${error instanceof Error ? error.message : String(error)}`);
-    }
-
-    // Ask for organization prefix filter
-    const orgPrefix = (await select({
-        message: "Which tenants should be migrated?",
-        options: [
-            { value: "", label: "All tenants" },
-            { value: "custom", label: "Organizations with specific prefix" },
-        ],
-    })) as string;
-
-    let prefixFilter: string | undefined;
-    if (orgPrefix === "custom") {
-        const customPrefix = (await select({
-            message: "Enter organization prefix to filter by:",
-            options: [
-                { value: "org_", label: "org_ (default organization prefix)" },
-                { value: "custom", label: "Enter custom prefix" },
-            ],
-        })) as string;
-
-        if (customPrefix === "custom") {
-            // In a real implementation, you'd use text() prompt here
-            // For now, default to org_
-            prefixFilter = "org_";
-        } else {
-            prefixFilter = customPrefix;
-        }
-    }
-
-    // Get tenant databases
+    // Get tenant databases from main database
     const tenantSpinner = spinner();
     tenantSpinner.start("Fetching tenant databases...");
 
     let tenants: TenantDatabase[] = [];
     try {
-        tenants = await getTenantDatabases(auth, prefixFilter);
-        tenantSpinner.stop(pc.green(`Found ${tenants.length} active tenant database(s)`));
+        tenants = await getTenantDatabases(mainDbConfig);
+        tenantSpinner.stop(pc.green(`Found ${tenants.length} tenant database(s)`));
     } catch (error) {
         tenantSpinner.stop(pc.red("Failed to fetch tenant databases"));
         fatal(`Tenant fetching failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -347,65 +408,75 @@ export async function migrateTenants(): Promise<void> {
         return;
     }
 
-    // Analyze what needs to be migrated
-    const tenantsNeedingMigration = tenants
-        .map(tenant => ({
-            tenant,
-            migrations: getMigrationsToApply(tenant, migrations),
-        }))
-        .filter(({ migrations }) => migrations.length > 0);
+    // Show migration plan (Drizzle will determine what needs to be applied)
+    console.log(pc.bold("\nMigration Plan:"));
+    console.log(pc.gray(`Will check and apply any pending migrations to ${tenants.length} tenant database(s):`));
+    tenants.forEach(tenant => {
+        console.log(pc.cyan(`  ${tenant.tenantId} (${tenant.databaseName})`));
+    });
 
-    if (tenantsNeedingMigration.length === 0) {
-        outro(pc.green("All tenant databases are already up to date!"));
+    // Handle dry-run mode
+    if (cliArgs?.dryRun) {
+        console.log(pc.blue("\n🔍 DRY RUN MODE - No changes will be applied"));
+        outro(pc.green(`✅ Dry run completed. ${tenants.length} tenant database(s) would be checked for migrations.`));
         return;
     }
 
-    // Show migration plan
-    console.log(pc.bold("\nMigration Plan:"));
-    tenantsNeedingMigration.forEach(({ tenant, migrations }) => {
-        console.log(pc.cyan(`  ${tenant.tenantId}: ${migrations.length} migration(s) to apply`));
-        migrations.forEach(m => {
-            console.log(pc.gray(`    - ${m.filename}`));
-        });
-    });
-
     // Confirm migration
-    const shouldProceed = await confirm({
-        message: `Apply migrations to ${tenantsNeedingMigration.length} tenant database(s)?`,
-        initialValue: false,
-    });
+    let shouldProceed = cliArgs?.autoConfirm || false;
+
+    if (!shouldProceed) {
+        const confirmation = await confirm({
+            message: `Check and apply migrations to ${tenants.length} tenant database(s)?`,
+            initialValue: false,
+        });
+
+        if (typeof confirmation === "symbol") {
+            // User cancelled with Ctrl+C
+            outro(pc.yellow("Migration cancelled."));
+            return;
+        }
+
+        shouldProceed = confirmation;
+    } else {
+        console.log(pc.green(`Auto-confirming migration check for ${tenants.length} tenant database(s)...`));
+    }
 
     if (!shouldProceed) {
         outro(pc.yellow("Migration cancelled."));
         return;
     }
 
-    // Apply migrations
+    // Apply migrations database by database
     console.log(pc.bold("\nApplying migrations:"));
 
     let successCount = 0;
     let errorCount = 0;
+    const migrationsFolder = join(projectRoot, "drizzle-tenant");
 
-    for (const { tenant, migrations } of tenantsNeedingMigration) {
-        try {
-            await migrateTenant(tenant, migrations, cloudflareConfig, auth);
+    for (const tenant of tenants) {
+        const result = await migrateTenant(tenant, cloudflareConfig, mainDbConfig, migrationsFolder);
+
+        if (result.success) {
             successCount++;
-        } catch (error) {
+        } else {
             errorCount++;
-            // Continue with other tenants even if one fails
+
+            if (cliArgs?.verbose && result.error) {
+                console.log(pc.gray(`    Error details: ${result.error}`));
+            }
         }
+
+        // Continue with other tenants even if one fails
     }
 
-    // Summary
+    // Minimal final report
     if (errorCount === 0) {
-        outro(pc.green(`✅ Successfully migrated ${successCount} tenant database(s)!`));
+        outro(pc.green(`✅ ${successCount} of ${successCount} tenant databases migrated successfully`));
     } else {
         outro(
             pc.yellow(
-                `⚠️ Migration completed with issues:\n` +
-                    `  ✓ ${successCount} successful\n` +
-                    `  ✗ ${errorCount} failed\n\n` +
-                    `Check the logs above for error details.`
+                `⚠️ ${successCount} of ${tenants.length} tenant databases migrated successfully (${errorCount} failed)`
             )
         );
     }
@@ -418,7 +489,7 @@ process.on("SIGINT", () => {
 });
 
 // Run if called directly
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
     migrateTenants().catch(err => {
         fatal(String(err?.message ?? err));
     });

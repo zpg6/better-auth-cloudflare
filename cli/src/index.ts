@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { cancel, confirm, group, intro, outro, select, spinner, text } from "@clack/prompts";
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { spawnSync } from "child_process";
 import { tmpdir } from "os";
 import { join, resolve } from "path";
 import pc from "picocolors";
@@ -124,7 +125,6 @@ function debugLog(message: string): void {
 }
 
 function bunSpawnSync(command: string, args: string[], cwd?: string, env?: Record<string, string>) {
-    const { spawnSync } = require("child_process") as typeof import("child_process");
     const result = spawnSync(command, args, {
         stdio: "pipe",
         cwd,
@@ -745,6 +745,30 @@ async function migrate(cliArgs?: CliArgs) {
         assertOk(dbRes, "Database migration generation failed.");
     }
 
+    // Generate tenant migrations if multi-tenancy is enabled
+    if (detectMultiTenancy(process.cwd())) {
+        debugLog("Generating tenant migrations for multi-tenancy");
+        const tenantMigSpinner = spinner();
+        tenantMigSpinner.start("Generating tenant migrations...");
+
+        try {
+            const tenantMigRes = bunSpawnSync(
+                "npx",
+                ["drizzle-kit", "generate", "--config=drizzle-tenant.config.ts"],
+                process.cwd()
+            );
+            if (tenantMigRes.code === 0) {
+                tenantMigSpinner.stop(pc.green("Tenant migrations generated."));
+            } else {
+                tenantMigSpinner.stop(pc.yellow("Tenant migrations generation skipped (run manually if needed)."));
+                debugLog(`Tenant migration generation failed: ${tenantMigRes.stderr}`);
+            }
+        } catch (error) {
+            tenantMigSpinner.stop(pc.yellow("Tenant migrations generation skipped (run manually if needed)."));
+            debugLog(`Tenant migration error: ${error}`);
+        }
+    }
+
     // If migration target is skip, exit early
     if (migrateChoice === "skip") {
         debugLog("Migration target is skip, skipping database migration");
@@ -859,6 +883,18 @@ async function migrate(cliArgs?: CliArgs) {
         } else {
             migSpinner.stop(pc.red("Failed to apply remote migrations."));
             assertOk(migRes, "Remote migration failed.");
+        }
+    }
+
+    // Offer to apply tenant migrations if multi-tenancy is enabled
+    if (detectMultiTenancy(process.cwd()) && migrateChoice !== "skip") {
+        const tenantMigrationsExist = existsSync(join(process.cwd(), "drizzle-tenant"));
+
+        if (tenantMigrationsExist) {
+            console.log(pc.bold("\n🏢 Multi-tenancy detected!"));
+            console.log(pc.gray("To apply tenant migrations to all tenant databases, run:"));
+            console.log(pc.cyan("  CLOUDFLARE_D1_API_TOKEN=xxx CLOUDFLARE_ACCT_ID=yyy CLOUDFLARE_DATABASE_ID=zzz \\"));
+            console.log(pc.cyan("    npx @better-auth-cloudflare/cli migrate:tenants"));
         }
     }
 
@@ -2118,8 +2154,8 @@ function printHelp() {
         `  npx @better-auth-cloudflare/cli                         Run interactive generator\n` +
         `  npx @better-auth-cloudflare/cli generate                Run interactive generator\n` +
         `  npx @better-auth-cloudflare/cli migrate                 Run migration workflow\n` +
-        `  npx @better-auth-cloudflare/cli generate-tenant-migrations  Split schemas for multi-tenancy\n` +
         `  npx @better-auth-cloudflare/cli migrate:tenants         Migrate all tenant databases\n` +
+        `  npx @better-auth-cloudflare/cli migrate:tenants --auto-confirm\n` +
         `  npx @better-auth-cloudflare/cli version                 Show version information\n` +
         `  npx @better-auth-cloudflare/cli --version               Show version information\n` +
         `  npx @better-auth-cloudflare/cli -v                      Show version information\n` +
@@ -2135,6 +2171,27 @@ function printHelp() {
         `  --r2=<bool>                    Enable R2 to extend Better Auth with user file storage (default: false)\n` +
         `  --verbose                      Show debug output during execution\n` +
         `  -v                             Show debug output (when used with other args) or version (when alone)\n` +
+        `\n` +
+        `Migrate Tenants Arguments:\n` +
+        `  --auto-confirm                 Skip confirmation prompt\n` +
+        `  -y                             Skip confirmation prompt\n` +
+        `  --dry-run                      Show what would be migrated without applying changes\n` +
+        `  --verbose                      Show detailed logging\n` +
+        `\n` +
+        `Required Environment Variables for migrate:tenants:\n` +
+        `\n` +
+        `  For SAME account (main and tenant DBs in same Cloudflare account):\n` +
+        `    CLOUDFLARE_D1_API_TOKEN     API token with D1:edit permissions\n` +
+        `    CLOUDFLARE_ACCT_ID          Account ID for both main and tenant databases\n` +
+        `    CLOUDFLARE_DATABASE_ID      Main database ID\n` +
+        `\n` +
+        `  For SEPARATE accounts (main and tenant DBs in different accounts):\n` +
+        `    CLOUDFLARE_MAIN_D1_API_TOKEN    API token for main database account\n` +
+        `    CLOUDFLARE_MAIN_ACCT_ID         Account ID for main database\n` +
+        `    CLOUDFLARE_MAIN_DATABASE_ID     Main database ID\n` +
+        `    CLOUDFLARE_D1_API_TOKEN         API token for tenant databases account\n` +
+        `    CLOUDFLARE_ACCT_ID              Account ID where tenant databases are managed\n` +
+        `\n` +
         `\n` +
         `Database-specific arguments:\n` +
         `  --d1-name=<name>               D1 database name (default: <app-name>-db)\n` +
@@ -2186,10 +2243,23 @@ function printHelp() {
         `  # Run migration workflow with non-interactive target\n` +
         `  npx @better-auth-cloudflare/cli migrate --migrate-target=dev\n` +
         `\n` +
+        `  # Migrate tenant databases - SAME account scenario (3 variables)\n` +
+        `  CLOUDFLARE_D1_API_TOKEN=xxx CLOUDFLARE_ACCT_ID=yyy CLOUDFLARE_DATABASE_ID=zzz \\\n` +
+        `    npx @better-auth-cloudflare/cli migrate:tenants --auto-confirm\n` +
+        `\n` +
+        `  # Migrate tenant databases - SEPARATE accounts scenario (5 variables)\n` +
+        `  CLOUDFLARE_MAIN_D1_API_TOKEN=aaa CLOUDFLARE_MAIN_ACCT_ID=bbb CLOUDFLARE_MAIN_DATABASE_ID=ccc \\\n` +
+        `  CLOUDFLARE_D1_API_TOKEN=xxx CLOUDFLARE_ACCT_ID=yyy \\\n` +
+        `    npx @better-auth-cloudflare/cli migrate:tenants --auto-confirm\n` +
+        `\n` +
+        `  # Preview what would be migrated (dry-run)\n` +
+        `  CLOUDFLARE_D1_API_TOKEN=xxx CLOUDFLARE_ACCT_ID=yyy CLOUDFLARE_DATABASE_ID=zzz \\\n` +
+        `    npx @better-auth-cloudflare/cli migrate:tenants --dry-run\n` +
+        `\n` +
         `Creates a new Better Auth Cloudflare project from Hono or OpenNext.js templates,\n` +
         `optionally creating Cloudflare D1, KV, R2, or Hyperdrive resources for you.\n` +
-        `The migrate command runs auth:update, db:generate, and optionally db:migrate.\n` +
-        `The generate-tenant-migrations command splits auth schemas for multi-tenancy.\n` +
+        `The migrate command handles auth:update, db:generate, schema splitting, and migrations.\n` +
+        `The migrate:tenants command applies tenant migrations to all tracked tenant databases.\n` +
         `\n` +
         `Cloudflare Status: https://www.cloudflarestatus.com/\n` +
         `Report issues: https://github.com/zpg6/better-auth-cloudflare/issues\n`;
@@ -2212,22 +2282,13 @@ if (cmd === "version" || cmd === "--version" || (cmd === "-v" && process.argv.le
     migrate(cliArgs).catch(err => {
         fatal(String(err?.message ?? err));
     });
-} else if (cmd === "generate-tenant-migrations") {
-    // Handle generate-tenant-migrations command
-    import("./commands/generate-tenant-migrations.js")
-        .then(({ generateTenantMigrations }) => {
-            generateTenantMigrations().catch(err => {
-                fatal(String(err?.message ?? err));
-            });
-        })
-        .catch(err => {
-            fatal(String(err?.message ?? err));
-        });
 } else if (cmd === "migrate:tenants") {
     // Handle migrate:tenants command
+    const hasCliArgs = process.argv.slice(3).some(arg => arg.startsWith("--") || arg === "-v" || arg === "-y");
     import("./commands/migrate-tenants.js")
-        .then(({ migrateTenants }) => {
-            migrateTenants().catch(err => {
+        .then(({ migrateTenants, parseMigrateTenantsArgs }) => {
+            const cliArgs = hasCliArgs ? parseMigrateTenantsArgs(process.argv.slice(3)) : undefined;
+            migrateTenants(cliArgs).catch(err => {
                 fatal(String(err?.message ?? err));
             });
         })

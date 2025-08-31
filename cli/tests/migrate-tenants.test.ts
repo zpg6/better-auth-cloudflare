@@ -59,8 +59,8 @@ CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT);`
         );
 
         // Set up environment variables
-        process.env.CLOUDFLARE_API_TOKEN = "test-token";
-        process.env.CLOUDFLARE_ACCOUNT_ID = "test-account";
+        process.env.CLOUDFLARE_D1_API_TOKEN = "test-token";
+        process.env.CLOUDFLARE_ACCT_ID = "test-account";
 
         // Store original cwd but don't mock process.cwd to avoid interfering with other tests
         // We'll just ensure our test project exists
@@ -73,8 +73,8 @@ CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT);`
         }
 
         // Clean up environment variables
-        delete process.env.CLOUDFLARE_API_TOKEN;
-        delete process.env.CLOUDFLARE_ACCOUNT_ID;
+        delete process.env.CLOUDFLARE_D1_API_TOKEN;
+        delete process.env.CLOUDFLARE_ACCT_ID;
     });
 
     it("should validate project structure requirements", () => {
@@ -111,8 +111,8 @@ CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT);`
 
     it("should validate Cloudflare configuration", () => {
         // Test that environment variables are set
-        expect(process.env.CLOUDFLARE_API_TOKEN).toBe("test-token");
-        expect(process.env.CLOUDFLARE_ACCOUNT_ID).toBe("test-account");
+        expect(process.env.CLOUDFLARE_D1_API_TOKEN).toBe("test-token");
+        expect(process.env.CLOUDFLARE_ACCT_ID).toBe("test-account");
     });
 });
 

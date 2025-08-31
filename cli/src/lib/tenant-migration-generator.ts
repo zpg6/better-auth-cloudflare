@@ -7,7 +7,16 @@ import { tmpdir } from "os";
  * Core Better Auth tables that should remain in the main database
  * These handle authentication, user identity, and multi-tenancy management
  */
-const CORE_AUTH_TABLES = new Set(["users", "accounts", "verifications", "tenants", "invitations"]);
+const CORE_AUTH_TABLES = new Set([
+    "users",
+    "accounts",
+    "sessions",
+    "verifications",
+    "tenants",
+    "invitations",
+    "organizations",
+    "members",
+]);
 
 /**
  * Check if a table should be moved to tenant databases
@@ -65,6 +74,9 @@ export async function splitAuthSchema(projectPath: string): Promise<void> {
     // Write the tenant raw SQL file
     const tenantRawPath = join(projectPath, "src/db/tenant.raw.ts");
     writeFileSync(tenantRawPath, await generateTenantRawFile(imports, tenantSchema, projectPath));
+
+    // Create tenant-specific drizzle config and generate migrations
+    await setupTenantMigrations(projectPath);
 
     // Update the main schema.ts to import from both files
     updateMainSchemaFile(projectPath);
@@ -187,19 +199,76 @@ async function generateTenantSchemaFile(imports: string, tenantSchema: string[])
 }
 
 /**
- * Generates the tenant raw SQL file content
+ * Generates the tenant raw SQL file content from actual migration files
  */
 async function generateTenantRawFile(imports: string, tenantSchema: string[], projectPath: string): Promise<string> {
     const header = `// Raw SQL statements for creating tenant tables
-// This is used for just-in-time migration when creating new tenant databases
+// This is concatenated from actual migration files for just-in-time deployment
 `;
 
-    // Generate raw SQL statements for tenant tables using drizzle-kit
-    const rawSqlStatements = await generateTenantSqlUsingDrizzle(projectPath, tenantSchema, imports);
+    // Use actual migration files if they exist (follow Drizzle's pattern)
+    const migrationSql = await getMigrationSqlFromFiles(projectPath);
+
+    // Fallback to generated SQL if no migration files exist yet
+    let rawSqlStatements = migrationSql || (await generateTenantSqlUsingDrizzle(projectPath, tenantSchema, imports));
+
+    // Escape backticks for template literal (only if using generated SQL)
+    if (!migrationSql) {
+        rawSqlStatements = rawSqlStatements.replace(/`/g, "\\`");
+    }
 
     const rawSqlExport = `export const raw = \`${rawSqlStatements}\`;`;
 
     return [header, rawSqlExport].join("\n");
+}
+
+/**
+ * Reads and concatenates all tenant migration SQL files
+ */
+async function getMigrationSqlFromFiles(projectPath: string): Promise<string | null> {
+    const tenantMigrationsDir = join(projectPath, "drizzle-tenant");
+
+    if (!existsSync(tenantMigrationsDir)) {
+        return null;
+    }
+
+    try {
+        const migrationFiles = readdirSync(tenantMigrationsDir)
+            .filter(file => file.endsWith(".sql"))
+            .sort((a, b) => a.localeCompare(b));
+
+        if (migrationFiles.length === 0) {
+            return null;
+        }
+
+        // Read and concatenate all migration files
+        const allSql = migrationFiles
+            .map(file => readFileSync(join(tenantMigrationsDir, file), "utf8"))
+            .join("\n--> statement-breakpoint\n");
+
+        // Add Drizzle's migration tracking table at the beginning
+        const drizzleMigrationTable = `CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
+	id SERIAL PRIMARY KEY,
+	hash text NOT NULL,
+	created_at numeric
+);`;
+
+        // Generate migration entries for all applied migrations
+        const migrationEntries = migrationFiles
+            .map((file, index) => {
+                const hash = file.replace(".sql", ""); // Use filename as hash
+                return `INSERT INTO "__drizzle_migrations" (id, hash, created_at) VALUES (${index + 1}, '${hash}', ${Date.now()});`;
+            })
+            .join("\n--> statement-breakpoint\n");
+
+        const combinedSql = `${drizzleMigrationTable}\n--> statement-breakpoint\n${allSql}\n--> statement-breakpoint\n${migrationEntries}`;
+
+        // Escape backticks for template literal
+        return combinedSql.replace(/`/g, "\\`");
+    } catch (error) {
+        console.warn("Could not read tenant migration files:", error);
+        return null;
+    }
 }
 
 /**
@@ -420,6 +489,56 @@ function parseColumnDefinition(columnName: string, definition: string): { column
 }
 
 /**
+ * Sets up tenant-specific migrations by creating drizzle-tenant.config.ts and generating migrations
+ */
+async function setupTenantMigrations(projectPath: string): Promise<void> {
+    // Create drizzle-tenant.config.ts
+    const tenantConfigPath = join(projectPath, "drizzle-tenant.config.ts");
+    const tenantConfigContent = `import { defineConfig } from "drizzle-kit";
+
+export default defineConfig({
+    dialect: "sqlite",
+    schema: "./src/db/tenant.schema.ts",
+    out: "./drizzle-tenant",
+    // Note: Tenant migrations are applied via CLI to individual tenant databases
+    // This config is used only for generating migration files
+    // Uses same env vars as multi-tenancy plugin for consistency
+    ...(process.env.NODE_ENV === "production"
+        ? {
+              driver: "d1-http",
+              dbCredentials: {
+                  accountId: process.env.CLOUDFLARE_ACCT_ID,
+                  databaseId: "placeholder", // Not used for generation
+                  token: process.env.CLOUDFLARE_D1_API_TOKEN,
+              },
+          }
+        : {}),
+});
+`;
+
+    writeFileSync(tenantConfigPath, tenantConfigContent);
+
+    // Create drizzle-tenant directory if it doesn't exist
+    const tenantMigrationsDir = join(projectPath, "drizzle-tenant");
+    if (!existsSync(tenantMigrationsDir)) {
+        mkdirSync(tenantMigrationsDir, { recursive: true });
+    }
+
+    // Generate tenant migrations using drizzle-kit
+    try {
+        execSync("npx drizzle-kit generate --config=drizzle-tenant.config.ts", {
+            cwd: projectPath,
+            stdio: "pipe",
+        });
+    } catch (error) {
+        // If generation fails, that's okay - the user can run it manually later
+        console.warn(
+            "Could not auto-generate tenant migrations. Run 'npx drizzle-kit generate --config=drizzle-tenant.config.ts' manually."
+        );
+    }
+}
+
+/**
  * Updates the main schema.ts file to conditionally import tenant.schema.ts
  */
 function updateMainSchemaFile(projectPath: string): void {
@@ -527,8 +646,7 @@ export function restoreOriginalSchema(projectPath: string): void {
 
     // Remove tenant schema file if it exists
     if (existsSync(tenantSchemaPath)) {
-        const fs = require("fs");
-        fs.unlinkSync(tenantSchemaPath);
+        rmSync(tenantSchemaPath);
     }
 
     // Restore original schema.ts import

@@ -61,15 +61,23 @@ export async function generateTenantMigrations(): Promise<void> {
                 pc.cyan("  • src/db/auth.schema.ts") +
                 pc.gray(" - Core auth tables (main database)\n") +
                 pc.cyan("  • src/db/tenant.schema.ts") +
-                pc.gray(" - Tenant-specific tables (tenant databases)\n\n") +
+                pc.gray(" - Tenant-specific tables (tenant databases)\n") +
+                pc.cyan("  • drizzle-tenant.config.ts") +
+                pc.gray(" - Config for tenant migrations\n") +
+                pc.cyan("  • drizzle-tenant/") +
+                pc.gray(" - Tenant migration files\n\n") +
                 pc.bold("Next steps:\n") +
                 pc.gray("  1. Run ") +
                 pc.cyan("npm run db:generate") +
-                pc.gray(" to create migrations\n") +
+                pc.gray(" to create core migrations\n") +
                 pc.gray("  2. Apply core migrations to main DB: ") +
                 pc.cyan("npm run db:migrate:dev") +
                 pc.gray("\n") +
-                pc.gray("  3. Tenant migrations will be applied automatically when tenant DBs are created")
+                pc.gray("  3. Apply tenant migrations: ") +
+                pc.cyan("npx @better-auth-cloudflare/cli migrate:tenants") +
+                pc.gray("\n") +
+                pc.gray("  4. To update tenant migrations: ") +
+                pc.cyan("npx drizzle-kit generate --config=drizzle-tenant.config.ts")
         );
     } catch (error) {
         splitSpinner.stop(pc.red("Failed to split auth schema."));
@@ -84,7 +92,7 @@ process.on("SIGINT", () => {
 });
 
 // Run if called directly
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
     generateTenantMigrations().catch(err => {
         fatal(String(err?.message ?? err));
     });

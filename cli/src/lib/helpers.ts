@@ -1,3 +1,5 @@
+import { readFileSync, writeFileSync } from "fs";
+
 export type JSONValue = string | number | boolean | null | JSONArray | JSONObject;
 export interface JSONObject {
     [key: string]: JSONValue;
@@ -11,7 +13,6 @@ export function validateBindingName(name: string): string | undefined {
 }
 
 export function updateJSON(filePath: string, mutator: (json: JSONObject) => JSONObject) {
-    const { readFileSync, writeFileSync } = require("fs") as typeof import("fs");
     const json = JSON.parse(readFileSync(filePath, "utf8")) as JSONObject;
     const next = mutator(json);
     writeFileSync(filePath, JSON.stringify(next, null, 2));

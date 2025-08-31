@@ -1,7 +1,7 @@
 {
-    "name": "@better-auth-cloudflare/cli",
-    "version": "0.1.16",
-    "description": "CLI to generate Better Auth Cloudflare projects (Hono or OpenNext.js)",
+    "name": "@zpg6-test-pkgs/better-auth-cloudflare-cli",
+    "version": "0.1.16-tenants.1",
+    "description": "CLI for tenant management in Better Auth Cloudflare projects",
     "author": "Zach Grimaldi",
     "repository": {
         "type": "git",
