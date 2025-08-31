@@ -39,6 +39,7 @@ export default function OrganizationDemo() {
     const [invitations, setInvitations] = useState<Invitation[]>([]);
     const [userInvitations, setUserInvitations] = useState<Invitation[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [operationResult, setOperationResult] = useState<{
         success?: boolean;
         error?: string;
@@ -48,10 +49,7 @@ export default function OrganizationDemo() {
     // Form states
     const [newOrgName, setNewOrgName] = useState("");
     const [newOrgSlug, setNewOrgSlug] = useState("");
-    const [inviteEmail, setInviteEmail] = useState("");
-    const [inviteRole, setInviteRole] = useState("member");
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-    const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
     const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{
         isOpen: boolean;
         organizationId: string;
@@ -70,6 +68,7 @@ export default function OrganizationDemo() {
             setOperationResult({ error: "Failed to load organizations" });
         } finally {
             setIsLoading(false);
+            setIsInitialLoading(false);
         }
     };
 
@@ -82,6 +81,8 @@ export default function OrganizationDemo() {
             }
         } catch (error) {
             console.error("Failed to load active organization:", error);
+        } finally {
+            setIsInitialLoading(false);
         }
     };
 
@@ -151,35 +152,6 @@ export default function OrganizationDemo() {
         } catch (error) {
             console.error("Failed to set active organization:", error);
             setOperationResult({ error: "Failed to set active organization" });
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const inviteMember = async () => {
-        if (!inviteEmail.trim()) return;
-
-        setIsLoading(true);
-        setOperationResult(null);
-
-        try {
-            const result = await authClient.organization.inviteMember({
-                email: inviteEmail.trim(),
-                role: inviteRole as "member" | "admin" | "owner",
-            });
-
-            if (result.error) {
-                setOperationResult({ error: result.error.message || "Failed to send invitation" });
-            } else {
-                setOperationResult({ success: true, message: "Invitation sent successfully!" });
-                setInviteEmail("");
-                setInviteRole("member");
-                setIsInviteDialogOpen(false);
-                loadInvitations();
-            }
-        } catch (error) {
-            console.error("Failed to invite member:", error);
-            setOperationResult({ error: "Failed to send invitation" });
         } finally {
             setIsLoading(false);
         }
@@ -352,7 +324,63 @@ export default function OrganizationDemo() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {activeOrganization ? (
+                    {isInitialLoading ? (
+                        <div className="space-y-4">
+                            {/* Organization Info Skeleton */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                    <div className="h-7 w-48 bg-gray-200 rounded animate-pulse mb-2" />
+                                    <div className="h-4 w-32 bg-gray-200 rounded animate-pulse mb-1" />
+                                    <div className="h-4 w-40 bg-gray-200 rounded animate-pulse" />
+                                </div>
+                                <div className="h-8 w-8 bg-gray-200 rounded animate-pulse" />
+                            </div>
+
+                            {/* Members Section Skeleton */}
+                            <div>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <div className="h-4 w-4 bg-gray-200 rounded animate-pulse" />
+                                    <div className="h-5 w-24 bg-gray-200 rounded animate-pulse" />
+                                </div>
+                                <div className="space-y-2">
+                                    {[1, 2, 3].map(i => (
+                                        <div
+                                            key={i}
+                                            className="flex items-center justify-between p-3 border rounded-lg"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-4 w-4 bg-gray-200 rounded animate-pulse" />
+                                                <div>
+                                                    <div className="h-5 w-32 bg-gray-200 rounded animate-pulse mb-1" />
+                                                    <div className="h-4 w-40 bg-gray-200 rounded animate-pulse" />
+                                                </div>
+                                            </div>
+                                            <div className="h-8 w-8 bg-gray-200 rounded animate-pulse" />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Pending Invitations Skeleton */}
+                            <div>
+                                <div className="h-5 w-36 bg-gray-200 rounded animate-pulse mb-3" />
+                                <div className="space-y-2">
+                                    {[1, 2].map(i => (
+                                        <div
+                                            key={i}
+                                            className="flex items-center justify-between p-3 border rounded-lg bg-yellow-50"
+                                        >
+                                            <div>
+                                                <div className="h-5 w-40 bg-gray-200 rounded animate-pulse mb-1" />
+                                                <div className="h-4 w-48 bg-gray-200 rounded animate-pulse" />
+                                            </div>
+                                            <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse" />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    ) : activeOrganization ? (
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
                                 <div>
@@ -379,50 +407,6 @@ export default function OrganizationDemo() {
                                         <Users className="h-4 w-4" />
                                         Members ({members.length})
                                     </h4>
-                                    <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
-                                        <DialogTrigger asChild>
-                                            <Button size="sm">
-                                                <Mail className="h-4 w-4 mr-2" />
-                                                Invite Member
-                                            </Button>
-                                        </DialogTrigger>
-                                        <DialogContent>
-                                            <DialogHeader>
-                                                <DialogTitle>Invite New Member</DialogTitle>
-                                            </DialogHeader>
-                                            <div className="space-y-4">
-                                                <div>
-                                                    <Label htmlFor="invite-email">Email Address</Label>
-                                                    <Input
-                                                        id="invite-email"
-                                                        type="email"
-                                                        placeholder="user@example.com"
-                                                        value={inviteEmail}
-                                                        onChange={e => setInviteEmail(e.target.value)}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <Label htmlFor="invite-role">Role</Label>
-                                                    <select
-                                                        id="invite-role"
-                                                        value={inviteRole}
-                                                        onChange={e => setInviteRole(e.target.value)}
-                                                        className="w-full p-2 border rounded-md"
-                                                    >
-                                                        <option value="member">Member</option>
-                                                        <option value="admin">Admin</option>
-                                                    </select>
-                                                </div>
-                                                <Button
-                                                    onClick={inviteMember}
-                                                    disabled={!inviteEmail.trim() || isLoading}
-                                                    className="w-full"
-                                                >
-                                                    {isLoading ? "Sending..." : "Send Invitation"}
-                                                </Button>
-                                            </div>
-                                        </DialogContent>
-                                    </Dialog>
                                 </div>
 
                                 <div className="space-y-2">
@@ -540,7 +524,22 @@ export default function OrganizationDemo() {
                     </Dialog>
                 </CardHeader>
                 <CardContent>
-                    {organizations.length === 0 ? (
+                    {isInitialLoading ? (
+                        <div className="space-y-2">
+                            {[1, 2, 3].map(i => (
+                                <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
+                                    <div className="flex-1">
+                                        <div className="h-5 w-40 bg-gray-200 rounded animate-pulse mb-1" />
+                                        <div className="h-4 w-56 bg-gray-200 rounded animate-pulse" />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <div className="h-8 w-20 bg-gray-200 rounded animate-pulse" />
+                                        <div className="h-8 w-8 bg-gray-200 rounded animate-pulse" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : organizations.length === 0 ? (
                         <div className="text-center py-8">
                             <Building className="text-gray-400 h-16 w-16 mx-auto mb-4" />
                             <p className="text-gray-500 text-lg font-medium">No organizations yet</p>
