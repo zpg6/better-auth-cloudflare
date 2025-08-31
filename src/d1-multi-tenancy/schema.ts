@@ -32,7 +32,7 @@ export const tenantDatabaseSchema = {
                 input: false,
             } satisfies FieldAttribute,
             status: {
-                type: "string", // "creating", "active", "deleting", "deleted"
+                type: "string", // "creating", "active", "migrating", "migration_failed", "deleting", "deleted"
                 required: true,
                 input: false,
                 defaultValue: "creating",
@@ -48,17 +48,10 @@ export const tenantDatabaseSchema = {
                 required: false,
                 input: false,
             } satisfies FieldAttribute,
-            lastMigrationVersion: {
-                type: "string",
+            lastMigratedAt: {
+                type: "date",
                 required: false,
                 input: false,
-                defaultValue: "0000",
-            } satisfies FieldAttribute,
-            migrationHistory: {
-                type: "string", // JSON array of applied migrations
-                required: false,
-                input: false,
-                defaultValue: "[]",
             } satisfies FieldAttribute,
         },
     },
@@ -74,11 +67,10 @@ export type Tenant = {
     tenantType: "user" | "organization";
     databaseName: string;
     databaseId: string;
-    status: "creating" | "active" | "deleting" | "deleted";
+    status: "creating" | "active" | "migrating" | "migration_failed" | "deleting" | "deleted";
     createdAt: Date;
     deletedAt?: Date;
-    lastMigrationVersion?: string;
-    migrationHistory?: string; // JSON array of applied migrations
+    lastMigratedAt?: Date;
 };
 
 /**
@@ -87,6 +79,8 @@ export type Tenant = {
 export const TenantDatabaseStatus = {
     CREATING: "creating",
     ACTIVE: "active",
+    MIGRATING: "migrating",
+    MIGRATION_FAILED: "migration_failed",
     DELETING: "deleting",
     DELETED: "deleted",
 } as const;

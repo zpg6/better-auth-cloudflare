@@ -71,29 +71,17 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
             if (migrations) {
                 const { version } = await initializeTenantDatabase(cloudflareD1Api, databaseId, migrations);
                 resolvedVersion = version;
-                // Note: New databases get the current schema, so no need to apply migrations
-                // Migrations are only for bringing existing databases up to the current level
+                // Note: New databases get the current schema with Drizzle migration tracking
             } else {
                 console.log(`⚠️ No migrations config found - tenant database will be empty`);
             }
 
-            // Update the tenant record with the database ID and migration info
+            // Update the tenant record with the database ID
             const updateData: any = {
                 databaseId: databaseId,
                 status: TenantDatabaseStatus.ACTIVE,
+                lastMigrationCheck: new Date(),
             };
-
-            if (migrations) {
-                // New databases start with the resolved current version
-                updateData.lastMigrationVersion = resolvedVersion;
-                updateData.migrationHistory = JSON.stringify([
-                    {
-                        version: resolvedVersion,
-                        name: `Current Schema (${resolvedVersion})`,
-                        appliedAt: new Date().toISOString(),
-                    },
-                ]);
-            }
 
             await adapter.update({
                 model,
