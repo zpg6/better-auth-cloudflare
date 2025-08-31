@@ -1,7 +1,6 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync } from "fs";
-import { join } from "path";
 import { execSync } from "child_process";
-import { tmpdir } from "os";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { join } from "path";
 
 /**
  * Core Better Auth tables that should remain in the main database
@@ -223,6 +222,50 @@ async function generateTenantRawFile(imports: string, tenantSchema: string[], pr
 }
 
 /**
+ * Generate migration entries using actual Drizzle content-based hashes
+ */
+async function generateMigrationEntries(tenantMigrationsDir: string, migrationFiles: string[]): Promise<string> {
+    const crypto = await import("crypto");
+
+    try {
+        const journalPath = join(tenantMigrationsDir, "meta", "_journal.json");
+        if (!existsSync(journalPath)) {
+            // Generate content-based hashes if no journal exists
+            return migrationFiles
+                .map((file, index) => {
+                    const filePath = join(tenantMigrationsDir, file);
+                    const content = readFileSync(filePath, "utf8");
+                    const hash = crypto.createHash("sha256").update(content).digest("hex");
+                    return `INSERT INTO "__drizzle_migrations" (id, hash, created_at) VALUES (${index + 1}, '${hash}', ${Date.now()});`;
+                })
+                .join("\n--> statement-breakpoint\n");
+        }
+
+        const journal = JSON.parse(readFileSync(journalPath, "utf8"));
+        const entries = journal.entries || [];
+
+        return migrationFiles
+            .map((file, index) => {
+                const filePath = join(tenantMigrationsDir, file);
+                const content = readFileSync(filePath, "utf8");
+                const contentHash = crypto.createHash("sha256").update(content).digest("hex");
+                const timestamp = entries[index]?.when || Date.now();
+                return `INSERT INTO "__drizzle_migrations" (id, hash, created_at) VALUES (${index + 1}, '${contentHash}', ${timestamp});`;
+            })
+            .join("\n--> statement-breakpoint\n");
+    } catch (error) {
+        console.warn("Could not generate migration hashes, falling back to filename hashes:", error);
+        // Fallback to filename-based hashes
+        return migrationFiles
+            .map((file, index) => {
+                const hash = file.replace(".sql", "");
+                return `INSERT INTO "__drizzle_migrations" (id, hash, created_at) VALUES (${index + 1}, '${hash}', ${Date.now()});`;
+            })
+            .join("\n--> statement-breakpoint\n");
+    }
+}
+
+/**
  * Reads and concatenates all tenant migration SQL files
  */
 async function getMigrationSqlFromFiles(projectPath: string): Promise<string | null> {
@@ -253,17 +296,12 @@ async function getMigrationSqlFromFiles(projectPath: string): Promise<string | n
 	created_at numeric
 );`;
 
-        // Generate migration entries for all applied migrations
-        const migrationEntries = migrationFiles
-            .map((file, index) => {
-                const hash = file.replace(".sql", ""); // Use filename as hash
-                return `INSERT INTO "__drizzle_migrations" (id, hash, created_at) VALUES (${index + 1}, '${hash}', ${Date.now()});`;
-            })
-            .join("\n--> statement-breakpoint\n");
+        // Generate migration entries using actual Drizzle hashes from meta files
+        const migrationEntries = await generateMigrationEntries(tenantMigrationsDir, migrationFiles);
 
         const combinedSql = `${drizzleMigrationTable}\n--> statement-breakpoint\n${allSql}\n--> statement-breakpoint\n${migrationEntries}`;
 
-        // Escape backticks for template literal
+        // Escape backticks for template literal at the very end
         return combinedSql.replace(/`/g, "\\`");
     } catch (error) {
         console.warn("Could not read tenant migration files:", error);
