@@ -280,7 +280,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(
                 ...d1Config.options,
             }),
             routes: [
-                async ({ modelName, operation, data, isCoreBetterAuthModel, fallbackAdapter }) => {
+                async ({ modelName, operation, data, fallbackAdapter }) => {
                     try {
                         // Extract tenantId from data based on operation type
                         let tenantId: string | undefined;
@@ -312,7 +312,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(
                         // Route to tenant database if:
                         // 1. There's a tenantId in the operation
                         // 2. The table is NOT a core auth table
-                        if (tenantId && !isCoreBetterAuthModel && !CORE_AUTH_TABLES.has(modelName)) {
+                        if (tenantId && !CORE_AUTH_TABLES.has(modelName)) {
                             // Look up the actual database ID from the tenant record
                             const tenantRecord: { databaseId: string } | null = await fallbackAdapter.findOne({
                                 model: "tenant",
