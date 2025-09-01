@@ -70,12 +70,12 @@ export async function splitAuthSchema(projectPath: string): Promise<void> {
     const tenantSchemaPath = join(projectPath, "src/db/tenant.schema.ts");
     writeFileSync(tenantSchemaPath, await generateTenantSchemaFile(imports, tenantSchema));
 
-    // Write the tenant raw SQL file
+    // Create tenant-specific drizzle config and generate migrations FIRST
+    await setupTenantMigrations(projectPath);
+
+    // Write the tenant raw SQL file AFTER migration files exist
     const tenantRawPath = join(projectPath, "src/db/tenant.raw.ts");
     writeFileSync(tenantRawPath, await generateTenantRawFile(imports, tenantSchema, projectPath));
-
-    // Create tenant-specific drizzle config and generate migrations
-    await setupTenantMigrations(projectPath);
 
     // Update the main schema.ts to import from both files
     updateMainSchemaFile(projectPath);
