@@ -1,6 +1,6 @@
 {
     "name": "@zpg6-test-pkgs/better-auth-cloudflare",
-    "version": "0.2.4-tenants.1",
+    "version": "0.2.4-tenants.2",
     "type": "module",
     "description": "Seamlessly integrate better-auth with Cloudflare Workers, D1, Hyperdrive, KV, R2, and geolocation services.",
     "author": "Zach Grimaldi",

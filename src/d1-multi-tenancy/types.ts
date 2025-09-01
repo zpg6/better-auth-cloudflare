@@ -86,11 +86,11 @@ export interface CloudflareD1MultiTenancySchema {
  * Custom tenant routing callback function
  *
  * @param params - The full adapter router parameters from better-auth
- * @returns The tenant ID to route to, or undefined/null to fall back to default logic
+ * @returns The tenant ID to route to, or an object with tenantId and modified data, or undefined/null to fall back to default logic
  */
 export type TenantRoutingCallback = (
     params: AdapterRouterParams
-) => string | undefined | null | Promise<string | undefined | null>;
+) => string | { tenantId: string; data?: any } | undefined | null | Promise<string | { tenantId: string; data?: any } | undefined | null>;
 
 /**
  * Configuration options for the Cloudflare D1 multi-tenancy plugin
@@ -161,6 +161,16 @@ export interface CloudflareD1MultiTenancyOptions {
      *       return apiKeyWhere.value.split('_')[0];
      *     }
      *   }
+     *   
+     *   // For create operations, modify data and return tenant ID
+     *   if (modelName === 'apikey' && operation === 'create' && data && 'prefix' in data) {
+     *     const prefix = data.prefix.split('__')[0];
+     *     return {
+     *       tenantId: prefix,
+     *       data: { ...data, userId: prefix } // Modify the data
+     *     };
+     *   }
+     *   
      *   return undefined; // Fall back to default logic
      * }
      * ```

@@ -294,14 +294,29 @@ export const withCloudflare = <T extends BetterAuthOptions>(
                         // Try custom tenant routing callback first
                         if (multiTenancyConfig.tenantRouting) {
                             try {
-                                const customTenantId = await multiTenancyConfig.tenantRouting({
+                                const customResult = await multiTenancyConfig.tenantRouting({
                                     modelName,
                                     operation,
                                     data,
                                     fallbackAdapter,
                                 } as AdapterRouterParams);
-                                if (customTenantId) {
-                                    tenantId = customTenantId;
+                                
+                                if (customResult) {
+                                    if (typeof customResult === 'string') {
+                                        tenantId = customResult;
+                                    } else if (typeof customResult === 'object' && customResult.tenantId) {
+                                        tenantId = customResult.tenantId;
+                                        // Modify the original data object in place if provided
+                                        if (customResult.data !== undefined && data && typeof data === 'object') {
+                                            // For create operations, merge the modified data
+                                            if (operation === 'create' && 'data' in data && data.data && typeof data.data === 'object') {
+                                                Object.assign(data.data as Record<string, any>, customResult.data);
+                                            } else if (!Array.isArray(data)) {
+                                                // For other operations, replace the data entirely (but not for arrays)
+                                                Object.assign(data as Record<string, any>, customResult.data);
+                                            }
+                                        }
+                                    }
                                 }
                             } catch (error) {
                                 console.error(
