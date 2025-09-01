@@ -202,4 +202,150 @@ export const schema = {
             expect(mainSchema).toContain('import * as authSchema from "./auth.schema"');
         });
     });
+
+    describe("Foreign Key Filtering", () => {
+        const testMigrationsDir = join(testProjectPath, "drizzle-tenant");
+
+        beforeEach(() => {
+            mkdirSync(testMigrationsDir, { recursive: true });
+        });
+
+        it("should filter out foreign key references to users table", () => {
+            const sqlWithUsersForeignKey = `CREATE TABLE \`user_files\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`user_id\` text NOT NULL,
+	\`filename\` text NOT NULL,
+	\`content_type\` text NOT NULL,
+	FOREIGN KEY (\`user_id\`) REFERENCES \`users\`(\`id\`) ON UPDATE no action ON DELETE cascade
+);`;
+
+            writeFileSync(join(testMigrationsDir, "0001_test.sql"), sqlWithUsersForeignKey);
+
+            // Simulate the filtering logic from getMigrationSqlFromFiles
+            const content = readFileSync(join(testMigrationsDir, "0001_test.sql"), "utf8");
+            const filteredLines = content.split("\n").filter(line => !/FOREIGN KEY.*REFERENCES.*\`users\`/.exec(line));
+
+            const fixedContent = filteredLines.join("\n").replace(/,\s*\n\s*\);/g, "\n);");
+
+            expect(fixedContent).not.toContain("FOREIGN KEY");
+            expect(fixedContent).not.toContain("REFERENCES `users`");
+            expect(fixedContent).toContain("CREATE TABLE `user_files`");
+            expect(fixedContent).toContain("`content_type` text NOT NULL\n);");
+        });
+
+        it("should preserve foreign keys to non-users tables", () => {
+            const sqlWithOtherForeignKey = `CREATE TABLE \`posts\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`organization_id\` text NOT NULL,
+	\`title\` text NOT NULL,
+	FOREIGN KEY (\`organization_id\`) REFERENCES \`organizations\`(\`id\`) ON UPDATE no action ON DELETE cascade
+);`;
+
+            writeFileSync(join(testMigrationsDir, "0001_test.sql"), sqlWithOtherForeignKey);
+
+            const content = readFileSync(join(testMigrationsDir, "0001_test.sql"), "utf8");
+            const filteredLines = content.split("\n").filter(line => !/FOREIGN KEY.*REFERENCES.*\`users\`/.exec(line));
+
+            const fixedContent = filteredLines.join("\n").replace(/,\s*\n\s*\);/g, "\n);");
+
+            expect(fixedContent).toContain("FOREIGN KEY (`organization_id`) REFERENCES `organizations`(`id`)");
+            expect(fixedContent).toContain("ON DELETE cascade");
+        });
+
+        it("should handle multiple foreign keys with mixed references", () => {
+            const sqlWithMixedForeignKeys = `CREATE TABLE \`user_posts\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`user_id\` text NOT NULL,
+	\`organization_id\` text NOT NULL,
+	\`title\` text NOT NULL,
+	FOREIGN KEY (\`user_id\`) REFERENCES \`users\`(\`id\`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (\`organization_id\`) REFERENCES \`organizations\`(\`id\`) ON UPDATE no action ON DELETE cascade
+);`;
+
+            writeFileSync(join(testMigrationsDir, "0001_test.sql"), sqlWithMixedForeignKeys);
+
+            const content = readFileSync(join(testMigrationsDir, "0001_test.sql"), "utf8");
+            const filteredLines = content.split("\n").filter(line => !/FOREIGN KEY.*REFERENCES.*\`users\`/.exec(line));
+
+            const fixedContent = filteredLines.join("\n").replace(/,\s*\n\s*\);/g, "\n);");
+
+            expect(fixedContent).not.toContain("REFERENCES `users`");
+            expect(fixedContent).toContain("FOREIGN KEY (`organization_id`) REFERENCES `organizations`(`id`)");
+            expect(fixedContent).not.toContain("cascade,"); // Should not have trailing comma
+        });
+
+        it("should handle trailing comma when users foreign key is last", () => {
+            const sqlWithTrailingComma = `CREATE TABLE \`user_sessions\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`token\` text NOT NULL,
+	\`expires_at\` integer NOT NULL,
+	FOREIGN KEY (\`user_id\`) REFERENCES \`users\`(\`id\`) ON UPDATE no action ON DELETE cascade
+);`;
+
+            writeFileSync(join(testMigrationsDir, "0001_test.sql"), sqlWithTrailingComma);
+
+            const content = readFileSync(join(testMigrationsDir, "0001_test.sql"), "utf8");
+            const filteredLines = content.split("\n").filter(line => !/FOREIGN KEY.*REFERENCES.*\`users\`/.exec(line));
+
+            const fixedContent = filteredLines.join("\n").replace(/,\s*\n\s*\);/g, "\n);");
+
+            expect(fixedContent).not.toContain("FOREIGN KEY");
+            expect(fixedContent).toContain("`expires_at` integer NOT NULL\n);");
+            expect(fixedContent).not.toContain(",\n);"); // No trailing comma
+        });
+
+        it("should handle different whitespace patterns", () => {
+            const sqlWithVariousWhitespace = `CREATE TABLE \`test_table\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`data\` text,
+    FOREIGN KEY ( \`user_id\` ) REFERENCES \`users\` ( \`id\` ) ON UPDATE no action ON DELETE cascade
+);`;
+
+            writeFileSync(join(testMigrationsDir, "0001_test.sql"), sqlWithVariousWhitespace);
+
+            const content = readFileSync(join(testMigrationsDir, "0001_test.sql"), "utf8");
+            const filteredLines = content.split("\n").filter(line => !/FOREIGN KEY.*REFERENCES.*\`users\`/.exec(line));
+
+            const fixedContent = filteredLines.join("\n").replace(/,\s*\n\s*\);/g, "\n);");
+
+            expect(fixedContent).not.toContain("FOREIGN KEY");
+            expect(fixedContent).not.toContain("REFERENCES `users`");
+        });
+
+        it("should handle empty migration files gracefully", () => {
+            writeFileSync(join(testMigrationsDir, "0001_empty.sql"), "");
+
+            const content = readFileSync(join(testMigrationsDir, "0001_empty.sql"), "utf8");
+            const filteredLines = content.split("\n").filter(line => !/FOREIGN KEY.*REFERENCES.*\`users\`/.exec(line));
+
+            const fixedContent = filteredLines.join("\n").replace(/,\s*\n\s*\);/g, "\n);");
+
+            expect(fixedContent).toBe("");
+        });
+
+        it("should preserve other SQL statements unchanged", () => {
+            const sqlWithVariousStatements = `CREATE TABLE \`organizations\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`name\` text NOT NULL
+);
+--> statement-breakpoint
+CREATE INDEX \`idx_org_name\` ON \`organizations\` (\`name\`);
+--> statement-breakpoint
+DROP TABLE \`old_table\`;
+--> statement-breakpoint
+INSERT INTO "__drizzle_migrations" (id, hash, created_at) VALUES (1, 'hash123', 1234567890);`;
+
+            writeFileSync(join(testMigrationsDir, "0001_test.sql"), sqlWithVariousStatements);
+
+            const content = readFileSync(join(testMigrationsDir, "0001_test.sql"), "utf8");
+            const filteredLines = content.split("\n").filter(line => !/FOREIGN KEY.*REFERENCES.*\`users\`/.exec(line));
+
+            const fixedContent = filteredLines.join("\n").replace(/,\s*\n\s*\);/g, "\n);");
+
+            expect(fixedContent).toContain("CREATE TABLE `organizations`");
+            expect(fixedContent).toContain("CREATE INDEX `idx_org_name`");
+            expect(fixedContent).toContain("DROP TABLE `old_table`");
+            expect(fixedContent).toContain('INSERT INTO "__drizzle_migrations"');
+        });
+    });
 });

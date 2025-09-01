@@ -1,6 +1,6 @@
 {
     "name": "@zpg6-test-pkgs/better-auth-cloudflare-cli",
-    "version": "0.1.16-tenants.5",
+    "version": "0.1.16-tenants.6",
     "description": "CLI for project creation and tenant management in Better Auth Cloudflare projects",
     "author": "Zach Grimaldi",
     "repository": {

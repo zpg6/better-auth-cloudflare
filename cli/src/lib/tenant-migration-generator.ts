@@ -287,10 +287,14 @@ async function getMigrationSqlFromFiles(projectPath: string): Promise<string | n
             .map(file => {
                 const content = readFileSync(join(tenantMigrationsDir, file), "utf8");
                 // Filter out foreign key references to users table since users table is in main DB
-                return content
+                const filteredLines = content
                     .split("\n")
-                    .filter(line => !/FOREIGN KEY.*REFERENCES.*`users`/.exec(line))
-                    .join("\n");
+                    .filter(line => !/FOREIGN KEY.*REFERENCES.*`users`/.exec(line));
+
+                // Fix trailing commas that might be left after removing foreign keys
+                const fixedContent = filteredLines.join("\n").replace(/,\s*\n\s*\);/g, "\n);"); // Remove trailing comma before closing parenthesis
+
+                return fixedContent;
             })
             .join("\n--> statement-breakpoint\n");
 

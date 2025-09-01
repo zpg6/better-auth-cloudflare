@@ -50,7 +50,7 @@ CREATE TABLE \`user_files\` (
 	\`uploaded_at\` integer NOT NULL,
 	\`category\` text,
 	\`is_public\` integer,
-	\`description\` text,
+	\`description\` text
 );
 
 --> statement-breakpoint
