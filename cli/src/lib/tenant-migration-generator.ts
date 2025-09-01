@@ -211,10 +211,8 @@ async function generateTenantRawFile(imports: string, tenantSchema: string[], pr
     // Fallback to generated SQL if no migration files exist yet
     let rawSqlStatements = migrationSql || (await generateTenantSqlUsingDrizzle(projectPath, tenantSchema, imports));
 
-    // Escape backticks for template literal (only if using generated SQL)
-    if (!migrationSql) {
-        rawSqlStatements = rawSqlStatements.replace(/`/g, "\\`");
-    }
+    // Escape backticks for template literal (always needed for template literal syntax)
+    rawSqlStatements = rawSqlStatements.replace(/`/g, "\\`");
 
     const rawSqlExport = `export const raw = \`${rawSqlStatements}\`;`;
 
@@ -301,8 +299,8 @@ async function getMigrationSqlFromFiles(projectPath: string): Promise<string | n
 
         const combinedSql = `${drizzleMigrationTable}\n--> statement-breakpoint\n${allSql}\n--> statement-breakpoint\n${migrationEntries}`;
 
-        // Escape backticks for template literal at the very end
-        return combinedSql.replace(/`/g, "\\`");
+        // Don't escape here - let generateTenantRawFile handle escaping
+        return combinedSql;
     } catch (error) {
         console.warn("Could not read tenant migration files:", error);
         return null;
