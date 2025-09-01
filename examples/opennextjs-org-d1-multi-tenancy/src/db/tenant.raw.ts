@@ -51,7 +51,6 @@ CREATE TABLE \`user_files\` (
 	\`category\` text,
 	\`is_public\` integer,
 	\`description\` text,
-	FOREIGN KEY (\`user_id\`) REFERENCES \`users\`(\`id\`) ON UPDATE no action ON DELETE cascade
 );
 
 --> statement-breakpoint

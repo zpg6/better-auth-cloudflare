@@ -282,9 +282,16 @@ async function getMigrationSqlFromFiles(projectPath: string): Promise<string | n
             return null;
         }
 
-        // Read and concatenate all migration files
+        // Read and concatenate all migration files, filtering out foreign key references to users table
         const allSql = migrationFiles
-            .map(file => readFileSync(join(tenantMigrationsDir, file), "utf8"))
+            .map(file => {
+                const content = readFileSync(join(tenantMigrationsDir, file), "utf8");
+                // Filter out foreign key references to users table since users table is in main DB
+                return content
+                    .split("\n")
+                    .filter(line => !/FOREIGN KEY.*REFERENCES.*`users`/.exec(line))
+                    .join("\n");
+            })
             .join("\n--> statement-breakpoint\n");
 
         // Add Drizzle's migration tracking table at the beginning
@@ -518,7 +525,11 @@ function parseColumnDefinition(columnName: string, definition: string): { column
         const [, refTable, refColumn, onDelete = "no action"] = refMatch;
         // Map the reference table name properly (users vs Users)
         const actualRefTable = refTable === "Users" ? "users" : refTable;
-        foreignKey = `FOREIGN KEY (\\\`${actualColumnName}\\\`) REFERENCES \\\`${actualRefTable}\\\`(\\\`${refColumn}\\\`) ON UPDATE no action ON DELETE ${onDelete}`;
+
+        // Skip foreign key references to users table (users table is in main DB, not tenant DB)
+        if (actualRefTable !== "users") {
+            foreignKey = `FOREIGN KEY (\\\`${actualColumnName}\\\`) REFERENCES \\\`${actualRefTable}\\\`(\\\`${refColumn}\\\`) ON UPDATE no action ON DELETE ${onDelete}`;
+        }
     }
 
     return { column: columnSql, foreignKey };
