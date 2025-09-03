@@ -2,9 +2,9 @@ import type { KVNamespace } from "@cloudflare/workers-types";
 import type { AuthContext, Session, User } from "better-auth";
 import type { DrizzleAdapterConfig } from "better-auth/adapters/drizzle";
 import type { FieldAttribute } from "better-auth/db";
-import type { drizzle as d1Drizzle } from "drizzle-orm/d1";
-import type { drizzle as mysqlDrizzle } from "drizzle-orm/mysql2";
-import type { drizzle as postgresDrizzle } from "drizzle-orm/postgres-js";
+import type { drizzle as d1Drizzle } from "@zpg6-test-pkgs/drizzle-orm/d1";
+import type { drizzle as mysqlDrizzle } from "@zpg6-test-pkgs/drizzle-orm/mysql2";
+import type { drizzle as postgresDrizzle } from "@zpg6-test-pkgs/drizzle-orm/postgres-js";
 import type { CloudflareD1MultiTenancyOptions } from "./d1-multi-tenancy/types.js";
 
 export interface CloudflarePluginOptions {

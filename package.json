@@ -1,6 +1,6 @@
 {
     "name": "@zpg6-test-pkgs/better-auth-cloudflare",
-    "version": "0.2.4-tenants.2",
+    "version": "0.2.4-tenants.3",
     "type": "module",
     "description": "Seamlessly integrate better-auth with Cloudflare Workers, D1, Hyperdrive, KV, R2, and geolocation services.",
     "author": "Zach Grimaldi",
@@ -39,8 +39,7 @@
     },
     "dependencies": {
         "@zpg6-test-pkgs/drizzle-orm": "0.44.5-d1-http-test.2",
-        "better-auth": "npm:@zpg6-test-pkgs/better-auth@1.3.8-adapter-router.7",
-        "drizzle-orm": "^0.43.1",
+        "better-auth": "npm:@zpg6-test-pkgs/better-auth@1.3.8-adapter-router.8",
         "zod": "^3.24.2"
     },
     "devDependencies": {
