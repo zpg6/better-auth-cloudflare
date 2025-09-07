@@ -8,21 +8,20 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+            - uses: actions/checkout@v4
 
-            - run: corepack enable
-            - uses: actions/setup-node@v4
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
               with:
-                  node-version: 20
+                  node-version: "20"
 
-            - name: Install pnpm
-              run: npm install -g pnpm
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 10.10.0
+                  run_install: false
 
             - name: Install dependencies
-              run: pnpm install --ignore-workspace
+              run: pnpm install
 
-            - name: Build
-              run: pnpm build
-
-            - run: pnpm dlx pkg-pr-new publish
+            - run: npx pkg-pr-new publish
