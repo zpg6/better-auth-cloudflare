@@ -1,0 +1,1 @@
+DROP TABLE `birthday_wishs`;

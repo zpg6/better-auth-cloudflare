@@ -74,6 +74,15 @@ The migrate command automatically detects your database configuration from `wran
 - **D1 databases**: Offers migration options (dev/remote)
 - **Hyperdrive databases**: Shows informational message
 - **Multiple databases**: Prompts you to choose which D1 database to migrate
+- **Multi-tenancy**: Automatically detects and handles schema splitting for tenant databases
+
+**Multi-tenancy workflow**:
+
+```bash
+# Apply tenant migrations to all tenant databases (same account)
+CLOUDFLARE_D1_API_TOKEN=xxx CLOUDFLARE_ACCT_ID=yyy CLOUDFLARE_DATABASE_ID=zzz \
+  npx @better-auth-cloudflare/cli migrate:tenants
+```
 
 ## Arguments
 
@@ -121,6 +130,15 @@ The migrate command automatically detects your database configuration from `wran
 
 ```
 --migrate-target=<target>      For migrate command: dev | remote | skip (default: skip)
+```
+
+### Multi-tenancy commands
+
+```
+migrate:tenants                Apply migrations to all tenant databases
+--auto-confirm                 Skip confirmation prompts (default: false)
+--dry-run                      Preview what would be migrated without applying changes
+--verbose                      Show detailed migration logs and debugging info
 ```
 
 ## Examples
@@ -182,9 +200,102 @@ Run migration workflow with non-interactive target:
 npx @better-auth-cloudflare/cli migrate --migrate-target=dev
 ```
 
+## Multi-Tenancy Workflow
+
+The CLI provides comprehensive support for organization-based multi-tenancy with automatic schema separation and migration management.
+
+### Automatic Multi-Tenancy Detection
+
+The `migrate` command automatically detects multi-tenancy configurations and handles schema splitting:
+
+```bash
+# Single command handles everything for multi-tenant setups
+npx @better-auth-cloudflare/cli migrate --migrate-target=dev
+```
+
+**What happens automatically:**
+
+- Detects multi-tenancy from auth configuration (`multiTenancy` with `mode: "organization"`)
+- Splits generated schemas into core auth tables vs tenant-specific tables
+- Creates separate drizzle configs (`drizzle.config.ts` vs `drizzle-tenant.config.ts`)
+- Generates core migrations and applies them to main database
+- Generates tenant migrations and sets up tenant migration system
+
+### Schema Separation Logic
+
+**Core Auth Tables (Main Database):**
+
+- `users`, `accounts`, `sessions`, `verifications`
+- `tenants`, `invitations`, `organizations`, `members`
+
+**Tenant Tables (Individual Tenant Databases):**
+
+- All other plugin tables (e.g., `userFiles`, custom plugin tables)
+
+### Tenant Migration Commands
+
+Apply migrations to all active tenant databases:
+
+```bash
+# Same account scenario (3 variables)
+CLOUDFLARE_D1_API_TOKEN=xxx CLOUDFLARE_ACCT_ID=yyy CLOUDFLARE_DATABASE_ID=zzz \
+  npx @better-auth-cloudflare/cli migrate:tenants
+
+# Separate accounts scenario (5 variables)
+CLOUDFLARE_MAIN_D1_API_TOKEN=aaa CLOUDFLARE_MAIN_ACCT_ID=bbb CLOUDFLARE_MAIN_DATABASE_ID=ccc \
+CLOUDFLARE_D1_API_TOKEN=xxx CLOUDFLARE_ACCT_ID=yyy \
+  npx @better-auth-cloudflare/cli migrate:tenants
+
+# Non-interactive mode (same account)
+CLOUDFLARE_D1_API_TOKEN=xxx CLOUDFLARE_ACCT_ID=yyy CLOUDFLARE_DATABASE_ID=zzz \
+  npx @better-auth-cloudflare/cli migrate:tenants --auto-confirm
+
+# Dry-run to preview changes (same account)
+CLOUDFLARE_D1_API_TOKEN=xxx CLOUDFLARE_ACCT_ID=yyy CLOUDFLARE_DATABASE_ID=zzz \
+  npx @better-auth-cloudflare/cli migrate:tenants --dry-run
+```
+
+### Environment Variables for Multi-Tenancy
+
+**For SAME account** (main and tenant DBs in same Cloudflare account - 3 variables):
+
+```bash
+CLOUDFLARE_D1_API_TOKEN     # API token with D1:edit permissions
+CLOUDFLARE_ACCT_ID          # Account ID for both main and tenant databases
+CLOUDFLARE_DATABASE_ID      # Main database ID
+```
+
+**For SEPARATE accounts** (main and tenant DBs in different accounts - 5 variables):
+
+```bash
+CLOUDFLARE_MAIN_D1_API_TOKEN    # API token for main database account
+CLOUDFLARE_MAIN_ACCT_ID         # Account ID for main database
+CLOUDFLARE_MAIN_DATABASE_ID     # Main database ID
+CLOUDFLARE_D1_API_TOKEN         # API token for tenant databases account
+CLOUDFLARE_ACCT_ID              # Account ID where tenant databases are managed
+```
+
+### Multi-Tenancy File Structure
+
+```
+your-project/
+├── drizzle.config.ts              # Main database configuration
+├── drizzle/                       # Main database migrations
+│   ├── 0000_initial.sql
+│   └── meta/
+├── drizzle-tenant.config.ts       # Tenant database configuration
+├── drizzle-tenant/                # Tenant database migrations
+│   ├── 0000_tenant_tables.sql
+│   └── meta/
+└── src/db/
+    ├── auth.schema.ts             # Core auth schema (main DB)
+    ├── tenant.schema.ts           # Tenant schema (tenant DBs)
+    └── tenant.raw.ts              # Raw tenant utilities
+```
+
 ---
 
-Creates a new Better Auth Cloudflare project from Hono or OpenNext.js templates, optionally creating Cloudflare D1, KV, R2, or Hyperdrive resources for you. The migrate command runs `auth:update`, `db:generate`, and optionally `db:migrate`.
+Creates a new Better Auth Cloudflare project from Hono or OpenNext.js templates, optionally creating Cloudflare D1, KV, R2, or Hyperdrive resources for you. The migrate command runs `auth:update`, `db:generate`, handles multi-tenancy schema splitting, and optionally applies migrations. The `migrate:tenants` command applies tenant migrations to all tracked tenant databases.
 
 ## Related
 

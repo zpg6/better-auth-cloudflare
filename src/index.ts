@@ -1,14 +1,24 @@
 import type { KVNamespace } from "@cloudflare/workers-types";
-import { type BetterAuthOptions, type BetterAuthPlugin, type SecondaryStorage, type Session } from "better-auth";
+import {
+    type AdapterInstance,
+    type BetterAuthOptions,
+    type BetterAuthPlugin,
+    type SecondaryStorage,
+    type Session,
+} from "better-auth";
+import { adapterRouter, type AdapterRouterParams } from "better-auth/adapters/adapter-router";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
-import { schema } from "./schema";
-import { createR2Storage, createR2Endpoints } from "./r2";
-import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types";
-export * from "./client";
-export * from "./schema";
-export * from "./types";
-export * from "./r2";
+import { cloudflareD1MultiTenancy, createTenantDatabaseClient } from "./d1-multi-tenancy/index.js";
+import { createR2Endpoints, createR2Storage } from "./r2.js";
+import { schema } from "./schema.js";
+import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types.js";
+export * from "./client.js";
+export * from "./d1-multi-tenancy/index.js";
+export type { TenantRoutingCallback } from "./d1-multi-tenancy/types.js";
+export * from "./r2.js";
+export * from "./schema.js";
+export * from "./types.js";
 
 /**
  * Cloudflare integration for Better Auth
@@ -195,7 +205,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(
     }
 
     // Determine which database configuration to use
-    let database;
+    let database: AdapterInstance | null = null;
     if (cloudFlareOptions.postgres) {
         database = drizzleAdapter(cloudFlareOptions.postgres.db, {
             provider: "pg",
@@ -213,11 +223,209 @@ export const withCloudflare = <T extends BetterAuthOptions>(
         });
     }
 
+    // Collect plugins to include
+    const plugins: BetterAuthPlugin[] = [cloudflare(cloudFlareOptions)];
+
+    // Add D1 multi-tenancy plugin if configured
+    if (cloudFlareOptions.d1 && cloudFlareOptions.d1.multiTenancy) {
+        // If organization mode is enabled, ensure the organization plugin is present
+        if (cloudFlareOptions.d1.multiTenancy.mode === "organization") {
+            const hasOrganizationPlugin = options.plugins?.some(plugin => plugin.id === "organization");
+
+            if (!hasOrganizationPlugin) {
+                throw new Error(
+                    "Organization mode for D1 multi-tenancy requires the 'organization' plugin to be enabled. " +
+                        "Please add the organization plugin to your Better Auth configuration: " +
+                        "import { organization } from 'better-auth/plugins' and include it in your plugins array."
+                );
+            }
+        }
+
+        // If D1 multi-tenancy is enabled, assert we have the main D1 configuration
+        if (!cloudFlareOptions.d1.db) {
+            throw new Error("D1 multi-tenancy requires the main D1 configuration to be provided.");
+        }
+
+        // Note: tenantSchema is optional with table-based routing
+        // The adapter will automatically filter the unified schema for tenant tables
+
+        const d1Config = cloudFlareOptions.d1;
+        const multiTenancyConfig = d1Config.multiTenancy!;
+
+        // Define which tables belong in the main database vs tenant databases
+        const defaultCoreModels = [
+            "user",
+            "users",
+            "account",
+            "accounts",
+            "session",
+            "sessions",
+            "organization",
+            "organizations",
+            "member",
+            "members",
+            "invitation",
+            "invitations",
+            "verification",
+            "verifications",
+            "tenant",
+            "tenants",
+        ];
+
+        // Handle both array and callback configurations for core models
+        const coreModels: string[] =
+            typeof multiTenancyConfig.coreModels === "function"
+                ? multiTenancyConfig.coreModels(defaultCoreModels)
+                : (multiTenancyConfig.coreModels ?? defaultCoreModels);
+
+        const CORE_AUTH_TABLES = new Set(coreModels);
+
+        database = adapterRouter({
+            fallbackAdapter: drizzleAdapter(d1Config.db, {
+                provider: "sqlite",
+                ...d1Config.options,
+            }),
+            routes: [
+                async ({ modelName, operation, data, fallbackAdapter }) => {
+                    try {
+                        // Extract tenantId from data - first try custom callback, then fall back to default logic
+                        let tenantId: string | undefined;
+
+                        // Try custom tenant routing callback first
+                        if (multiTenancyConfig.tenantRouting) {
+                            try {
+                                const customResult = await multiTenancyConfig.tenantRouting({
+                                    modelName,
+                                    operation,
+                                    data,
+                                    fallbackAdapter,
+                                } as AdapterRouterParams);
+                                
+                                if (customResult) {
+                                    if (typeof customResult === 'string') {
+                                        tenantId = customResult;
+                                    } else if (typeof customResult === 'object' && customResult.tenantId) {
+                                        tenantId = customResult.tenantId;
+                                        // Modify the original data object in place if provided
+                                        if (customResult.data !== undefined && data && typeof data === 'object') {
+                                            // For create operations, merge the modified data
+                                            if (operation === 'create' && 'data' in data && data.data && typeof data.data === 'object') {
+                                                Object.assign(data.data as Record<string, any>, customResult.data);
+                                            } else if (!Array.isArray(data)) {
+                                                // For other operations, replace the data entirely (but not for arrays)
+                                                Object.assign(data as Record<string, any>, customResult.data);
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (error) {
+                                console.error(
+                                    `[AdapterRouter] Error in custom tenant routing for ${modelName}:`,
+                                    error
+                                );
+                                // Continue to fallback logic
+                            }
+                        }
+
+                        // Fall back to default tenant ID extraction if custom callback didn't return a value
+                        if (!tenantId) {
+                            if (operation === "create" && data && typeof data === "object" && !Array.isArray(data)) {
+                                // For create operations, data is the object with the fields
+                                if ("tenantId" in data && data.tenantId) {
+                                    tenantId = data.tenantId as string;
+                                } else if (
+                                    "data" in data &&
+                                    data.data &&
+                                    "tenantId" in data.data &&
+                                    data.data.tenantId
+                                ) {
+                                    tenantId = data.data.tenantId as string;
+                                }
+                            } else if (data && Array.isArray(data)) {
+                                // For findOne/findMany operations, data is directly the where array
+                                const tenantIdWhere = data.find(
+                                    (w: any) => w.field === "tenantId" || w.field === "tenant_id"
+                                );
+                                if (tenantIdWhere?.value) {
+                                    tenantId = tenantIdWhere.value as string;
+                                }
+                            } else if (data && "where" in data && data.where) {
+                                // For other operations, data might have a where property
+                                const tenantIdWhere = data.where.find(
+                                    (w: any) => w.field === "tenantId" || w.field === "tenant_id"
+                                );
+                                if (tenantIdWhere?.value) {
+                                    tenantId = tenantIdWhere.value as string;
+                                }
+                            }
+                        }
+
+                        // Route to tenant database if:
+                        // 1. There's a tenantId in the operation
+                        // 2. The table is NOT a core auth table
+                        if (tenantId && !CORE_AUTH_TABLES.has(modelName)) {
+                            // Look up the actual database ID from the tenant record
+                            const tenantRecord: { databaseId: string } | null = await fallbackAdapter.findOne({
+                                model: "tenant",
+                                where: [
+                                    { field: "tenantId", value: tenantId, operator: "eq" },
+                                    { field: "tenantType", value: multiTenancyConfig.mode, operator: "eq" },
+                                    { field: "status", value: "active", operator: "eq" },
+                                ],
+                                select: ["databaseId", "tenantId", "status"],
+                            });
+
+                            if (!tenantRecord?.databaseId) {
+                                return null;
+                            }
+
+                            const tenantDb = createTenantDatabaseClient(
+                                multiTenancyConfig.cloudflareD1Api.accountId,
+                                tenantRecord.databaseId,
+                                multiTenancyConfig.cloudflareD1Api.apiToken,
+                                multiTenancyConfig.cloudflareD1Api.debugLogs
+                            );
+
+                            // Get tenant-specific Drizzle schema (exclude core auth tables)
+                            const tenantDrizzleSchema = Object.fromEntries(
+                                Object.entries(d1Config.options?.schema || {}).filter(
+                                    ([tableName]) => !CORE_AUTH_TABLES.has(tableName)
+                                )
+                            );
+
+                            return drizzleAdapter(tenantDb, {
+                                provider: "sqlite",
+                                schema: tenantDrizzleSchema,
+                                usePlural: true,
+                                debugLogs: true,
+                            });
+                        }
+
+                        // All core auth tables and operations without tenantId go to main database
+                        return null;
+                    } catch (error) {
+                        console.error(`[AdapterRouter] Error in route for ${modelName}:`, error);
+                        return null;
+                    }
+                },
+            ],
+            debugLogs: true,
+        });
+
+        plugins.push(cloudflareD1MultiTenancy(cloudFlareOptions.d1.multiTenancy));
+    }
+    if (!database) {
+        console.warn("⚠️ No database configuration provided. Please provide one of postgres, mysql, or d1.");
+    }
+
+    // Add user-provided plugins
+    plugins.push(...(options.plugins ?? []));
+
     return {
         ...options,
         database,
         secondaryStorage: cloudFlareOptions.kv ? createKVStorage(cloudFlareOptions.kv) : undefined,
-        plugins: [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])],
+        plugins,
         advanced: updatedAdvanced,
         session: updatedSession,
     } as WithCloudflareAuth<T>;
