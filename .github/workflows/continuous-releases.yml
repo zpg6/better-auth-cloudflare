@@ -30,3 +30,15 @@ jobs:
               run: pnpm install
 
             - run: npx pkg-pr-new publish
+
+            - name: Install CLI dependencies
+              working-directory: ./cli
+              run: pnpm install
+
+            - name: Build CLI
+              working-directory: ./cli
+              run: pnpm build
+
+            - name: Publish CLI
+              working-directory: ./cli
+              run: npx pkg-pr-new publish --bin
