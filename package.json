@@ -59,9 +59,5 @@
     },
     "publishConfig": {
         "access": "public"
-    },
-    "jest": {
-        "preset": "ts-jest",
-        "testEnvironment": "node"
     }
 }
