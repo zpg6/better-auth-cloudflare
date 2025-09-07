@@ -1,4 +1,4 @@
-name: Continuous Releases
+name: Continuous Releases with pkg-pr-new
 on: [push, pull_request]
 
 permissions: {}
