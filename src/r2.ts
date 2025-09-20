@@ -561,12 +561,31 @@ export const createR2Endpoints = (
                     }
 
                     // Get filename and metadata from headers
-                    const filename = ctx.request?.headers?.get("x-filename");
-                    const metadataHeader = ctx.request?.headers?.get("x-file-metadata");
+                    const rawFilename = ctx.request?.headers?.get("x-filename");
+                    const rawMetadataHeader = ctx.request?.headers?.get("x-file-metadata");
 
-                    if (!filename) {
+                    if (!rawFilename) {
                         throw new Error("x-filename header is required");
                     }
+
+                    // Sanitize header values to ensure it only contains ASCII characters
+                    const filename = rawFilename
+                        .split("")
+                        .map(char => {
+                            const code = char.charCodeAt(0);
+                            return code <= 127 ? char : "?";
+                        })
+                        .join("");
+
+                    const metadataHeader = rawMetadataHeader
+                        ? rawMetadataHeader
+                              .split("")
+                              .map(char => {
+                                  const code = char.charCodeAt(0);
+                                  return code <= 127 ? char : "?";
+                              })
+                              .join("")
+                        : undefined;
 
                     // Parse metadata from headers
                     let additionalFields: Record<string, any> = {};
