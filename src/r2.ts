@@ -1,7 +1,7 @@
 import type { AuthContext } from "better-auth";
 import { createAuthEndpoint, getSessionFromCtx, sessionMiddleware } from "better-auth/api";
 import type { FieldAttribute } from "better-auth/db";
-import { z, type ZodRawShape, type ZodTypeAny } from "zod";
+import { z, type ZodType } from "zod";
 import type { FileMetadata, R2Config } from "./types";
 
 export const R2_ERROR_CODES = {
@@ -86,10 +86,10 @@ function validateFileMetadata(record: any): record is FileMetadata {
  * Converts Better Auth FieldAttribute to Zod schema (same pattern as feedback plugin)
  */
 function convertFieldAttributesToZodSchema(additionalFields: Record<string, FieldAttribute>) {
-    const zodSchema: ZodRawShape = {};
+    const zodSchema: Record<string, ZodType> = {};
 
     for (const [key, value] of Object.entries(additionalFields)) {
-        let fieldSchema: ZodTypeAny;
+        let fieldSchema: ZodType;
 
         if (value.type === "string") {
             fieldSchema = z.string();
@@ -120,7 +120,7 @@ function convertFieldAttributesToZodSchema(additionalFields: Record<string, Fiel
 // Zod schemas for validation
 export const createFileMetadataSchema = (additionalFields?: Record<string, FieldAttribute>) => {
     if (!additionalFields || Object.keys(additionalFields).length === 0) {
-        return z.record(z.any()).optional();
+        return z.record(z.string(), z.any()).optional();
     }
     return convertFieldAttributesToZodSchema(additionalFields).optional();
 };
@@ -141,7 +141,7 @@ export const listFilesSchema = z
  * Creates upload schema dynamically based on additionalFields configuration
  */
 export const createUploadFileSchema = (additionalFields?: Record<string, FieldAttribute>) => {
-    const baseShape: ZodRawShape = {
+    const baseShape: Record<string, ZodType> = {
         file: z.instanceof(File),
     };
 
@@ -151,7 +151,7 @@ export const createUploadFileSchema = (additionalFields?: Record<string, FieldAt
 
     // Add additionalFields to the schema
     for (const [key, value] of Object.entries(additionalFields)) {
-        let fieldSchema: ZodTypeAny;
+        let fieldSchema: ZodType;
 
         if (value.type === "string") {
             fieldSchema = z.string();
@@ -257,7 +257,7 @@ export const createFileValidator = (config: R2Config) => {
 
             if (!result.success) {
                 // Extract detailed error information from Zod
-                const errorMessages = result.error.errors
+                const errorMessages = result.error.issues
                     .map(err => {
                         const path = err.path.length > 0 ? `${err.path.join(".")}: ` : "";
                         return `${path}${err.message}`;
@@ -268,7 +268,7 @@ export const createFileValidator = (config: R2Config) => {
                 ctx?.logger?.error(`[R2]: Metadata validation failed:`, {
                     error: detailedError,
                     metadata,
-                    zodErrors: result.error.errors,
+                    zodErrors: result.error.issues,
                 });
 
                 return error(detailedError, "INVALID_METADATA");
@@ -561,12 +561,31 @@ export const createR2Endpoints = (
                     }
 
                     // Get filename and metadata from headers
-                    const filename = ctx.request?.headers?.get("x-filename");
-                    const metadataHeader = ctx.request?.headers?.get("x-file-metadata");
+                    const rawFilename = ctx.request?.headers?.get("x-filename");
+                    const rawMetadataHeader = ctx.request?.headers?.get("x-file-metadata");
 
-                    if (!filename) {
+                    if (!rawFilename) {
                         throw new Error("x-filename header is required");
                     }
+
+                    // Sanitize header values to ensure it only contains ASCII characters
+                    const filename = rawFilename
+                        .split("")
+                        .map(char => {
+                            const code = char.charCodeAt(0);
+                            return code <= 127 ? char : "?";
+                        })
+                        .join("");
+
+                    const metadataHeader = rawMetadataHeader
+                        ? rawMetadataHeader
+                              .split("")
+                              .map(char => {
+                                  const code = char.charCodeAt(0);
+                                  return code <= 127 ? char : "?";
+                              })
+                              .join("")
+                        : undefined;
 
                     // Parse metadata from headers
                     let additionalFields: Record<string, any> = {};
