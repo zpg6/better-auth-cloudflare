@@ -1,6 +1,6 @@
 {
     "name": "better-auth-cloudflare",
-    "version": "0.2.4",
+    "version": "0.2.5",
     "description": "Seamlessly integrate better-auth with Cloudflare Workers, D1, Hyperdrive, KV, R2, and geolocation services.",
     "author": "Zach Grimaldi",
     "repository": {
