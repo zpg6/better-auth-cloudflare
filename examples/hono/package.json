@@ -18,7 +18,7 @@
         "@cloudflare/workers-types": "^4.20250606.0",
         "better-auth": "^1.2.8",
         "better-auth-cloudflare": "file:../../",
-        "drizzle-orm": "^0.43.1",
+        "drizzle-orm": "^0.44.5",
         "hono": "^4.7.11"
     },
     "devDependencies": {
