@@ -1,13 +1,15 @@
 {
     "name": "better-auth-cloudflare",
     "version": "0.2.5",
+    "type": "module",
     "description": "Seamlessly integrate better-auth with Cloudflare Workers, D1, Hyperdrive, KV, R2, and geolocation services.",
     "author": "Zach Grimaldi",
     "repository": {
         "type": "git",
         "url": "git+https://github.com/zpg6/better-auth-cloudflare.git"
     },
-    "main": "./dist/index.js",
+    "main": "./dist/index.cjs",
+    "module": "./dist/index.mjs",
     "types": "./dist/index.d.ts",
     "keywords": [
         "better-auth",
@@ -27,7 +29,7 @@
     ],
     "scripts": {
         "clean": "rm -rf dist",
-        "build": "tsc",
+        "build": "unbuild --clean",
         "test": "jest",
         "typecheck": "tsc --noEmit",
         "format": "prettier --write ."
@@ -45,16 +47,29 @@
         "jest": "^29.7.0",
         "prettier": "^3.2.5",
         "ts-jest": "^29.1.1",
-        "typescript": "^5.3.3"
+        "typescript": "^5.3.3",
+        "unbuild": "^3.0.0"
     },
     "exports": {
         ".": {
-            "types": "./dist/index.d.ts",
-            "default": "./dist/index.js"
+            "import": {
+                "types": "./dist/index.d.ts",
+                "default": "./dist/index.mjs"
+            },
+            "require": {
+                "types": "./dist/index.d.cts",
+                "default": "./dist/index.cjs"
+            }
         },
         "./client": {
-            "types": "./dist/client.d.ts",
-            "default": "./dist/client.js"
+            "import": {
+                "types": "./dist/client.d.ts",
+                "default": "./dist/client.mjs"
+            },
+            "require": {
+                "types": "./dist/client.d.cts",
+                "default": "./dist/client.cjs"
+            }
         }
     },
     "publishConfig": {
