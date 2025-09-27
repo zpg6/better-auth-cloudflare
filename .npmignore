@@ -1,4 +1,5 @@
 build.ts
+build.config.ts
 .turbo
 src
 .prettierrc
