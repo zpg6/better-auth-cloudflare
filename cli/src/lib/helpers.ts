@@ -317,3 +317,53 @@ export function updateHyperdriveBlockWithId(
 
     return toml.slice(0, found.start) + block + toml.slice(found.end);
 }
+
+export interface GitInitResult {
+    success: boolean;
+    error?: string;
+}
+
+export function initializeGitRepository(projectPath: string): GitInitResult {
+    const { spawnSync } = require("child_process") as typeof import("child_process");
+
+    // Check if git is available
+    const gitCheck = spawnSync("git", ["--version"], { stdio: "pipe", encoding: "utf8" });
+    if (gitCheck.status !== 0) {
+        return { success: false, error: "Git is not installed or not available in PATH" };
+    }
+
+    // Initialize git repository
+    const initResult = spawnSync("git", ["init"], {
+        cwd: projectPath,
+        stdio: "pipe",
+        encoding: "utf8",
+    });
+
+    if (initResult.status !== 0) {
+        return { success: false, error: `Failed to initialize git repository: ${initResult.stderr}` };
+    }
+
+    // Add all files to staging
+    const addResult = spawnSync("git", ["add", "."], {
+        cwd: projectPath,
+        stdio: "pipe",
+        encoding: "utf8",
+    });
+
+    if (addResult.status !== 0) {
+        return { success: false, error: `Failed to add files to git: ${addResult.stderr}` };
+    }
+
+    // Create initial commit
+    const commitResult = spawnSync("git", ["commit", "-m", "Initial commit"], {
+        cwd: projectPath,
+        stdio: "pipe",
+        encoding: "utf8",
+    });
+
+    if (commitResult.status !== 0) {
+        return { success: false, error: `Failed to create initial commit: ${commitResult.stderr}` };
+    }
+
+    return { success: true };
+}

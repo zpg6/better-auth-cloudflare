@@ -9,6 +9,7 @@ import {
     extractD1DatabaseId,
     extractHyperdriveId,
     extractKvNamespaceId,
+    initializeGitRepository,
     parseWranglerToml,
     updateD1BlockWithId,
     updateHyperdriveBlockWithId,
@@ -78,6 +79,7 @@ interface GenerateAnswers {
     appName: string;
     template: "hono" | "nextjs";
     database: DbKind;
+    packageManager: PackageManager;
     // D1
     d1Name?: string;
     d1Binding?: string;
@@ -180,6 +182,34 @@ function detectPackageManagerForAuth(cwd: string): PackageManager {
     if (commandAvailable("npm")) return "npm";
     // Fallback to regular detection if npm is not available
     return detectPackageManager(cwd);
+}
+
+function getAvailablePackageManagers(): PackageManager[] {
+    const available: PackageManager[] = [];
+    const preferredOrder: PackageManager[] = ["pnpm", "npm", "bun", "yarn"];
+
+    for (const pm of preferredOrder) {
+        if (commandAvailable(pm)) {
+            available.push(pm);
+        }
+    }
+
+    return available;
+}
+
+function getPackageManagerDisplayName(pm: PackageManager): string {
+    switch (pm) {
+        case "bun":
+            return "Bun";
+        case "pnpm":
+            return "pnpm";
+        case "yarn":
+            return "Yarn";
+        case "npm":
+            return "npm";
+        default:
+            return pm;
+    }
 }
 
 function runScript(pm: PackageManager, script: string, cwd: string) {
@@ -568,6 +598,16 @@ function validateCliArgs(args: CliArgs): string[] {
         errors.push("database must be 'd1', 'hyperdrive-postgres', or 'hyperdrive-mysql'");
     }
 
+    // Validate package manager
+    if (args["package-manager"]) {
+        const pm = args["package-manager"] as string;
+        if (!["bun", "pnpm", "yarn", "npm"].includes(pm)) {
+            errors.push("package-manager must be 'bun', 'pnpm', 'yarn', or 'npm'");
+        } else if (!commandAvailable(pm as PackageManager)) {
+            errors.push(`package-manager '${pm}' is not available on this system`);
+        }
+    }
+
     // Validate binding names
     const bindingFields = ["d1-binding", "hd-binding", "kv-binding", "r2-binding"];
     for (const field of bindingFields) {
@@ -607,6 +647,7 @@ function cliArgsToAnswers(args: CliArgs): Partial<GenerateAnswers> {
     if (args["app-name"]) answers.appName = args["app-name"] as string;
     if (args.template) answers.template = args.template as "hono" | "nextjs";
     if (args.database) answers.database = args.database as DbKind;
+    if (args["package-manager"]) answers.packageManager = args["package-manager"] as PackageManager;
 
     // D1 fields
     if (args["d1-name"]) answers.d1Name = args["d1-name"] as string;
@@ -867,10 +908,16 @@ async function generate(cliArgs?: CliArgs) {
         const partialAnswers = cliArgsToAnswers(cliArgs);
 
         // Fill in required fields with defaults if not provided
+        const availablePackageManagers = getAvailablePackageManagers();
+        const defaultPackageManager =
+            partialAnswers.packageManager ||
+            (availablePackageManagers.length > 0 ? availablePackageManagers[0] : "npm");
+
         answers = {
             appName: partialAnswers.appName || "my-app",
             template: partialAnswers.template || "hono",
             database: partialAnswers.database || "d1",
+            packageManager: defaultPackageManager,
             geolocation: partialAnswers.geolocation !== undefined ? partialAnswers.geolocation : true,
             kv: partialAnswers.kv !== undefined ? partialAnswers.kv : true,
             r2: partialAnswers.r2 !== undefined ? partialAnswers.r2 : false,
@@ -937,6 +984,23 @@ async function generate(cliArgs?: CliArgs) {
                         ],
                         initialValue: "d1",
                     }) as Promise<DbKind>;
+                },
+                packageManager: () => {
+                    const available = getAvailablePackageManagers();
+                    if (available.length === 0) {
+                        return Promise.resolve("npm" as PackageManager);
+                    }
+                    if (available.length === 1) {
+                        return Promise.resolve(available[0]);
+                    }
+                    return (select as any)({
+                        message: "Package manager",
+                        options: available.map(pm => ({
+                            value: pm,
+                            label: getPackageManagerDisplayName(pm),
+                        })),
+                        initialValue: available[0],
+                    }) as Promise<PackageManager>;
                 },
                 d1Name: ({ results }: { results: Partial<GenerateAnswers> }) =>
                     results.database === "d1"
@@ -1495,8 +1559,8 @@ export const verification = {} as any;`;
 
     // Install dependencies before Cloudflare resource creation
     // This ensures projects are buildable even if Cloudflare setup fails
-    const pm = detectPackageManager(targetDir);
-    debugLog(`Detected package manager: ${pm}`);
+    const pm = answers.packageManager;
+    debugLog(`Using selected package manager: ${pm}`);
     let doInstall: boolean;
 
     if (isNonInteractive) {
@@ -2041,6 +2105,19 @@ export const verification = {} as any;`;
         }
     }
 
+    // Initialize git repository
+    debugLog("Initializing git repository");
+    const gitSpinner = spinner();
+    gitSpinner.start("Initializing git repository...");
+
+    const gitResult = initializeGitRepository(targetDir);
+    if (gitResult.success) {
+        gitSpinner.stop(pc.green("Git repository initialized with initial commit"));
+    } else {
+        gitSpinner.stop(pc.yellow("Git initialization skipped"));
+        debugLog(`Git initialization failed: ${gitResult.error}`);
+    }
+
     // Final instructions
     const pmDev = pm === "yarn" ? "yarn dev" : pm === "npm" ? "npm run dev" : `${pm} run dev`;
     const runScriptHelp = (name: string) =>
@@ -2094,6 +2171,7 @@ function printHelp() {
         `  --app-name=<name>              Project name (default: my-app)\n` +
         `  --template=<template>          hono | nextjs (default: hono)\n` +
         `  --database=<db>                d1 | hyperdrive-postgres | hyperdrive-mysql (default: d1)\n` +
+        `  --package-manager=<pm>         pnpm | bun | yarn | npm (default: first available)\n` +
         `  --geolocation=<bool>           Enable geolocation tracking (default: true)\n` +
         `  --kv=<bool>                    Use KV as secondary storage for Better Auth (default: true)\n` +
         `  --r2=<bool>                    Enable R2 to extend Better Auth with user file storage (default: false)\n` +
