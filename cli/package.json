@@ -37,6 +37,7 @@
     },
     "dependencies": {
         "@clack/prompts": "^0.7.0",
+        "ora": "^9.0.0",
         "picocolors": "^1.0.0"
     },
     "devDependencies": {

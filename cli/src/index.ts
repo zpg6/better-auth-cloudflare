@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { cancel, confirm, group, intro, outro, select, spinner, text } from "@clack/prompts";
+import { cancel, confirm, group, intro, outro, select, text } from "@clack/prompts";
+import ora from "ora";
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join, resolve } from "path";
@@ -118,6 +119,15 @@ type PackageManager = "bun" | "pnpm" | "yarn" | "npm";
 
 // Global verbose flag state
 let isVerbose = false;
+
+// Create ora spinner with consistent styling
+function createSpinner(text?: string) {
+    return ora({
+        text: text || "",
+        spinner: "dots",
+        color: "cyan",
+    });
+}
 
 function debugLog(message: string): void {
     if (isVerbose) {
@@ -410,16 +420,16 @@ async function ensureWranglerAuth(isNonInteractive: boolean): Promise<string | u
         const shouldLogin = shouldLoginResult === true;
 
         if (shouldLogin) {
-            const s = spinner();
-            s.start("Opening browser for Wrangler login...");
+            const s = createSpinner("Opening browser for Wrangler login...");
+            s.start();
 
             const loginResult = bunSpawnSync("npx", ["wrangler", "login"]);
 
             if (loginResult.code === 0) {
-                s.stop(pc.green("Successfully logged in to Wrangler."));
+                s.succeed("Successfully logged in to Wrangler.");
                 return undefined;
             } else {
-                s.stop(pc.red("Failed to login to Wrangler."));
+                s.fail("Failed to login to Wrangler.");
                 fatal("Wrangler login failed. Please try running 'npx wrangler login' manually.");
             }
         } else {
@@ -738,27 +748,27 @@ async function migrate(cliArgs?: CliArgs) {
 
     // Run auth:update - use npm specifically for auth commands
     debugLog("Running auth:update script");
-    const authSpinner = spinner();
-    authSpinner.start("Running auth:update...");
+    const authSpinner = createSpinner("Running auth:update...");
+    authSpinner.start();
     const authPm = detectPackageManagerForAuth(process.cwd());
     debugLog(`Using package manager for auth commands: ${authPm}`);
     const authRes = runScript(authPm, "auth:update", process.cwd());
     if (authRes.code === 0) {
-        authSpinner.stop(pc.green("Auth schema updated."));
+        authSpinner.succeed("Auth schema updated.");
     } else {
-        authSpinner.stop(pc.red("Failed to update auth schema."));
+        authSpinner.fail("Failed to update auth schema.");
         assertOk(authRes, "Auth schema update failed.");
     }
 
     // Run db:generate
     debugLog("Running db:generate script");
-    const dbSpinner = spinner();
-    dbSpinner.start("Running db:generate...");
+    const dbSpinner = createSpinner("Running db:generate...");
+    dbSpinner.start();
     const dbRes = runScript(pm, "db:generate", process.cwd());
     if (dbRes.code === 0) {
-        dbSpinner.stop(pc.green("Database migrations generated."));
+        dbSpinner.succeed("Database migrations generated.");
     } else {
-        dbSpinner.stop(pc.red("Failed to generate database migrations."));
+        dbSpinner.fail("Failed to generate database migrations.");
         assertOk(dbRes, "Database migration generation failed.");
     }
 
@@ -857,24 +867,24 @@ async function migrate(cliArgs?: CliArgs) {
 
     if (migrateChoice === "dev") {
         debugLog("Applying migrations locally (dev environment)");
-        const migSpinner = spinner();
-        migSpinner.start("Applying migrations locally...");
+        const migSpinner = createSpinner("Applying migrations locally...");
+        migSpinner.start();
         const migRes = runScript(pm, "db:migrate:dev", process.cwd());
         if (migRes.code === 0) {
-            migSpinner.stop(pc.green("Migrations applied locally."));
+            migSpinner.succeed("Migrations applied locally.");
         } else {
-            migSpinner.stop(pc.red("Failed to apply local migrations."));
+            migSpinner.fail("Failed to apply local migrations.");
             assertOk(migRes, "Local migration failed.");
         }
     } else if (migrateChoice === "remote") {
         debugLog("Applying migrations to remote (production environment)");
-        const migSpinner = spinner();
-        migSpinner.start("Applying migrations to remote...");
+        const migSpinner = createSpinner("Applying migrations to remote...");
+        migSpinner.start();
         const migRes = runScript(pm, "db:migrate:prod", process.cwd());
         if (migRes.code === 0) {
-            migSpinner.stop(pc.green("Migrations applied to remote."));
+            migSpinner.succeed("Migrations applied to remote.");
         } else {
-            migSpinner.stop(pc.red("Failed to apply remote migrations."));
+            migSpinner.fail("Failed to apply remote migrations.");
             assertOk(migRes, "Remote migration failed.");
         }
     }
@@ -1091,10 +1101,10 @@ async function generate(cliArgs?: CliArgs) {
         );
     }
 
-    const s = spinner();
+    const s = createSpinner("Cloning templates...");
 
     const tmp = mkdtempSync(join(tmpdir(), "bacf-"));
-    s.start("Cloning templates...");
+    s.start();
     {
         const res = bunSpawnSync("git", [
             "clone",
@@ -1103,9 +1113,9 @@ async function generate(cliArgs?: CliArgs) {
             "https://github.com/zpg6/better-auth-cloudflare.git",
             tmp,
         ]);
-        if (res.code === 0) s.stop("Templates ready.");
+        if (res.code === 0) s.succeed("Templates ready.");
         else {
-            s.stop("Failed to fetch templates.");
+            s.fail("Failed to fetch templates.");
             assertOk(res, "Failed to clone repository. Please ensure git is installed.");
         }
     }
@@ -1121,16 +1131,16 @@ async function generate(cliArgs?: CliArgs) {
         fatal((err as Error).message);
     }
 
-    const copying = spinner();
-    copying.start("Copying project files...");
+    const copying = createSpinner("Copying project files...");
+    copying.start();
     debugLog(`Copying template files from ${templateDir} to ${targetDir}`);
     try {
         cpSync(templateDir, targetDir, { recursive: true });
     } catch (e) {
-        copying.stop("Copy failed.");
+        copying.fail("Copy failed.");
         fatal("Failed to copy template files.");
     }
-    copying.stop("Project files copied.");
+    copying.succeed("Project files copied.");
 
     // Centralize project constants for future tooling
 
@@ -1573,13 +1583,13 @@ export const verification = {} as any;`;
     }
 
     if (doInstall) {
-        const inst = spinner();
-        inst.start("Installing dependencies...");
+        const inst = createSpinner("Installing dependencies...");
+        inst.start();
         const res = runInstall(pm, targetDir);
         if (res.code === 0) {
-            inst.stop(pc.green("Dependencies installed."));
+            inst.succeed("Dependencies installed.");
         } else {
-            inst.stop(pc.red("Failed to install dependencies."));
+            inst.fail("Failed to install dependencies.");
             // Skip dependency installation failure in test environments
             // The CLI will continue but auth generation may fail
             console.warn("⚠️ Warning: Dependency installation failed. Auth generation may not work properly.");
@@ -1603,7 +1613,7 @@ export const verification = {} as any;`;
 
         if (answers.database === "d1" && answers.d1Name) {
             debugLog(`Creating D1 database: ${answers.d1Name} with binding: ${answers.d1Binding}`);
-            const creating = spinner();
+            const creating = createSpinner();
             creating.start(`Creating D1 Database \`${answers.d1Name}\`...`);
             const res = runWranglerCommand(["d1", "create", answers.d1Name], cwd, answers.accountId);
 
@@ -1623,13 +1633,11 @@ export const verification = {} as any;`;
                     );
                     writeFileSync(wranglerPath, updatedWrangler);
                 }
-                creating.stop(
-                    pc.green(`\`${answers.d1Name}\` created${databaseId ? " (id: " + databaseId + ")" : ""}.`)
-                );
+                creating.succeed(`\`${answers.d1Name}\` created${databaseId ? " (id: " + databaseId + ")" : ""}.`);
             } else if (
                 res.stderr.includes("More than one account available but unable to select one in non-interactive mode")
             ) {
-                creating.stop(pc.red("Failed to create D1 database."));
+                creating.fail("Failed to create D1 database.");
                 const selectedAccountId = await handleAccountSelection(res.stderr, isNonInteractive);
                 if (selectedAccountId) {
                     // Retry with selected account
@@ -1649,12 +1657,12 @@ export const verification = {} as any;`;
                             );
                             writeFileSync(wranglerPath, updatedWrangler);
                         }
-                        creating.stop(
-                            pc.green(`\`${answers.d1Name}\` created${databaseId ? " (id: " + databaseId + ")" : ""}.`)
+                        creating.succeed(
+                            `\`${answers.d1Name}\` created${databaseId ? " (id: " + databaseId + ")" : ""}.`
                         );
                         answers.accountId = selectedAccountId; // Save for subsequent commands
                     } else {
-                        creating.stop(pc.red("Failed to create D1 database."));
+                        creating.fail("Failed to create D1 database.");
                         assertOk(retryRes, "D1 creation failed.");
                     }
                 }
@@ -1683,13 +1691,11 @@ export const verification = {} as any;`;
                         );
                         writeFileSync(wranglerPath, updatedWrangler);
                     }
-                    creating.stop(
-                        pc.yellow(
-                            `D1 database already exists (name: ${answers.d1Name})${existingDatabaseId ? " (id: " + existingDatabaseId + ")" : ""}.`
-                        )
+                    creating.warn(
+                        `D1 database already exists (name: ${answers.d1Name})${existingDatabaseId ? " (id: " + existingDatabaseId + ")" : ""}.`
                     );
                 } else if (isInternalError) {
-                    creating.stop(pc.red("D1 database creation failed due to Cloudflare API internal error."));
+                    creating.fail("D1 database creation failed due to Cloudflare API internal error.");
                     console.log(pc.gray("This is usually a temporary issue with Cloudflare's API."));
                     console.log(
                         pc.gray("Check Cloudflare Status for ongoing issues: https://www.cloudflarestatus.com/")
@@ -1699,7 +1705,7 @@ export const verification = {} as any;`;
                     console.log(pc.gray("Then update your wrangler.toml with the database ID."));
                     assertOk(res, "D1 database creation failed due to internal error.");
                 } else {
-                    creating.stop(pc.red("Failed to create D1 database."));
+                    creating.fail("Failed to create D1 database.");
                     console.log(
                         pc.gray("Check Cloudflare Status for ongoing issues: https://www.cloudflarestatus.com/")
                     );
@@ -1711,7 +1717,7 @@ export const verification = {} as any;`;
         if (answers.database !== "d1" && answers.hdName && answers.hdConnectionString && answers.hdBinding) {
             debugLog(`Creating Hyperdrive: ${answers.hdName} with binding: ${answers.hdBinding}`);
             debugLog(`Connection string: ${answers.hdConnectionString.replace(/:([^:@]+)@/, ":***@")}`);
-            const creating = spinner();
+            const creating = createSpinner();
             creating.start(`Creating Hyperdrive \`${answers.hdName}\`...`);
             const res = runWranglerCommand(
                 ["hyperdrive", "create", answers.hdName, `--connection-string=${answers.hdConnectionString}`],
@@ -1733,7 +1739,7 @@ export const verification = {} as any;`;
                     );
                     writeFileSync(wranglerPath, updatedWrangler);
                 }
-                creating.stop(pc.green(`Hyperdrive created${hyperdriveId ? " (id: " + hyperdriveId + ")" : ""}.`));
+                creating.succeed(`Hyperdrive created${hyperdriveId ? " (id: " + hyperdriveId + ")" : ""}.`);
             } else {
                 // Check for specific error types
                 const isHyperdriveExists =
@@ -1756,13 +1762,11 @@ export const verification = {} as any;`;
                         );
                         writeFileSync(wranglerPath, updatedWrangler);
                     }
-                    creating.stop(
-                        pc.yellow(
-                            `Hyperdrive already exists (name: ${answers.hdName})${existingHyperdriveId ? " (id: " + existingHyperdriveId + ")" : ""}.`
-                        )
+                    creating.warn(
+                        `Hyperdrive already exists (name: ${answers.hdName})${existingHyperdriveId ? " (id: " + existingHyperdriveId + ")" : ""}.`
                     );
                 } else {
-                    creating.stop(pc.red("Failed to create Hyperdrive."));
+                    creating.fail("Failed to create Hyperdrive.");
                     assertOk(res, "Hyperdrive creation failed.");
                 }
             }
@@ -1770,7 +1774,7 @@ export const verification = {} as any;`;
 
         if (answers.kv && answers.kvNamespaceName && answers.kvBinding) {
             debugLog(`Creating KV namespace: ${answers.kvNamespaceName} with binding: ${answers.kvBinding}`);
-            const creating = spinner();
+            const creating = createSpinner();
             creating.start(`Creating KV Namespace \`${answers.kvNamespaceName}\`...`);
             const res = runWranglerCommand(
                 ["kv", "namespace", "create", answers.kvNamespaceName],
@@ -1788,7 +1792,7 @@ export const verification = {} as any;`;
                     const updatedWrangler = updateKvBlockWithId(currentWrangler, answers.kvBinding!, namespaceId);
                     writeFileSync(wranglerPath, updatedWrangler);
                 }
-                creating.stop(pc.green(`KV namespace created${namespaceId ? " (id: " + namespaceId + ")" : ""}.`));
+                creating.succeed(`KV namespace created${namespaceId ? " (id: " + namespaceId + ")" : ""}.`);
             } else {
                 // Check for specific error types
                 const isKvExists =
@@ -1816,13 +1820,11 @@ export const verification = {} as any;`;
                         );
                         writeFileSync(wranglerPath, updatedWrangler);
                     }
-                    creating.stop(
-                        pc.yellow(
-                            `KV namespace already exists (name: ${answers.kvNamespaceName})${existingNamespaceId ? " (id: " + existingNamespaceId + ")" : ""}.`
-                        )
+                    creating.warn(
+                        `KV namespace already exists (name: ${answers.kvNamespaceName})${existingNamespaceId ? " (id: " + existingNamespaceId + ")" : ""}.`
                     );
                 } else {
-                    creating.stop(pc.red("Failed to create KV namespace."));
+                    creating.fail("Failed to create KV namespace.");
                     assertOk(res, "KV namespace creation failed.");
                 }
             }
@@ -1831,7 +1833,7 @@ export const verification = {} as any;`;
         if (answers.r2 && answers.r2BucketName) {
             const r2Binding = answers.r2Binding || "R2_BUCKET";
             debugLog(`Creating R2 bucket: ${answers.r2BucketName} with binding: ${r2Binding}`);
-            const creating = spinner();
+            const creating = createSpinner();
             creating.start(`Creating R2 Bucket \`${answers.r2BucketName}\`...`);
             const res = runWranglerCommand(["r2", "bucket", "create", answers.r2BucketName], cwd, answers.accountId);
             if (res.code === 0) {
@@ -1841,7 +1843,7 @@ export const verification = {} as any;`;
                     wrangler = appendOrReplaceR2Block(wrangler, r2Binding, answers.r2BucketName);
                     writeFileSync(wranglerPath, wrangler);
                 }
-                creating.stop(pc.green(`R2 bucket created (name: ${answers.r2BucketName}).`));
+                creating.succeed(`R2 bucket created (name: ${answers.r2BucketName}).`);
             } else {
                 // Check if the error is because the bucket already exists (error code 10004)
                 const bucketAlreadyExists =
@@ -1859,9 +1861,9 @@ export const verification = {} as any;`;
                         wrangler = appendOrReplaceR2Block(wrangler, r2Binding, answers.r2BucketName);
                         writeFileSync(wranglerPath, wrangler);
                     }
-                    creating.stop(pc.yellow(`R2 bucket already exists (name: ${answers.r2BucketName}).`));
+                    creating.warn(`R2 bucket already exists (name: ${answers.r2BucketName}).`);
                 } else {
-                    creating.stop(pc.red("Failed to create R2 bucket."));
+                    creating.fail("Failed to create R2 bucket.");
                     console.log(
                         pc.gray("Check Cloudflare Status for ongoing issues: https://www.cloudflarestatus.com/")
                     );
@@ -1875,14 +1877,14 @@ export const verification = {} as any;`;
 
     // Schema generation & migrations
     debugLog("Starting auth schema generation");
-    const genAuth = spinner();
-    genAuth.start("Generating auth schema...");
+    const genAuth = createSpinner("Generating auth schema...");
+    genAuth.start();
     {
         const authPm = detectPackageManagerForAuth(targetDir);
         debugLog(`Using package manager for auth commands: ${authPm}`);
         const authRes = runScript(authPm, "auth:update", targetDir);
         if (authRes.code === 0) {
-            genAuth.stop(pc.green("Auth schema updated."));
+            genAuth.succeed("Auth schema updated.");
 
             // Restore original schema.ts and index.ts after successful auth generation for non-D1 databases
             if (answers.database !== "d1") {
@@ -1906,7 +1908,7 @@ export const verification = {} as any;`;
                 }
             }
         } else {
-            genAuth.stop(pc.red("Failed to generate auth schema."));
+            genAuth.fail("Failed to generate auth schema.");
             // In test environments, continue even if auth generation fails
             // The temporary auth schema will remain in place
             console.warn("⚠️ Warning: Auth schema generation failed. Using placeholder schema.");
@@ -1914,14 +1916,14 @@ export const verification = {} as any;`;
     }
 
     debugLog("Starting Drizzle migration generation");
-    const genDb = spinner();
-    genDb.start("Generating Drizzle migrations...");
+    const genDb = createSpinner("Generating Drizzle migrations...");
+    genDb.start();
     {
         const dbGenRes = runScript(pm, "db:generate", targetDir);
         if (dbGenRes.code === 0) {
-            genDb.stop(pc.green("Drizzle migrations generated."));
+            genDb.succeed("Drizzle migrations generated.");
         } else {
-            genDb.stop(pc.red("Failed to generate migrations."));
+            genDb.fail("Failed to generate migrations.");
             assertOk(dbGenRes, "Migration generation failed.");
         }
     }
@@ -1947,22 +1949,22 @@ export const verification = {} as any;`;
 
         if (migrateChoice === "dev") {
             debugLog("Applying D1 migrations locally");
-            const mig = spinner();
-            mig.start("Applying migrations locally...");
+            const mig = createSpinner("Applying migrations locally...");
+            mig.start();
             const res = runScript(pm, "db:migrate:dev", targetDir);
-            if (res.code === 0) mig.stop(pc.green("Migrations applied locally."));
+            if (res.code === 0) mig.succeed("Migrations applied locally.");
             else {
-                mig.stop(pc.red("Failed to apply local migrations."));
+                mig.fail("Failed to apply local migrations.");
                 assertOk(res, "Local migration failed.");
             }
         } else if (migrateChoice === "prod") {
             debugLog("Applying D1 migrations to production");
-            const mig = spinner();
-            mig.start("Applying migrations remotely...");
+            const mig = createSpinner("Applying migrations remotely...");
+            mig.start();
             const res = runScript(pm, "db:migrate:prod", targetDir);
-            if (res.code === 0) mig.stop(pc.green("Migrations applied remotely."));
+            if (res.code === 0) mig.succeed("Migrations applied remotely.");
             else {
-                mig.stop(pc.red("Failed to apply remote migrations."));
+                mig.fail("Failed to apply remote migrations.");
                 assertOk(res, "Remote migration failed.");
             }
         }
@@ -1996,21 +1998,21 @@ export const verification = {} as any;`;
         }
 
         if (migrateChoice === "dev") {
-            const mig = spinner();
-            mig.start("Applying migrations to development database...");
+            const mig = createSpinner("Applying migrations to development database...");
+            mig.start();
             const res = runScript(pm, "db:migrate:dev", targetDir);
-            if (res.code === 0) mig.stop(pc.green("Migrations applied to development database."));
+            if (res.code === 0) mig.succeed("Migrations applied to development database.");
             else {
-                mig.stop(pc.red("Failed to apply development migrations."));
+                mig.fail("Failed to apply development migrations.");
                 assertOk(res, "Development migration failed.");
             }
         } else if (migrateChoice === "prod") {
-            const mig = spinner();
-            mig.start("Applying migrations to production database...");
+            const mig = createSpinner("Applying migrations to production database...");
+            mig.start();
             const res = runScript(pm, "db:migrate:prod", targetDir);
-            if (res.code === 0) mig.stop(pc.green("Migrations applied to production database."));
+            if (res.code === 0) mig.succeed("Migrations applied to production database.");
             else {
-                mig.stop(pc.red("Failed to apply production migrations."));
+                mig.fail("Failed to apply production migrations.");
                 console.log(pc.gray("Check Cloudflare Status for ongoing issues: https://www.cloudflarestatus.com/"));
                 assertOk(res, "Production migration failed.");
             }
@@ -2026,14 +2028,14 @@ export const verification = {} as any;`;
     // Run database migrations to production if database was created
     if (setup && !databaseSetupSkipped) {
         if (answers.database === "d1") {
-            const migrateSpinner = spinner();
-            migrateSpinner.start("Applying D1 database migrations to production...");
+            const migrateSpinner = createSpinner("Applying D1 database migrations to production...");
+            migrateSpinner.start();
 
             const migrateRes = runScript(pm, "db:migrate:prod", targetDir);
             if (migrateRes.code === 0) {
-                migrateSpinner.stop(pc.green("D1 database migrations applied to production."));
+                migrateSpinner.succeed("D1 database migrations applied to production.");
             } else {
-                migrateSpinner.stop(pc.red("Failed to apply D1 database migrations to production."));
+                migrateSpinner.fail("Failed to apply D1 database migrations to production.");
                 // Don't fail the entire process, but warn the user
                 outro(
                     pc.yellow(
@@ -2043,14 +2045,14 @@ export const verification = {} as any;`;
                 console.log(pc.gray("Check Cloudflare Status for ongoing issues: https://www.cloudflarestatus.com/"));
             }
         } else {
-            const migrateSpinner = spinner();
-            migrateSpinner.start("Applying database migrations to production...");
+            const migrateSpinner = createSpinner("Applying database migrations to production...");
+            migrateSpinner.start();
 
             const migrateRes = runScript(pm, "db:migrate:prod", targetDir);
             if (migrateRes.code === 0) {
-                migrateSpinner.stop(pc.green("Database migrations applied to production."));
+                migrateSpinner.succeed("Database migrations applied to production.");
             } else {
-                migrateSpinner.stop(pc.red("Failed to apply database migrations to production."));
+                migrateSpinner.fail("Failed to apply database migrations to production.");
                 // Don't fail the entire process, but warn the user
                 outro(
                     pc.yellow(
@@ -2085,12 +2087,12 @@ export const verification = {} as any;`;
 
         if (deployChoice) {
             debugLog("Starting deployment to Cloudflare Workers");
-            const deploySpinner = spinner();
-            deploySpinner.start("Deploying to Cloudflare Workers...");
+            const deploySpinner = createSpinner("Deploying to Cloudflare Workers...");
+            deploySpinner.start();
 
             const deployRes = runScript(pm, "deploy", targetDir);
             if (deployRes.code === 0) {
-                deploySpinner.stop(pc.green("Successfully deployed to Cloudflare Workers!"));
+                deploySpinner.succeed("Successfully deployed to Cloudflare Workers!");
 
                 // Try to extract the deployment URL from wrangler output
                 const urlMatch = deployRes.stdout.match(/https:\/\/[^\s]+\.workers\.dev/);
@@ -2098,7 +2100,7 @@ export const verification = {} as any;`;
                     outro(pc.cyan(`🚀 Your app is live at: ${urlMatch[0]}`));
                 }
             } else {
-                deploySpinner.stop(pc.red("Deployment failed."));
+                deploySpinner.fail("Deployment failed.");
                 console.log(pc.gray("Check Cloudflare Status for ongoing issues: https://www.cloudflarestatus.com/"));
                 outro(pc.yellow("You can deploy manually later with: bun run deploy"));
             }
@@ -2107,14 +2109,14 @@ export const verification = {} as any;`;
 
     // Initialize git repository
     debugLog("Initializing git repository");
-    const gitSpinner = spinner();
-    gitSpinner.start("Initializing git repository...");
+    const gitSpinner = createSpinner("Initializing git repository...");
+    gitSpinner.start();
 
     const gitResult = initializeGitRepository(targetDir);
     if (gitResult.success) {
-        gitSpinner.stop(pc.green("Git repository initialized with initial commit"));
+        gitSpinner.succeed("Git repository initialized with initial commit");
     } else {
-        gitSpinner.stop(pc.yellow("Git initialization skipped"));
+        gitSpinner.warn("Git initialization skipped");
         debugLog(`Git initialization failed: ${gitResult.error}`);
     }
 
@@ -2125,6 +2127,7 @@ export const verification = {} as any;`;
 
     const lines: string[] = [];
     lines.push(`${pc.green("✔")} ${pc.bold("Project created!")}`);
+    lines.push("");
     lines.push(`  ${pc.cyan("cd")} ${answers.appName}`);
     lines.push(`  ${pc.cyan(pmDev)}  ${pc.gray("# Start dev server")}`);
     lines.push("");
