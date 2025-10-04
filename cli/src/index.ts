@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { cancel, confirm, group, intro, outro, select, text } from "@clack/prompts";
+import prompts from "prompts";
 import ora from "ora";
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
@@ -127,6 +127,82 @@ function createSpinner(text?: string) {
         spinner: "dots",
         color: "cyan",
     });
+}
+
+// Simple replacements for @clack/prompts
+function intro(message: string) {
+    console.log(`\n${message}`);
+}
+
+function outro(message: string) {
+    console.log(`\n${message}\n`);
+}
+
+function cancel(message: string) {
+    console.log(`✖  ${message}`);
+}
+
+async function confirm(options: { message: string; initialValue?: boolean }) {
+    const response = await prompts({
+        type: "confirm",
+        name: "value",
+        message: options.message,
+        initial: options.initialValue ?? false,
+    });
+    return response.value;
+}
+
+async function select(options: { message: string; options: Array<{ value: any; label: string }>; initialValue?: any }) {
+    const response = await prompts({
+        type: "select",
+        name: "value",
+        message: options.message,
+        choices: options.options.map(opt => ({ title: opt.label, value: opt.value })),
+        initial: options.initialValue ? options.options.findIndex(opt => opt.value === options.initialValue) : 0,
+    });
+    return response.value;
+}
+
+async function text(options: {
+    message: string;
+    placeholder?: string;
+    defaultValue?: string;
+    initialValue?: string;
+    validate?: (value: string) => string | void;
+}) {
+    const response = await prompts({
+        type: "text",
+        name: "value",
+        message: options.message,
+        initial: options.initialValue || options.defaultValue || "",
+        validate: options.validate
+            ? (value: string) => {
+                  const result = options.validate!(value);
+                  return result === undefined ? true : result;
+              }
+            : undefined,
+    });
+    return response.value;
+}
+
+async function group<T>(prompts: any, options?: { onCancel?: () => void }) {
+    const results: any = {};
+
+    for (const [key, promptFn] of Object.entries(prompts)) {
+        try {
+            const result = await (promptFn as any)({ results });
+            if (result !== undefined) {
+                results[key] = result;
+            }
+        } catch (error) {
+            if (options?.onCancel) {
+                options.onCancel();
+            }
+            throw error;
+        }
+    }
+
+    return results as T;
 }
 
 function debugLog(message: string): void {
@@ -381,14 +457,13 @@ async function handleAccountSelection(stderr: string, isNonInteractive: boolean)
         process.exit(1);
     } else {
         // In interactive mode, let user select
-        const { select } = await import("@clack/prompts");
-        const selectedAccountId = (await (select as any)({
+        const selectedAccountId = await select({
             message: "Multiple Cloudflare accounts found. Which account would you like to use?",
             options: accounts.map(account => ({
                 value: account.id,
                 label: `${account.name} (${account.id})`,
             })),
-        })) as string;
+        });
 
         return selectedAccountId;
     }

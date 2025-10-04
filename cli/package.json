@@ -36,13 +36,14 @@
         "prepublishOnly": "npm run build"
     },
     "dependencies": {
-        "@clack/prompts": "^0.7.0",
         "ora": "^9.0.0",
-        "picocolors": "^1.0.0"
+        "picocolors": "^1.0.0",
+        "prompts": "^2.4.2"
     },
     "devDependencies": {
         "@iarna/toml": "^2.2.5",
         "@types/node": "^22.7.5",
+        "@types/prompts": "^2.4.9",
         "bun-types": "^1.1.33",
         "postgres": "^3.4.4",
         "typescript": "^5.5.4"
