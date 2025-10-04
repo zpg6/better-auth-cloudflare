@@ -9,6 +9,7 @@ import {
     extractD1DatabaseId,
     extractHyperdriveId,
     extractKvNamespaceId,
+    initializeGitRepository,
     parseWranglerToml,
     updateD1BlockWithId,
     updateHyperdriveBlockWithId,
@@ -2039,6 +2040,19 @@ export const verification = {} as any;`;
                 outro(pc.yellow("You can deploy manually later with: bun run deploy"));
             }
         }
+    }
+
+    // Initialize git repository
+    debugLog("Initializing git repository");
+    const gitSpinner = spinner();
+    gitSpinner.start("Initializing git repository...");
+
+    const gitResult = initializeGitRepository(targetDir);
+    if (gitResult.success) {
+        gitSpinner.stop(pc.green("Git repository initialized with initial commit"));
+    } else {
+        gitSpinner.stop(pc.yellow("Git initialization skipped"));
+        debugLog(`Git initialization failed: ${gitResult.error}`);
     }
 
     // Final instructions
