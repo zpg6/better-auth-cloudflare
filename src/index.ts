@@ -138,6 +138,8 @@ type WithCloudflareAuth<T extends BetterAuthOptions> = T & {
 };
 
 /**
+ * @deprecated　Use cloudflare plugin directly instead.
+ *
  * Enhances BetterAuthOptions with Cloudflare-specific configurations.
  *
  * This function integrates Cloudflare services like D1 for database and KV for secondary storage,
