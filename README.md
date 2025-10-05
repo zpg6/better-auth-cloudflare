@@ -226,11 +226,13 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties) 
             )],
             secondaryStorage: env?.KV ? createKVStorage(env.KV as KVNamespace) : undefined,
             session: {
-                storeSessionInDatabase: true, // set to true if you've enabled geolocationTracking 
+                // set to true if you've enabled geolocationTracking 
+                storeSessionInDatabase: true,
             },
             advanced: {
                 ipAddress: {
-                    ipAddressHeaders: ["cf-connecting-ip", "x-real-ip"], // add these headers if you've enabled autoDetectIpAddress
+                    // add these headers if you've enabled autoDetectIpAddress
+                    ipAddressHeaders: ["cf-connecting-ip", "x-real-ip"],
                 },
             },
         }
