@@ -58,15 +58,15 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - [Configuration Options](#configuration-options)
 - [Manual Installation](#manual-installation)
 - [Manual Setup](#manual-setup)
-    - [1. Define Your Database Schema (`src/db/schema.ts`)](#1-define-your-database-schema-srcdbschemats)
-    - [2. Initialize Drizzle ORM (`src/db/index.ts`)](#2-initialize-drizzle-orm-srcdbindexts)
-    - [3. Configure Better Auth (`src/auth/index.ts`)](#3-configure-better-auth-srcauthindexts)
-    - [4. Generate and Manage Auth Schema](#4-generate-and-manage-auth-schema)
-    - [5. Configure KV as Secondary Storage (Optional)](#5-configure-kv-as-secondary-storage-optional)
-    - [6. Set Up API Routes](#6-set-up-api-routes)
-    - [7. Initialize the Client](#7-initialize-the-client)
+  - [1. Define Your Database Schema (`src/db/schema.ts`)](#1-define-your-database-schema-srcdbschemats)
+  - [2. Initialize Drizzle ORM (`src/db/index.ts`)](#2-initialize-drizzle-orm-srcdbindexts)
+  - [3. Configure Better Auth (`src/auth/index.ts`)](#3-configure-better-auth-srcauthindexts)
+  - [4. Generate and Manage Auth Schema](#4-generate-and-manage-auth-schema)
+  - [5. Configure KV as Secondary Storage (Optional)](#5-configure-kv-as-secondary-storage-optional)
+  - [6. Set Up API Routes](#6-set-up-api-routes)
+  - [7. Initialize the Client](#7-initialize-the-client)
 - [Usage Examples](#usage-examples)
-    - [Accessing Geolocation Data](#accessing-geolocation-data)
+  - [Accessing Geolocation Data](#accessing-geolocation-data)
 - [R2 File Storage Guide](./docs/r2.md)
 - [License](#license)
 - [Contributing](#contributing)
@@ -174,14 +174,14 @@ export async function getDb() {
 
 ### 3. Configure Better Auth (`src/auth/index.ts`)
 
-Set up your Better Auth configuration, wrapping it with `withCloudflare` to enable Cloudflare-specific features. The exact configuration depends on your framework:
+Set up your Better Auth configuration, add `cloudflare` plugin to enable Cloudflare-specific features. The exact configuration depends on your framework:
 
 **For most frameworks (Hono, etc.):**
 
 ```typescript
 import type { D1Database, IncomingRequestCfProperties } from "@cloudflare/workers-types";
 import { betterAuth } from "better-auth";
-import { withCloudflare } from "better-auth-cloudflare";
+import { cloudflare, createKVStorage } from "better-auth-cloudflare";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle } from "drizzle-orm/d1";
 import { schema } from "../db";
@@ -192,21 +192,26 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties) 
     const db = env ? drizzle(env.DATABASE, { schema, logger: true }) : ({} as any);
 
     return betterAuth({
-        ...withCloudflare(
-            {
+        {
+            emailAndPassword: {
+                enabled: true,
+            },
+            rateLimit: {
+                enabled: true,
+            },
+            database: drizzleAdapter(
+                db,
+                {
+                    provider: "sqlite",
+                    debugLogs: false,
+                    // other DrizzleAdapterConfig options
+                }
+            )
+            plugins: [cloudflare(
                 autoDetectIpAddress: true,
                 geolocationTracking: true,
                 cf: cf || {},
-                d1: env
-                    ? {
-                          db,
-                          options: {
-                              usePlural: true,
-                              debugLogs: true,
-                          },
-                      }
-                    : undefined,
-                kv: env?.KV,
+
                 // Optional: Enable R2 file storage
                 r2: {
                     bucket: env.R2_BUCKET,
@@ -218,26 +223,19 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties) 
                         description: { type: "string", required: false },
                     },
                 },
+            )],
+            secondaryStorage: env?.KV ? createKVStorage(env.KV as KVNamespace) : undefined,
+            session: {
+                // set to true if you've enabled geolocationTracking 
+                storeSessionInDatabase: true,
             },
-            {
-                emailAndPassword: {
-                    enabled: true,
+            advanced: {
+                ipAddress: {
+                    // add these headers if you've enabled autoDetectIpAddress
+                    ipAddressHeaders: ["cf-connecting-ip", "x-real-ip"],
                 },
-                rateLimit: {
-                    enabled: true,
-                },
-            }
-        ),
-        // Only add database adapter for CLI schema generation
-        ...(env
-            ? {}
-            : {
-                  database: drizzleAdapter({} as D1Database, {
-                      provider: "sqlite",
-                      usePlural: true,
-                      debugLogs: true,
-                  }),
-              }),
+            },
+        }
     });
 }
 
@@ -264,15 +262,11 @@ async function getDb() {
 }
 
 const auth = betterAuth({
-    ...withCloudflare(
+    database: drizzleAdapter(
+        await getDb()
         {
-            mysql: {
-                db: await getDb(),
-            },
-            // other cloudflare options...
-        },
-        {
-            // your auth options...
+            provider: "mysql",
+            // other DrizzleAdapterConfig options
         }
     ),
 });
@@ -286,20 +280,16 @@ import postgres from "postgres";
 
 async function getDb() {
     const { env } = await getCloudflareContext({ async: true });
-    const sql = postgres(env.HYPERDRIVE_URL);
+    const sql = postgres(env.HYPERDRIVE.connectionString);
     return drizzle(sql, { schema });
 }
 
 const auth = betterAuth({
-    ...withCloudflare(
+    database: drizzleAdapter(
+        await getDb()
         {
-            postgres: {
-                db: await getDb(),
-            },
-            // other cloudflare options...
-        },
-        {
-            // your auth options...
+            provider: "pg",
+            // other DrizzleAdapterConfig options
         }
     ),
 });
@@ -337,7 +327,7 @@ For integrating the generated `auth.schema.ts` with your existing Drizzle schema
 
 ### 5. Configure KV as Secondary Storage (Optional)
 
-If you provide a KV namespace in the `withCloudflare` configuration (as shown in `src/auth/index.ts`), it will be used as [Secondary Storage](https://www.better-auth.com/docs/concepts/database#secondary-storage) by Better Auth. This is typically used for caching or storing session data that doesn't need to reside in your primary database.
+You can use `createKVStorage()` to create a Better Auth compatible [Secondary Storage](https://www.better-auth.com/docs/concepts/database#secondary-storage). This is typically used for caching or storing session data that doesn't need to reside in your primary database.
 
 Ensure your KV namespace (e.g., `USER_SESSIONS`) is correctly bound in your `wrangler.toml` file.
 
