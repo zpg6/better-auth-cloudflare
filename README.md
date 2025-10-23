@@ -225,6 +225,19 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties) 
                 },
                 rateLimit: {
                     enabled: true,
+                    window: 60, // Minimum KV TTL is 60s
+                    max: 100, // reqs/window
+                    customRules: {
+                        // https://github.com/better-auth/better-auth/issues/5452
+                        "/sign-in/email": {
+                            window: 60,
+                            max: 100,
+                        },
+                        "/sign-in/social": {
+                            window: 60,
+                            max: 100,
+                        },
+                    },
                 },
             }
         ),
@@ -340,6 +353,31 @@ For integrating the generated `auth.schema.ts` with your existing Drizzle schema
 If you provide a KV namespace in the `withCloudflare` configuration (as shown in `src/auth/index.ts`), it will be used as [Secondary Storage](https://www.better-auth.com/docs/concepts/database#secondary-storage) by Better Auth. This is typically used for caching or storing session data that doesn't need to reside in your primary database.
 
 Ensure your KV namespace (e.g., `USER_SESSIONS`) is correctly bound in your `wrangler.toml` file.
+
+#### Important: KV TTL Limitation
+
+Cloudflare KV has a minimum TTL (Time To Live) requirement of **60 seconds**. If you're using KV for secondary storage with rate limiting enabled, you **must** configure your rate limit windows to be at least 60 seconds to prevent crashes:
+
+```typescript
+rateLimit: {
+    enabled: true,
+    window: 60, // Minimum KV TTL is 60s
+    max: 100, // reqs/window
+    customRules: {
+        // https://github.com/better-auth/better-auth/issues/5452
+        "/sign-in/email": {
+            window: 60,
+            max: 100,
+        },
+        "/sign-in/social": {
+            window: 60,
+            max: 100,
+        },
+    },
+},
+```
+
+The library automatically enforces this minimum and will log a warning if a TTL less than 60 seconds is attempted, but it's better to configure your rate limits correctly from the start.
 
 ### 6. Set Up API Routes
 
