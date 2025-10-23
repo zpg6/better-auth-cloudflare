@@ -1,4 +1,4 @@
-import type { AuthPluginSchema } from "better-auth";
+import type { AuthPluginSchema } from "better-auth/db";
 import type { FieldAttribute } from "better-auth/db";
 import type { CloudflarePluginOptions } from "./types";
 

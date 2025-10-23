@@ -1,5 +1,6 @@
 import type { KVNamespace } from "@cloudflare/workers-types";
-import { type BetterAuthOptions, type BetterAuthPlugin, type SecondaryStorage, type Session } from "better-auth";
+import { type BetterAuthOptions, type BetterAuthPlugin, type Session } from "better-auth";
+import { type SecondaryStorage } from "better-auth/db";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
 import { schema } from "./schema";
