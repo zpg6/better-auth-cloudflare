@@ -1,5 +1,6 @@
 import type { KVNamespace } from "@cloudflare/workers-types";
-import { type BetterAuthOptions, type BetterAuthPlugin, type SecondaryStorage, type Session } from "better-auth";
+import { type BetterAuthOptions, type BetterAuthPlugin, type Session } from "better-auth";
+import { type SecondaryStorage } from "better-auth/db";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
 import { schema } from "./schema";
@@ -122,7 +123,16 @@ export const createKVStorage = (kv: KVNamespace<string>): SecondaryStorage => {
             return kv.get(key);
         },
         set: async (key: string, value: string, ttl?: number) => {
-            return kv.put(key, value, ttl ? { expirationTtl: ttl } : undefined);
+            if (ttl !== undefined) {
+                // Cloudflare KV requires TTL >= 60 seconds
+                const minTtl = 60;
+                if (ttl < minTtl) {
+                    console.warn(`[BetterAuthCloudflare] TTL ${ttl}s is less than KV minimum of ${minTtl}s. Using ${minTtl}s instead.`);
+                    ttl = minTtl;
+                }
+                return kv.put(key, value, { expirationTtl: ttl });
+            }
+            return kv.put(key, value);
         },
         delete: async (key: string) => {
             return kv.delete(key);
