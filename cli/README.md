@@ -186,6 +186,14 @@ npx @better-auth-cloudflare/cli migrate --migrate-target=dev
 
 Creates a new Better Auth Cloudflare project from Hono or OpenNext.js templates, optionally creating Cloudflare D1, KV, R2, or Hyperdrive resources for you. The migrate command runs `auth:update`, `db:generate`, and optionally `db:migrate`.
 
+## Troubleshooting
+
+**Error `...Error [ERR_REQUIRE_ESM]: require() of ES Module...`**:
+
+Loading ECMAScript modules using `require()` should be supported by your nodejs.
+Make sure your node version is at least `v23.0.0`, `v22.12.0`, or `v20.19.0`, depending on the major version you use. 
+Read more [here](https://nodejs.org/api/modules.html#loading-ecmascript-modules-using-require)
+
 ## Related
 
 - 📦 **[better-auth-cloudflare](https://github.com/zpg6/better-auth-cloudflare)** - Main package and documentation
