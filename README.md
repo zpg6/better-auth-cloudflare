@@ -103,6 +103,10 @@ npx @better-auth-cloudflare/cli@latest migrate --migrate-target=prod   # Non-int
 
 The CLI creates projects from Hono or Next.js templates and can automatically set up D1, KV, R2, and Hyperdrive resources. See [CLI Documentation](./cli/README.md) for full documentation and all available arguments.
 
+**Troubleshooting**:
+
+If you encounter this error when using the CLI: `...Error [ERR_REQUIRE_ESM]: require() of ES Module...`, make sure your node version is at least `v23.0.0`, `v22.12.0`, or `v20.19.0`, depending on the major version you use. Read more [here](https://nodejs.org/api/modules.html#loading-ecmascript-modules-using-require)
+
 ## Manual Installation
 
 ```bash
