@@ -645,10 +645,13 @@ export const createR2Endpoints = (
 
                     // Store file metadata in database
                     try {
-                        await ctx.context.adapter.create({
+                        const newFile = await ctx.context.adapter.create({
                             model: modelName,
                             data: {
-                                id: fileMetadata.id,
+                                // You are trying to create a record with an id. 
+                                // This is not allowed as we handle id generation for you. 
+                                // The id will be ignored.
+                                // id: fileMetadata.id,
                                 userId: fileMetadata.userId,
                                 filename: fileMetadata.filename,
                                 originalName: fileMetadata.originalName,
@@ -660,7 +663,7 @@ export const createR2Endpoints = (
                             },
                         });
 
-                        ctx.context.logger?.info("[R2]: File metadata saved to database:", fileMetadata.id);
+                        ctx.context.logger?.info("[R2]: File metadata saved to database:", newFile.id);
                     } catch (dbError) {
                         ctx.context.logger?.error("[R2]: Failed to save to database:", dbError);
 
@@ -678,7 +681,7 @@ export const createR2Endpoints = (
 
                     return ctx.json({
                         success: true,
-                        data: fileMetadata,
+                        data: { ...fileMetadata, id: newFile.id },
                     });
                 } catch (error) {
                     ctx.context.logger?.error("[R2]: Upload failed:", error);
