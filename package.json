@@ -36,6 +36,7 @@
     },
     "dependencies": {
         "drizzle-orm": "^0.44.5",
+        "mime": "^4.1.0",
         "zod": "^4.1.5"
     },
     "peerDependencies": {

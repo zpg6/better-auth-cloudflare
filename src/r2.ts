@@ -1,6 +1,7 @@
 import type { AuthContext } from "better-auth";
 import { createAuthEndpoint, getSessionFromCtx, sessionMiddleware } from "better-auth/api";
 import type { FieldAttribute } from "better-auth/db";
+import mime from "mime/lite";
 import { z, type ZodType } from "zod";
 import type { FileMetadata, R2Config } from "./types";
 
@@ -512,11 +513,18 @@ export const createR2Endpoints = (
     getR2Storage: () => ReturnType<typeof createR2Storage> | null,
     r2Config?: R2Config
 ) => {
+    const allowedMediaTypes = r2Config?.allowedTypes
+        ?.map(type => mime.getType(type))
+        .filter((mimeType): mimeType is string => Boolean(mimeType));
+
     return {
         upload: createAuthEndpoint(
             "/files/upload-raw",
             {
                 method: "POST",
+                metadata: {
+                    allowedMediaTypes,
+                },
             },
             async ctx => {
                 // Manually get session instead of using middleware
