@@ -652,10 +652,6 @@ export const createR2Endpoints = (
                         const newFile = await ctx.context.adapter.create({
                             model: modelName,
                             data: {
-                                // You are trying to create a record with an id. 
-                                // This is not allowed as we handle id generation for you. 
-                                // The id will be ignored.
-                                // id: fileMetadata.id,
                                 userId: fileMetadata.userId,
                                 filename: fileMetadata.filename,
                                 originalName: fileMetadata.originalName,
