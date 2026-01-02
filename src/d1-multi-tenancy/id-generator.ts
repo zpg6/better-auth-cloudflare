@@ -81,11 +81,12 @@ const DEFAULT_CONFIG: Required<UniversalIdConfig> = {
 function generateShortHash(input: string, length: number): string {
     let hash = 5381;
     for (let i = 0; i < input.length; i++) {
-        hash = ((hash << 5) + hash) + input.charCodeAt(i); // hash * 33 + char
+        // Use bitwise operations to ensure 32-bit integer arithmetic and prevent overflow
+        hash = ((hash << 5) + hash + input.charCodeAt(i)) | 0;
     }
     
-    // Convert to positive number and encode as base36
-    const hashStr = Math.abs(hash).toString(36);
+    // Ensure positive with unsigned right shift and encode as base36
+    const hashStr = (Math.abs(hash) >>> 0).toString(36);
     
     // Pad or truncate to desired length
     if (hashStr.length >= length) {
@@ -104,9 +105,27 @@ function generateRandom(length: number): string {
     let result = '';
     const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
     
+    // Check if crypto API is available
+    const hasCrypto = typeof crypto !== 'undefined' && crypto.getRandomValues;
+    
+    // Warn about insecure fallback in production-like environments
+    if (!hasCrypto) {
+        // Check if we're likely in a production environment
+        const isProduction = typeof window === 'undefined' || 
+                           (typeof location !== 'undefined' && location.hostname !== 'localhost');
+        
+        if (isProduction) {
+            console.warn(
+                '[UniversalIdGenerator] WARNING: crypto.getRandomValues not available. ' +
+                'Using Math.random() which is not cryptographically secure. ' +
+                'This may affect ID uniqueness guarantees.'
+            );
+        }
+    }
+    
     for (let i = 0; i < length; i++) {
         // Use crypto.getRandomValues if available, otherwise Math.random
-        const randomValue = typeof crypto !== 'undefined' && crypto.getRandomValues
+        const randomValue = hasCrypto
             ? crypto.getRandomValues(new Uint32Array(1))[0] / (0xffffffff + 1)
             : Math.random();
         
@@ -250,11 +269,17 @@ export const defaultIdGenerator = new UniversalIdGenerator();
  * Generates a shard hash from a database UUID
  * This creates a consistent hash that can be embedded in record IDs
  * 
+ * Note: Uses 8 characters from the UUID which provides 2^32 unique values.
+ * This is sufficient for most use cases (millions of tenants) but could
+ * theoretically collide with extremely high tenant counts. The UUID format
+ * ensures good distribution of hash values.
+ * 
  * @param databaseId - Cloudflare D1 database UUID
- * @returns Shard hash string
+ * @returns Shard hash string (8 characters)
  */
 export function generateShardHashFromDatabaseId(databaseId: string): string {
     // Remove any dashes from UUID and take first 8 characters of lowercase
+    // UUIDs are randomly distributed, so first 8 chars provide good uniqueness
     const normalized = databaseId.replace(/-/g, '').toLowerCase();
     return normalized.substring(0, 8);
 }

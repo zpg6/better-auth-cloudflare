@@ -82,13 +82,20 @@ export class ShardCache {
     
     /**
      * Adds or updates an entry in the cache
+     * 
+     * Note: When maxEntries is reached, this uses FIFO eviction (oldest inserted entry),
+     * not LRU (least recently used). For most use cases this is sufficient since tenant
+     * databases are relatively stable and not frequently added/removed.
      */
     set(entry: Omit<ShardCacheEntry, 'cachedAt'>): void {
-        // If cache is at max capacity, remove oldest entry
+        // If cache is at max capacity, remove oldest entry (FIFO)
         if (this.cache.size >= this.config.maxEntries) {
             const oldestKey = this.cache.keys().next().value;
             if (oldestKey) {
                 this.cache.delete(oldestKey);
+                if (this.config.debugLogs) {
+                    console.log(`[ShardCache] Evicted oldest entry: ${oldestKey}`);
+                }
             }
         }
         
@@ -224,7 +231,13 @@ export class ShardCache {
             }
         } catch (error) {
             console.error(`[ShardCache] Failed to hydrate cache:`, error);
-            throw error;
+            // Mark as hydrated anyway to prevent blocking application startup
+            // The cache will lazily populate as queries are made
+            this.isHydrated = true;
+            console.warn(
+                `[ShardCache] Cache hydration failed but continuing. ` +
+                `Queries will fall back to tenant table lookups.`
+            );
         }
     }
     
