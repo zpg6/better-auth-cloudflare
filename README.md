@@ -19,6 +19,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - 🚀 **Hyperdrive Support**: Connect to Postgres and MySQL databases through Cloudflare Hyperdrive.
 - 🔌 **KV Storage Integration**: Optionally use Cloudflare KV for secondary storage (e.g., session caching).
 - 📁 **R2 File Storage**: Upload, download, and manage user files with Cloudflare R2 object storage and database tracking.
+- 🏢 **D1 Multi-Tenancy**: Automatic tenant database creation with Universal ID-based sharding for optimal performance.
 - 📍 **Automatic Geolocation Tracking**: Enrich user sessions with location data derived from Cloudflare.
 - 🌐 **Cloudflare IP Detection**: Utilize Cloudflare's IP detection headers out-of-the-box.
 - 🔍 **Rich Client-Side Context**: Access timezone, city, country, region, and more via the client plugin.
@@ -34,7 +35,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - [x] R2
 - [ ] Cloudflare Images
 - [ ] Durable Objects
-- [ ] D1 Multi-Tenancy
+- [x] D1 Multi-Tenancy with Universal ID-based Sharding
 
 **CLI:**
 
@@ -67,6 +68,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
     - [7. Initialize the Client](#7-initialize-the-client)
 - [Usage Examples](#usage-examples)
     - [Accessing Geolocation Data](#accessing-geolocation-data)
+- [D1 Multi-Tenancy with Universal ID Sharding](./docs/d1-multi-tenancy-universal-ids.md)
 - [R2 File Storage Guide](./docs/r2.md)
 - [License](#license)
 - [Contributing](#contributing)
