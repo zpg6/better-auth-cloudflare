@@ -214,11 +214,14 @@ export class ShardCache {
             let cachedCount = 0;
             for (const tenant of tenants) {
                 if (tenant.shardHash && tenant.databaseId) {
+                    // Use databaseName from record, or derive from shard hash if missing
+                    const databaseName = tenant.databaseName || `DB_${tenant.shardHash}`;
+                    
                     this.set({
                         shardHash: tenant.shardHash,
                         databaseId: tenant.databaseId,
                         tenantId: tenant.tenantId,
-                        databaseName: tenant.databaseName,
+                        databaseName: databaseName,
                     });
                     cachedCount++;
                 }

@@ -422,9 +422,9 @@ export const withCloudflare = <T extends BetterAuthOptions>(
                                 
                                 // Update cache if we have shard hash
                                 if (tenantRecord.shardHash) {
-                                    // Derive database name from tenant if not available
+                                    // Derive database name from shard hash if not in record
                                     const databaseName = (tenantRecord as any).databaseName || 
-                                                       `DB_${new Date().toISOString().split('T')[0].replace(/-/g, '')}_${tenantRecord.shardHash}`;
+                                                       `DB_${tenantRecord.shardHash}`;
                                     
                                     shardCache.set({
                                         shardHash: tenantRecord.shardHash,
