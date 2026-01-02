@@ -31,6 +31,11 @@ export const tenantDatabaseSchema = {
                 required: true,
                 input: false,
             } satisfies FieldAttribute,
+            shardHash: {
+                type: "string", // Short hash derived from database UUID for routing
+                required: false, // Optional for backward compatibility
+                input: false,
+            } satisfies FieldAttribute,
             status: {
                 type: "string", // "creating", "active", "migrating", "migration_failed", "deleting", "deleted"
                 required: true,
@@ -67,6 +72,7 @@ export type Tenant = {
     tenantType: "user" | "organization";
     databaseName: string;
     databaseId: string;
+    shardHash?: string; // Short hash derived from database UUID for routing
     status: "creating" | "active" | "migrating" | "migration_failed" | "deleting" | "deleted";
     createdAt: Date;
     deletedAt?: Date;

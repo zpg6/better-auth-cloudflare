@@ -108,7 +108,8 @@ export interface CloudflareD1MultiTenancyOptions {
 
     /**
      * Optional prefix for tenant database names
-     * @default "tenant_"
+     * Uses structured naming convention: {prefix}_{date}_{tenantHash}
+     * @default "DB"
      */
     databasePrefix?: string;
 

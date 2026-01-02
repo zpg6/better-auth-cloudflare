@@ -9,7 +9,7 @@ import {
 import { adapterRouter, type AdapterRouterParams } from "better-auth/adapters/adapter-router";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
-import { cloudflareD1MultiTenancy, createTenantDatabaseClient } from "./d1-multi-tenancy/index.js";
+import { cloudflareD1MultiTenancy, createTenantDatabaseClient, defaultIdGenerator, getShardCache } from "./d1-multi-tenancy/index.js";
 import { createR2Endpoints, createR2Storage } from "./r2.js";
 import { schema } from "./schema.js";
 import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types.js";
@@ -280,6 +280,11 @@ export const withCloudflare = <T extends BetterAuthOptions>(
 
         const CORE_AUTH_TABLES = new Set(coreModels);
 
+        // Initialize shard cache
+        const shardCache = getShardCache({ 
+            debugLogs: multiTenancyConfig.cloudflareD1Api.debugLogs 
+        });
+
         database = adapterRouter({
             fallbackAdapter: drizzleAdapter(d1Config.db, {
                 provider: "sqlite",
@@ -288,11 +293,44 @@ export const withCloudflare = <T extends BetterAuthOptions>(
             routes: [
                 async ({ modelName, operation, data, fallbackAdapter }) => {
                     try {
-                        // Extract tenantId from data - first try custom callback, then fall back to default logic
-                        let tenantId: string | undefined;
+                        // Skip routing for core auth tables
+                        if (CORE_AUTH_TABLES.has(modelName)) {
+                            return null;
+                        }
 
-                        // Try custom tenant routing callback first
-                        if (multiTenancyConfig.tenantRouting) {
+                        // Ensure cache is hydrated (lazy initialization)
+                        await shardCache.ensureHydrated(fallbackAdapter, multiTenancyConfig.mode);
+
+                        let tenantId: string | undefined;
+                        let databaseId: string | undefined;
+                        let routingSource: 'universal-id' | 'tenant-id' | 'custom' | 'none' = 'none';
+
+                        // STEP 1: Try to extract shard hash from Universal ID in the query
+                        // This is the fast path - no database lookup needed
+                        if (data && Array.isArray(data)) {
+                            // For findOne/findMany operations, data is the where array
+                            const idWhere = data.find((w: any) => w.field === "id");
+                            if (idWhere?.value && typeof idWhere.value === "string") {
+                                const shardHash = defaultIdGenerator.extractShardHash(idWhere.value);
+                                if (shardHash) {
+                                    const cachedEntry = shardCache.get(shardHash);
+                                    if (cachedEntry) {
+                                        databaseId = cachedEntry.databaseId;
+                                        tenantId = cachedEntry.tenantId;
+                                        routingSource = 'universal-id';
+                                        
+                                        if (multiTenancyConfig.cloudflareD1Api.debugLogs) {
+                                            console.log(
+                                                `[AdapterRouter] Routed ${modelName} via Universal ID shard hash: ${shardHash} -> ${databaseId}`
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // STEP 2: Try custom tenant routing callback if no route yet
+                        if (!databaseId && multiTenancyConfig.tenantRouting) {
                             try {
                                 const customResult = await multiTenancyConfig.tenantRouting({
                                     modelName,
@@ -304,8 +342,10 @@ export const withCloudflare = <T extends BetterAuthOptions>(
                                 if (customResult) {
                                     if (typeof customResult === 'string') {
                                         tenantId = customResult;
+                                        routingSource = 'custom';
                                     } else if (typeof customResult === 'object' && customResult.tenantId) {
                                         tenantId = customResult.tenantId;
+                                        routingSource = 'custom';
                                         // Modify the original data object in place if provided
                                         if (customResult.data !== undefined && data && typeof data === 'object') {
                                             // For create operations, merge the modified data
@@ -327,12 +367,13 @@ export const withCloudflare = <T extends BetterAuthOptions>(
                             }
                         }
 
-                        // Fall back to default tenant ID extraction if custom callback didn't return a value
-                        if (!tenantId) {
+                        // STEP 3: Fall back to extracting tenantId from data if no route yet
+                        if (!databaseId && !tenantId) {
                             if (operation === "create" && data && typeof data === "object" && !Array.isArray(data)) {
                                 // For create operations, data is the object with the fields
                                 if ("tenantId" in data && data.tenantId) {
                                     tenantId = data.tenantId as string;
+                                    routingSource = 'tenant-id';
                                 } else if (
                                     "data" in data &&
                                     data.data &&
@@ -340,6 +381,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(
                                     data.data.tenantId
                                 ) {
                                     tenantId = data.data.tenantId as string;
+                                    routingSource = 'tenant-id';
                                 }
                             } else if (data && Array.isArray(data)) {
                                 // For findOne/findMany operations, data is directly the where array
@@ -348,6 +390,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(
                                 );
                                 if (tenantIdWhere?.value) {
                                     tenantId = tenantIdWhere.value as string;
+                                    routingSource = 'tenant-id';
                                 }
                             } else if (data && "where" in data && data.where) {
                                 // For other operations, data might have a where property
@@ -356,32 +399,50 @@ export const withCloudflare = <T extends BetterAuthOptions>(
                                 );
                                 if (tenantIdWhere?.value) {
                                     tenantId = tenantIdWhere.value as string;
+                                    routingSource = 'tenant-id';
                                 }
                             }
                         }
 
-                        // Route to tenant database if:
-                        // 1. There's a tenantId in the operation
-                        // 2. The table is NOT a core auth table
-                        if (tenantId && !CORE_AUTH_TABLES.has(modelName)) {
-                            // Look up the actual database ID from the tenant record
-                            const tenantRecord: { databaseId: string } | null = await fallbackAdapter.findOne({
-                                model: "tenant",
-                                where: [
-                                    { field: "tenantId", value: tenantId, operator: "eq" },
-                                    { field: "tenantType", value: multiTenancyConfig.mode, operator: "eq" },
-                                    { field: "status", value: "active", operator: "eq" },
-                                ],
-                                select: ["databaseId", "tenantId", "status"],
-                            });
+                        // STEP 4: If we have tenantId but no databaseId, look it up
+                        if (tenantId && !databaseId) {
+                            const tenantRecord: { databaseId: string; shardHash?: string } | null = 
+                                await fallbackAdapter.findOne({
+                                    model: "tenant",
+                                    where: [
+                                        { field: "tenantId", value: tenantId, operator: "eq" },
+                                        { field: "tenantType", value: multiTenancyConfig.mode, operator: "eq" },
+                                        { field: "status", value: "active", operator: "eq" },
+                                    ],
+                                    select: ["databaseId", "shardHash", "tenantId", "status"],
+                                });
 
-                            if (!tenantRecord?.databaseId) {
-                                return null;
+                            if (tenantRecord?.databaseId) {
+                                databaseId = tenantRecord.databaseId;
+                                
+                                // Update cache if we have shard hash
+                                if (tenantRecord.shardHash) {
+                                    shardCache.set({
+                                        shardHash: tenantRecord.shardHash,
+                                        databaseId: tenantRecord.databaseId,
+                                        tenantId: tenantId,
+                                        databaseName: '', // Not available here, but not critical
+                                    });
+                                }
+                                
+                                if (multiTenancyConfig.cloudflareD1Api.debugLogs) {
+                                    console.log(
+                                        `[AdapterRouter] Routed ${modelName} via tenant lookup (${routingSource}): ${tenantId} -> ${databaseId}`
+                                    );
+                                }
                             }
+                        }
 
+                        // Route to tenant database if we found one
+                        if (databaseId) {
                             const tenantDb = createTenantDatabaseClient(
                                 multiTenancyConfig.cloudflareD1Api.accountId,
-                                tenantRecord.databaseId,
+                                databaseId,
                                 multiTenancyConfig.cloudflareD1Api.apiToken,
                                 multiTenancyConfig.cloudflareD1Api.debugLogs
                             );
@@ -397,7 +458,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(
                                 provider: "sqlite",
                                 schema: tenantDrizzleSchema,
                                 usePlural: true,
-                                debugLogs: true,
+                                debugLogs: multiTenancyConfig.cloudflareD1Api.debugLogs ?? true,
                             });
                         }
 

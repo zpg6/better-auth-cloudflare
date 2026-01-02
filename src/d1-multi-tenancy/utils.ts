@@ -141,7 +141,17 @@ export const deleteD1Database = async (config: CloudflareD1ApiConfig, databaseId
 
 /**
  * Helper function to get the Cloudflare D1 tenant database name for a given tenant ID
+ * Uses structured naming convention: DB_{date}_{tenantHash}
  */
-export const getCloudflareD1TenantDatabaseName = (tenantId: string, prefix = "tenant_"): string => {
-    return `${prefix}${tenantId}`;
+export const getCloudflareD1TenantDatabaseName = (tenantId: string, prefix = "DB"): string => {
+    const date = new Date().toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
+    
+    // Generate consistent hash from tenant ID
+    let hash = 5381;
+    for (let i = 0; i < tenantId.length; i++) {
+        hash = ((hash << 5) + hash) + tenantId.charCodeAt(i);
+    }
+    const tenantHash = Math.abs(hash).toString(36).substring(0, 8);
+    
+    return `${prefix}_${date}_${tenantHash}`;
 };
