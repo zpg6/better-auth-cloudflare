@@ -11,12 +11,11 @@
 		"enabled": true
 	},
 	"compatibility_flags": ["nodejs_compat"],
-	"d1_databases": [
+	"hyperdrive": [
 		{
-			"binding": "DB",
-			"database_name": "your-sveltekit-pages-d1",
-			"database_id": "your-sveltekit-pages-d1-id",
-			"migrations_dir": "drizzle"
+			"binding": "HYPERDRIVE",
+			"id": "your-hyperdrive-id",
+			"localConnectionString": "postgres://user:password@127.0.0.1:5432/local_db"
 		}
 	],
 	"kv_namespaces": [
