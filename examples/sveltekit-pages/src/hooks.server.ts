@@ -5,11 +5,11 @@ import { svelteKitHandler } from 'better-auth/svelte-kit';
 
 export const handle: Handle = async ({ event, resolve }) => {
 	try {
-		const db = event.platform?.env.DB;
-		if (!db) {
-			throw new Error('Database instance (DB) is not available in event.platform.env.');
+		const env = event.platform?.env;
+		if (!env) {
+			throw new Error('Cloudflare environment (env) is not available in event.platform.');
 		}
-		event.locals.db = createClient(db);
+		event.locals.db = createClient(env);
 
 		const auth = createAuth(event.locals.db, event);
 		event.locals.auth = auth;

@@ -1,8 +1,10 @@
-import { drizzle, type DrizzleD1Database } from 'drizzle-orm/d1';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import * as schema from './schema';
 
-export function createClient(db: D1Database): DrizzleD1Database<typeof schema> {
-	return drizzle(db, {
+export function createClient(env: App.Platform['env'] & { HYPERDRIVE: { connectionString: string } }) {
+	const client = postgres(env.HYPERDRIVE.connectionString, { prepare: false });
+	return drizzle(client, {
 		schema
 	});
 }

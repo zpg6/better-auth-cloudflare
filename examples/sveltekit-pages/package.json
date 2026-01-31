@@ -17,8 +17,9 @@
 		"cf-typegen": "pnpm wrangler types src/worker-configuration.d.ts",
 		"db:push": "drizzle-kit push",
 		"db:generate": "drizzle-kit generate",
-		"db:migrate:dev": "pnpm wrangler d1 migrations apply your-sveltekit-pages-d1 --local",
-		"db:migrate:prod": "pnpm wrangler d1 migrations apply your-sveltekit-pages-d1 --remote",
+		"db:migrate": "drizzle-kit migrate",
+		"db:migrate:local": "drizzle-kit migrate",
+		"db:migrate:prod": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio"
 	},
 	"devDependencies": {
@@ -33,6 +34,7 @@
 		"@sveltejs/vite-plugin-svelte": "^5.0.0",
 		"@tailwindcss/vite": "^4.0.0",
 		"@types/node": "^22",
+		"better-auth-cloudflare": "file:../..",
 		"bits-ui": "^2.8.6",
 		"clsx": "^2.1.1",
 		"drizzle-kit": "^0.30.2",
@@ -57,7 +59,6 @@
 	},
 	"dependencies": {
 		"better-auth": "^1.2.9",
-		"better-auth-cloudflare": "file:../../",
 		"drizzle-orm": "^0.44.2",
 		"postgres": "^3.4.8"
 	}

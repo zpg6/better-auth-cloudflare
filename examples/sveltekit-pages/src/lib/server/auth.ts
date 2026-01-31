@@ -10,11 +10,11 @@ function createAuth(db: DrizzleClient, event?: RequestEvent) {
 			{
 				autoDetectIpAddress: true,
 				geolocationTracking: true,
+				// @ts-expect-error FIX: `@cloudflare/workers-types` is not compatible
 				cf: event?.platform?.cf || {},
-				d1: {
+				postgres: {
 					db,
 					options: {
-						usePlural: true,
 						debugLogs: true
 					}
 				},
