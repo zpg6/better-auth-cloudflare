@@ -27,7 +27,6 @@
 		"@eslint/js": "^9.18.0",
 		"@iconify-json/lucide": "^1.2.49",
 		"@internationalized/date": "^3.8.1",
-		"@libsql/client": "^0.15.9",
 		"@lucide/svelte": "^0.515.0",
 		"@sveltejs/adapter-cloudflare": "^7.0.4",
 		"@sveltejs/kit": "^2.16.0",
@@ -59,6 +58,7 @@
 	"dependencies": {
 		"better-auth": "^1.2.9",
 		"better-auth-cloudflare": "file:../../",
-		"drizzle-orm": "^0.44.2"
+		"drizzle-orm": "^0.44.2",
+		"postgres": "^3.4.8"
 	}
 }
