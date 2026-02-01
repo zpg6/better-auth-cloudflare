@@ -10,7 +10,7 @@ function createAuth(db: DrizzleClient, event?: RequestEvent) {
 			{
 				autoDetectIpAddress: true,
 				geolocationTracking: true,
-				cf: event?.platform?.cf || {},
+				cf: event?.platform?.cf as any,
 				postgres: {
 					db,
 					options: {
@@ -18,8 +18,7 @@ function createAuth(db: DrizzleClient, event?: RequestEvent) {
 						usePlural: true
 					}
 				},
-				// @ts-expect-error FIX: `@cloudflare/workers-types` is not compatible
-				kv: event?.platform?.env?.SVELTEKIT_PAGES_AUTH_SESSION_KV as KVNamespace,
+				kv: event?.platform?.env?.SVELTEKIT_PAGES_AUTH_SESSION_KV as any,
 				r2: {
 					bucket: event?.platform?.env?.SVELTEKIT_PAGES_ASSETS as R2Bucket,
 					maxFileSize: 2 * 1024 * 1024, // 2MB
