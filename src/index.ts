@@ -3,13 +3,13 @@ import { type BetterAuthOptions, type BetterAuthPlugin, type Session } from "bet
 import { type SecondaryStorage } from "better-auth/db";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
-import { schema } from "./schema.js";
-import { createR2Storage, createR2Endpoints } from "./r2.js";
-import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types.js";
-export * from "./client.js";
-export * from "./schema.js";
-export * from "./types.js";
-export * from "./r2.js";
+import { schema } from "./schema";
+import { createR2Storage, createR2Endpoints } from "./r2";
+import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types";
+export * from "./client";
+export * from "./schema";
+export * from "./types";
+export * from "./r2";
 
 /**
  * Cloudflare integration for Better Auth
