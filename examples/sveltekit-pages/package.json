@@ -17,27 +17,28 @@
 		"cf-typegen": "pnpm wrangler types src/worker-configuration.d.ts",
 		"db:push": "drizzle-kit push",
 		"db:generate": "drizzle-kit generate",
-		"db:migrate": "drizzle-kit migrate",
-		"db:migrate:local": "drizzle-kit migrate",
-		"db:migrate:prod": "drizzle-kit migrate",
-		"db:studio": "drizzle-kit studio"
+		"db:migrate:local": "dotenv -e .env -- drizzle-kit migrate",
+		"db:migrate:prod": "dotenv -e .env.production -- drizzle-kit migrate",
+		"db:studio:local": "dotenv -e .env -- drizzle-kit studio",
+		"db:studio:prod": "dotenv -e .env.production -- drizzle-kit studio"
 	},
 	"devDependencies": {
-		"@cloudflare/workers-types": "^4.20250620.0",
+		"@cloudflare/workers-types": "^4.20260131.0",
 		"@eslint/compat": "^1.2.5",
 		"@eslint/js": "^9.18.0",
 		"@iconify-json/lucide": "^1.2.49",
 		"@internationalized/date": "^3.8.1",
 		"@lucide/svelte": "^0.515.0",
-		"@sveltejs/adapter-cloudflare": "^7.0.4",
-		"@sveltejs/kit": "^2.16.0",
-		"@sveltejs/vite-plugin-svelte": "^5.0.0",
-		"@tailwindcss/vite": "^4.0.0",
+		"@sveltejs/adapter-cloudflare": "^7.2.6",
+		"@sveltejs/kit": "^2.50.1",
+		"@sveltejs/vite-plugin-svelte": "^5.1.1",
+		"@tailwindcss/vite": "^4.1.18",
 		"@types/node": "^22",
 		"better-auth-cloudflare": "file:../..",
 		"bits-ui": "^2.8.6",
 		"clsx": "^2.1.1",
-		"drizzle-kit": "^0.30.2",
+		"dotenv-cli": "^8.0.0",
+		"drizzle-kit": "^0.30.6",
 		"eslint": "^9.18.0",
 		"eslint-config-prettier": "^10.0.1",
 		"eslint-plugin-svelte": "^3.0.0",
@@ -54,12 +55,12 @@
 		"typescript": "^5.0.0",
 		"typescript-eslint": "^8.20.0",
 		"unplugin-icons": "^22.1.0",
-		"vite": "^6.2.6",
+		"vite": "^7.3.1",
 		"wrangler": "^4.20.5"
 	},
 	"dependencies": {
 		"better-auth": "^1.2.9",
-		"drizzle-orm": "^0.44.2",
+		"drizzle-orm": "^0.44.5",
 		"postgres": "^3.4.8"
 	}
 }
