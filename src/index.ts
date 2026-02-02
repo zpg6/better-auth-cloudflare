@@ -1,11 +1,10 @@
-import type { KVNamespace } from "@cloudflare/workers-types";
 import { type BetterAuthOptions, type BetterAuthPlugin, type Session } from "better-auth";
 import { type SecondaryStorage } from "better-auth/db";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
 import { schema } from "./schema";
 import { createR2Storage, createR2Endpoints } from "./r2";
-import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types";
+import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions, KVNamespaceConstraint, R2BucketConstraint } from "./types";
 export * from "./client";
 export * from "./schema";
 export * from "./types";
@@ -17,7 +16,9 @@ export * from "./r2";
  * @param options - Plugin configuration options
  * @returns Better Auth plugin for Cloudflare
  */
-export const cloudflare = (options?: CloudflarePluginOptions) => {
+export const cloudflare = <TR2 extends R2BucketConstraint = R2BucketConstraint>(
+    options?: CloudflarePluginOptions<TR2>
+) => {
     const opts = options ?? {};
 
     // Default geolocationTracking to true if not specified
@@ -117,7 +118,7 @@ function extractGeolocationData(input: CloudflareGeolocation): CloudflareGeoloca
  * @param kv - Cloudflare KV namespace
  * @returns SecondaryStorage implementation
  */
-export const createKVStorage = (kv: KVNamespace<string>): SecondaryStorage => {
+export const createKVStorage = (kv: KVNamespaceConstraint): SecondaryStorage => {
     return {
         get: async (key: string) => {
             return kv.get(key);
@@ -141,13 +142,6 @@ export const createKVStorage = (kv: KVNamespace<string>): SecondaryStorage => {
 };
 
 /**
- * Type helper to infer the enhanced auth type with Cloudflare plugin
- */
-type WithCloudflareAuth<T extends BetterAuthOptions> = T & {
-    plugins: [ReturnType<typeof cloudflare>, ...(T["plugins"] extends readonly any[] ? T["plugins"] : [])];
-};
-
-/**
  * Enhances BetterAuthOptions with Cloudflare-specific configurations.
  *
  * This function integrates Cloudflare services like D1 for database and KV for secondary storage,
@@ -157,10 +151,14 @@ type WithCloudflareAuth<T extends BetterAuthOptions> = T & {
  * @param options - The base BetterAuthOptions to be enhanced.
  * @returns BetterAuthOptions configured for use with Cloudflare.
  */
-export const withCloudflare = <T extends BetterAuthOptions>(
-    cloudFlareOptions: WithCloudflareOptions,
+export const withCloudflare = <
+    TKV extends KVNamespaceConstraint = KVNamespaceConstraint,
+    TR2 extends R2BucketConstraint = R2BucketConstraint,
+    T extends BetterAuthOptions = BetterAuthOptions
+>(
+    cloudFlareOptions: WithCloudflareOptions<TKV, TR2>,
     options: T
-): WithCloudflareAuth<T> => {
+) => {
     const autoDetectIpEnabled =
         cloudFlareOptions.autoDetectIpAddress === undefined || cloudFlareOptions.autoDetectIpAddress === true;
     const geolocationTrackingForSession =
@@ -222,15 +220,14 @@ export const withCloudflare = <T extends BetterAuthOptions>(
             ...cloudFlareOptions.d1.options,
         });
     }
-
     return {
         ...options,
         database,
         secondaryStorage: cloudFlareOptions.kv ? createKVStorage(cloudFlareOptions.kv) : undefined,
-        plugins: [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])],
+        plugins: [cloudflare<TR2>(cloudFlareOptions), ...(options.plugins ?? [])],
         advanced: updatedAdvanced,
         session: updatedSession,
-    } as WithCloudflareAuth<T>;
+    };
 };
 
 export type SessionWithGeolocation = Session & CloudflareGeolocation;

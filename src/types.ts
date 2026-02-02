@@ -1,4 +1,3 @@
-import type { KVNamespace } from "@cloudflare/workers-types";
 import type { AuthContext, Session, User } from "better-auth";
 import type { DrizzleAdapterConfig } from "better-auth/adapters/drizzle";
 import type { FieldAttribute } from "better-auth/db";
@@ -6,7 +5,33 @@ import type { drizzle as d1Drizzle } from "drizzle-orm/d1";
 import type { drizzle as mysqlDrizzle } from "drizzle-orm/mysql2";
 import type { drizzle as postgresDrizzle } from "drizzle-orm/postgres-js";
 
-export interface CloudflarePluginOptions {
+/**
+ * Minimal KV interface constraint - defines what methods we actually use
+ * Any KVNamespace from @cloudflare/workers-types will satisfy this constraint
+ */
+export interface KVNamespaceConstraint {
+    get(key: string, options?: { type?: "text"; cacheTtl?: number }): Promise<string | null>;
+    put(
+        key: string,
+        value: string | ArrayBuffer | ArrayBufferView | ReadableStream,
+        options?: { expiration?: number; expirationTtl?: number; metadata?: unknown }
+    ): Promise<void>;
+    delete(key: string): Promise<void>;
+}
+
+/**
+ * Minimal R2 bucket interface constraint - defines what methods we actually use
+ * Any R2Bucket from @cloudflare/workers-types will satisfy this constraint
+ */
+export interface R2BucketConstraint {
+    put(key: string, value: Blob | ReadableStream | ArrayBuffer | ArrayBufferView | string, options?: unknown): Promise<unknown>;
+    get(key: string, options?: unknown): Promise<{ body: ReadableStream } | null>;
+    delete(key: string | string[]): Promise<void>;
+    head(key: string): Promise<unknown>;
+    list(options?: { limit?: number; prefix?: string; cursor?: string }): Promise<{ objects: unknown[] }>;
+}
+
+export interface CloudflarePluginOptions<TR2 extends R2BucketConstraint = R2BucketConstraint> {
     /**
      * Auto-detect IP address
      * @default true
@@ -28,7 +53,7 @@ export interface CloudflarePluginOptions {
      * R2 configuration for user file tracking
      * If provided, enables file tracking features automatically
      */
-    r2?: R2Config;
+    r2?: R2Config<TR2>;
 }
 
 /**
@@ -45,7 +70,25 @@ export type DrizzleConfig<T extends typeof d1Drizzle | typeof postgresDrizzle | 
     options?: Omit<DrizzleAdapterConfig, "provider">;
 };
 
-export interface WithCloudflareOptions extends CloudflarePluginOptions {
+/**
+ * Options for withCloudflare wrapper
+ *
+ * @typeParam TKV - Your KVNamespace type from @cloudflare/workers-types (optional, auto-inferred)
+ * @typeParam TR2 - Your R2Bucket type from @cloudflare/workers-types (optional, auto-inferred)
+ *
+ * @example
+ * ```ts
+ * // Types are automatically inferred from your platform.env types
+ * withCloudflare({
+ *   kv: platform.env.MY_KV,  // TKV is inferred
+ *   r2: { bucket: platform.env.MY_R2 }  // TR2 is inferred
+ * }, { ... })
+ * ```
+ */
+export interface WithCloudflareOptions<
+    TKV extends KVNamespaceConstraint = KVNamespaceConstraint,
+    TR2 extends R2BucketConstraint = R2BucketConstraint
+> extends CloudflarePluginOptions<TR2> {
     /**
      * D1 database configuration for SQLite
      */
@@ -63,8 +106,9 @@ export interface WithCloudflareOptions extends CloudflarePluginOptions {
 
     /**
      * KV namespace for secondary storage, if you want to use that.
+     * Pass your KVNamespace directly - types will be inferred from your @cloudflare/workers-types.
      */
-    kv?: KVNamespace<string>;
+    kv?: TKV;
 }
 
 /**
@@ -104,17 +148,7 @@ export interface CloudflareSessionResponse {
     user: User;
 }
 
-/**
- * Minimal R2Bucket interface - only what we actually need for file storage
- * Avoids complex type conflicts between DOM and Cloudflare Worker types
- */
-export interface R2Bucket {
-    put(key: string, value: Blob | File, options?: any): Promise<any>;
-    get(key: string): Promise<{ body: ReadableStream } | null>;
-    delete(key: string): Promise<void>;
-    head(key: string): Promise<any>;
-    list(options?: { prefix?: string }): Promise<{ objects: any[] }>;
-}
+
 
 /**
  * R2 configuration for file storage and tracking
@@ -138,11 +172,12 @@ export interface R2Bucket {
  * } as const satisfies R2Config;
  * ```
  */
-export interface R2Config {
+export interface R2Config<TR2 extends R2BucketConstraint = R2BucketConstraint> {
     /**
      * R2 bucket instance
+     * Pass your R2Bucket directly - types will be inferred from your @cloudflare/workers-types.
      */
-    bucket: R2Bucket;
+    bucket: TR2;
 
     /**
      * Additional fields to track in the file metadata schema.
@@ -259,12 +294,12 @@ export interface R2Config {
 type InferFieldType<T extends FieldAttribute> = T["type"] extends "string"
     ? string
     : T["type"] extends "number"
-      ? number
-      : T["type"] extends "boolean"
-        ? boolean
-        : T["type"] extends "date"
-          ? Date
-          : any;
+    ? number
+    : T["type"] extends "boolean"
+    ? boolean
+    : T["type"] extends "date"
+    ? Date
+    : any;
 
 // Convert Record<string, FieldAttribute> to actual typed object
 type InferAdditionalFields<T extends Record<string, FieldAttribute>> = {
@@ -292,58 +327,58 @@ export type FileMetadataWithAdditionalFields<T extends Record<string, FieldAttri
     InferAdditionalFields<T>;
 
 // Infer R2Config types from runtime definition (eliminates double definition!)
-export type InferR2Config<T extends R2Config> =
+export type InferR2Config<T extends R2Config<R2BucketConstraint>> =
     T["additionalFields"] extends Record<string, FieldAttribute>
-        ? Omit<T, "hooks"> & {
-              hooks?: {
-                  upload?: {
-                      before?: (
-                          file: File & {
-                              userId: string;
-                              r2Key: string;
-                              metadata: FileMetadataWithAdditionalFields<T["additionalFields"]>;
-                          },
-                          ctx: AuthContext
-                      ) => Promise<void | null | undefined>;
+    ? Omit<T, "hooks"> & {
+        hooks?: {
+            upload?: {
+                before?: (
+                    file: File & {
+                        userId: string;
+                        r2Key: string;
+                        metadata: FileMetadataWithAdditionalFields<T["additionalFields"]>;
+                    },
+                    ctx: AuthContext
+                ) => Promise<void | null | undefined>;
 
-                      after?: (
-                          file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
-                          ctx: AuthContext
-                      ) => Promise<void>;
-                  };
+                after?: (
+                    file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
+                    ctx: AuthContext
+                ) => Promise<void>;
+            };
 
-                  download?: {
-                      before?: (
-                          file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
-                          ctx: AuthContext
-                      ) => Promise<void | null | undefined>;
+            download?: {
+                before?: (
+                    file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
+                    ctx: AuthContext
+                ) => Promise<void | null | undefined>;
 
-                      after?: (
-                          file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
-                          ctx: AuthContext
-                      ) => Promise<void>;
-                  };
+                after?: (
+                    file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
+                    ctx: AuthContext
+                ) => Promise<void>;
+            };
 
-                  delete?: {
-                      before?: (
-                          file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
-                          ctx: AuthContext
-                      ) => Promise<void | null | undefined>;
+            delete?: {
+                before?: (
+                    file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
+                    ctx: AuthContext
+                ) => Promise<void | null | undefined>;
 
-                      after?: (
-                          file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
-                          ctx: AuthContext
-                      ) => Promise<void>;
-                  };
+                after?: (
+                    file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
+                    ctx: AuthContext
+                ) => Promise<void>;
+            };
 
-                  list?: {
-                      before?: (userId: string, ctx: AuthContext) => Promise<void | null | undefined>;
+            list?: {
+                before?: (userId: string, ctx: AuthContext) => Promise<void | null | undefined>;
 
-                      after?: (userId: string, files: any, ctx: AuthContext) => Promise<void>;
-                  };
-              };
-          }
-        : T;
+                after?: (userId: string, files: any, ctx: AuthContext) => Promise<void>;
+            };
+        };
+    }
+    : T;
 
 /**
  * Helper to create a fully typed R2 config with automatic type inference
@@ -384,6 +419,6 @@ export type InferR2Config<T extends R2Config> =
  * });
  * ```
  */
-export function createR2Config<T extends R2Config>(config: T): InferR2Config<T> {
+export function createR2Config<T extends R2Config<R2BucketConstraint>>(config: T): InferR2Config<T> {
     return config as InferR2Config<T>;
 }
