@@ -114,16 +114,7 @@ export interface WithCloudflareOptions<
 /**
  * Cloudflare geolocation data
  */
-export interface CloudflareGeolocation {
-    timezone?: string | null;
-    city?: string | null;
-    country?: string | null;
-    region?: string | null;
-    regionCode?: string | null;
-    colo?: string | null;
-    latitude?: string | null;
-    longitude?: string | null;
-}
+export interface CloudflareGeolocation extends Partial<IncomingRequestCfProperties> { }
 
 /**
  * Session type enhanced with Cloudflare geolocation data
