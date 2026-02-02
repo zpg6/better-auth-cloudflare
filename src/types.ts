@@ -285,12 +285,12 @@ export interface R2Config<TR2 extends R2BucketConstraint = R2BucketConstraint> {
 type InferFieldType<T extends FieldAttribute> = T["type"] extends "string"
     ? string
     : T["type"] extends "number"
-    ? number
-    : T["type"] extends "boolean"
-    ? boolean
-    : T["type"] extends "date"
-    ? Date
-    : any;
+      ? number
+      : T["type"] extends "boolean"
+        ? boolean
+        : T["type"] extends "date"
+          ? Date
+          : any;
 
 // Convert Record<string, FieldAttribute> to actual typed object
 type InferAdditionalFields<T extends Record<string, FieldAttribute>> = {
@@ -320,57 +320,57 @@ export type FileMetadataWithAdditionalFields<T extends Record<string, FieldAttri
 // Infer R2Config types from runtime definition (eliminates double definition!)
 export type InferR2Config<T extends R2Config<R2BucketConstraint>> =
     T["additionalFields"] extends Record<string, FieldAttribute>
-    ? Omit<T, "hooks"> & {
-        hooks?: {
-            upload?: {
-                before?: (
-                    file: File & {
-                        userId: string;
-                        r2Key: string;
-                        metadata: FileMetadataWithAdditionalFields<T["additionalFields"]>;
-                    },
-                    ctx: AuthContext
-                ) => Promise<void | null | undefined>;
+        ? Omit<T, "hooks"> & {
+              hooks?: {
+                  upload?: {
+                      before?: (
+                          file: File & {
+                              userId: string;
+                              r2Key: string;
+                              metadata: FileMetadataWithAdditionalFields<T["additionalFields"]>;
+                          },
+                          ctx: AuthContext
+                      ) => Promise<void | null | undefined>;
 
-                after?: (
-                    file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
-                    ctx: AuthContext
-                ) => Promise<void>;
-            };
+                      after?: (
+                          file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
+                          ctx: AuthContext
+                      ) => Promise<void>;
+                  };
 
-            download?: {
-                before?: (
-                    file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
-                    ctx: AuthContext
-                ) => Promise<void | null | undefined>;
+                  download?: {
+                      before?: (
+                          file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
+                          ctx: AuthContext
+                      ) => Promise<void | null | undefined>;
 
-                after?: (
-                    file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
-                    ctx: AuthContext
-                ) => Promise<void>;
-            };
+                      after?: (
+                          file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
+                          ctx: AuthContext
+                      ) => Promise<void>;
+                  };
 
-            delete?: {
-                before?: (
-                    file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
-                    ctx: AuthContext
-                ) => Promise<void | null | undefined>;
+                  delete?: {
+                      before?: (
+                          file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
+                          ctx: AuthContext
+                      ) => Promise<void | null | undefined>;
 
-                after?: (
-                    file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
-                    ctx: AuthContext
-                ) => Promise<void>;
-            };
+                      after?: (
+                          file: FileMetadataWithAdditionalFields<T["additionalFields"]>,
+                          ctx: AuthContext
+                      ) => Promise<void>;
+                  };
 
-            list?: {
-                before?: (userId: string, ctx: AuthContext) => Promise<void | null | undefined>;
+                  list?: {
+                      before?: (userId: string, ctx: AuthContext) => Promise<void | null | undefined>;
 
-                after?: (userId: string, files: any, ctx: AuthContext) => Promise<void>;
-            };
-        };
-    }
-    : T;
-
+                      after?: (userId: string, files: any, ctx: AuthContext) => Promise<void>;
+                  };
+              };
+          }
+        : T;
+        
 /**
  * Helper to create a fully typed R2 config with automatic type inference
  *
