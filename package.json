@@ -40,7 +40,8 @@
         "zod": "^4.1.5"
     },
     "peerDependencies": {
-        "better-auth": "^1.1.21"
+        "better-auth": "^1.1.21",
+        "@cloudflare/workers-types": "^4"
     },
     "devDependencies": {
         "@cloudflare/workers-types": "4.20250606.0",
