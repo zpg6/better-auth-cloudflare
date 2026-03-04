@@ -69,6 +69,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - [Usage Examples](#usage-examples)
     - [Accessing Geolocation Data](#accessing-geolocation-data)
 - [D1 Multi-Tenancy with Universal ID Sharding](./docs/d1-multi-tenancy-universal-ids.md)
+- [D1 Multi-Tenancy Plugin Integration Guide](./docs/d1-multi-tenancy-plugins.md)
 - [R2 File Storage Guide](./docs/r2.md)
 - [License](#license)
 - [Contributing](#contributing)

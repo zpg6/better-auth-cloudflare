@@ -185,46 +185,67 @@ Deploy your Next.js application with Better Auth to Cloudflare:
 
 OpenNext.js requires a more complex auth configuration due to its async database initialization and singleton requirements. The configuration in `src/auth/index.ts` uses the following pattern:
 
-### Async Database Initialization
+### Async Database Initialization with Multi-Tenancy
 
 ```typescript
 import { KVNamespace } from "@cloudflare/workers-types";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { openAPI } from "better-auth/plugins";
-import { getDb } from "../db";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { anonymous, openAPI, organization } from "better-auth/plugins";
+import { getDb, schema } from "../db";
+import { raw } from "../db/tenant.raw";
+import { birthdayPlugin } from "./plugins/birthday";
 
 // Define an asynchronous function to build your auth configuration
 async function authBuilder() {
-    const dbInstance = await getDb(); // Get your D1 database instance
+    const dbInstance = await getDb();
     return betterAuth(
         withCloudflare(
             {
                 autoDetectIpAddress: true,
                 geolocationTracking: true,
-                cf: getCloudflareContext().cf, // OpenNext.js context access
+                cf: getCloudflareContext().cf,
                 d1: {
-                    db: dbInstance, // Async database instance
+                    db: dbInstance,
                     options: {
                         usePlural: true,
                         debugLogs: true,
+                        schema, // Include the full schema for tenant table filtering
+                    },
+                    multiTenancy: {
+                        cloudflareD1Api: {
+                            apiToken: process.env.CLOUDFLARE_D1_API_TOKEN!,
+                            accountId: process.env.CLOUDFLARE_ACCT_ID!,
+                        },
+                        mode: "organization", // Create a separate database for each organization
+                        databasePrefix: "org_tenant_",
+                        migrations: {
+                            currentSchema: raw, // Current schema applied to new tenant databases
+                            currentVersion: "v1.0.0",
+                        },
+                        // Optional: custom routing logic for plugin tables
+                        tenantRouting: ({ modelName, operation, data }) => {
+                            return undefined; // Fall back to default tenantId field lookup
+                        },
+                        hooks: {
+                            afterCreate: async ({ tenantId, databaseName }) => {
+                                console.log(`✅ Created tenant database ${databaseName} for org ${tenantId}`);
+                            },
+                        },
                     },
                 },
                 kv: process.env.KV as KVNamespace<string>,
             },
             {
-                emailAndPassword: {
-                    enabled: true,
-                },
-                socialProviders: {
-                    // Configure social providers as needed
-                },
-                rateLimit: {
-                    enabled: true,
-                },
-                plugins: [openAPI()],
+                rateLimit: { enabled: true },
+                plugins: [
+                    openAPI(),
+                    anonymous(),
+                    organization(),
+                    birthdayPlugin({ enableReminders: true, reminderDaysBefore: 7 }),
+                ],
             }
         )
     );
@@ -256,14 +277,26 @@ export const auth = betterAuth({
             autoDetectIpAddress: true,
             geolocationTracking: true,
             cf: {},
-            // No actual database or KV instance needed, only schema-affecting options
+            d1: {
+                db: {} as any, // Mock database for schema generation
+                options: {
+                    usePlural: true,
+                    schema,
+                },
+                multiTenancy: {
+                    cloudflareD1Api: { apiToken: "mock-token", accountId: "mock-account" },
+                    mode: "organization",
+                    databasePrefix: "org_tenant_",
+                },
+            },
         },
         {
-            // Include only configurations that influence the Drizzle schema
-            emailAndPassword: {
-                enabled: true,
-            },
-            plugins: [openAPI()],
+            plugins: [
+                openAPI(),
+                anonymous(),
+                organization(),
+                birthdayPlugin({ enableReminders: true, reminderDaysBefore: 7 }),
+            ],
         }
     ),
 
@@ -271,7 +304,6 @@ export const auth = betterAuth({
     database: drizzleAdapter(process.env.DATABASE as any, {
         provider: "sqlite",
         usePlural: true,
-        debugLogs: true,
     }),
 });
 ```
