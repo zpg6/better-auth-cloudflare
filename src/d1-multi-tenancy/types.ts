@@ -1,4 +1,5 @@
 import type { User } from "better-auth";
+import type { KVNamespace } from "@cloudflare/workers-types";
 import type { FieldAttribute } from "better-auth/db";
 import type { AdapterRouterParams } from "better-auth/adapters/adapter-router";
 import type { TenantMigrationConfig } from "./d1-utils.js";
@@ -177,6 +178,18 @@ export interface CloudflareD1MultiTenancyOptions {
      * ```
      */
     tenantRouting?: TenantRoutingCallback;
+
+    /**
+     * Cloudflare KV namespace for persistent shard cache storage.
+     *
+     * When provided, the shard-hash → database-ID mapping is stored in KV so it
+     * persists across Worker cold starts and is shared between Worker instances.
+     * The in-memory cache still acts as a fast L1 layer; KV is the L2 fallback.
+     *
+     * You can pass the same KV namespace used for Better Auth secondary storage or
+     * a dedicated namespace.
+     */
+    kv?: KVNamespace<string>;
 
     /**
      * Enable extended console logs

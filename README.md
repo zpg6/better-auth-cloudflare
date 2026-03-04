@@ -342,6 +342,15 @@ For integrating the generated `auth.schema.ts` with your existing Drizzle schema
 
 If you provide a KV namespace in the `withCloudflare` configuration (as shown in `src/auth/index.ts`), it will be used as [Secondary Storage](https://www.better-auth.com/docs/concepts/database#secondary-storage) by Better Auth. This is typically used for caching or storing session data that doesn't need to reside in your primary database.
 
+When D1 multi-tenancy is configured, the same KV namespace (or a dedicated one passed as `multiTenancy.kv`) is also used as a **persistent L2 backing store for the shard cache**. This means the `shardHash → databaseId` mapping survives Worker cold starts and is shared across all Worker instances, eliminating the tenant-table re-hydration query on startup.
+
+```typescript
+multiTenancy: {
+    // ... other options
+    kv: env.KV, // uses this KV for the shard cache; falls back to top-level kv if omitted
+},
+```
+
 Ensure your KV namespace (e.g., `USER_SESSIONS`) is correctly bound in your `wrangler.toml` file.
 
 ### 6. Set Up API Routes

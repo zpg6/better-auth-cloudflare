@@ -282,7 +282,8 @@ export const withCloudflare = <T extends BetterAuthOptions>(
 
         // Initialize shard cache
         const shardCache = getShardCache({ 
-            debugLogs: multiTenancyConfig.cloudflareD1Api.debugLogs 
+            debugLogs: multiTenancyConfig.cloudflareD1Api.debugLogs,
+            kv: multiTenancyConfig.kv ?? cloudFlareOptions.kv,
         });
 
         database = adapterRouter({
@@ -313,7 +314,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(
                             if (idWhere?.value && typeof idWhere.value === "string") {
                                 const shardHash = defaultIdGenerator.extractShardHash(idWhere.value);
                                 if (shardHash) {
-                                    const cachedEntry = shardCache.get(shardHash);
+                                    const cachedEntry = await shardCache.get(shardHash);
                                     if (cachedEntry) {
                                         databaseId = cachedEntry.databaseId;
                                         tenantId = cachedEntry.tenantId;

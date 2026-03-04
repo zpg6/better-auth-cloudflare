@@ -6,8 +6,14 @@
  * 
  * The cache is hydrated once at startup (or lazily) and updated when
  * new tenant databases are created or deleted.
+ * 
+ * When a KV namespace is provided, the cache operates as a two-level store:
+ *   L1 – in-memory Map (fast, per-Worker-instance)
+ *   L2 – Cloudflare KV (persistent, shared across Worker instances)
+ * This eliminates repeated tenant-table hydrations on cold Worker starts.
  */
 
+import type { KVNamespace } from "@cloudflare/workers-types";
 import type { CloudflareD1ApiConfig } from "./types.js";
 
 /**
@@ -61,6 +67,21 @@ export interface ShardCacheConfig {
      * Enable debug logging
      */
     debugLogs?: boolean;
+
+    /**
+     * Cloudflare KV namespace for persistent shard cache storage.
+     * When provided the cache operates as a two-level store:
+     *   L1 – in-memory Map (fast, per-Worker-instance)
+     *   L2 – KV (persistent, shared across Worker instances)
+     * This prevents repeated tenant-table hydrations on every cold Worker start.
+     */
+    kv?: KVNamespace<string>;
+
+    /**
+     * Key prefix used when storing entries in KV.
+     * @default "shard:"
+     */
+    kvPrefix?: string;
 }
 
 /**
@@ -68,7 +89,7 @@ export interface ShardCacheConfig {
  */
 export class ShardCache {
     private cache: Map<string, ShardCacheEntry> = new Map();
-    private config: Required<ShardCacheConfig>;
+    private config: Required<Omit<ShardCacheConfig, 'kv'>> & Pick<ShardCacheConfig, 'kv'>;
     private isHydrated: boolean = false;
     private hydrationPromise: Promise<void> | null = null;
     
@@ -77,6 +98,8 @@ export class ShardCache {
             ttl: config?.ttl ?? 3600000, // 1 hour default
             maxEntries: config?.maxEntries ?? 10000,
             debugLogs: config?.debugLogs ?? false,
+            kv: config?.kv,
+            kvPrefix: config?.kvPrefix ?? "shard:",
         };
     }
     
@@ -86,6 +109,9 @@ export class ShardCache {
      * Note: When maxEntries is reached, this uses FIFO eviction (oldest inserted entry),
      * not LRU (least recently used). For most use cases this is sufficient since tenant
      * databases are relatively stable and not frequently added/removed.
+     * 
+     * When a KV namespace is configured the entry is also written to KV so it
+     * persists across Worker instances (fire-and-forget – does not block the caller).
      */
     set(entry: Omit<ShardCacheEntry, 'cachedAt'>): void {
         // If cache is at max capacity, remove oldest entry (FIFO)
@@ -99,10 +125,23 @@ export class ShardCache {
             }
         }
         
-        this.cache.set(entry.shardHash, {
+        const fullEntry: ShardCacheEntry = {
             ...entry,
             cachedAt: Date.now(),
-        });
+        };
+
+        this.cache.set(entry.shardHash, fullEntry);
+
+        // Write through to KV (fire-and-forget)
+        if (this.config.kv) {
+            const kvKey = this.config.kvPrefix + entry.shardHash;
+            const kvOpts = this.config.ttl > 0
+                ? { expirationTtl: Math.ceil(this.config.ttl / 1000) }
+                : undefined;
+            this.config.kv.put(kvKey, JSON.stringify(fullEntry), kvOpts).catch(err => {
+                console.error(`[ShardCache] Failed to write shard ${entry.shardHash} to KV:`, err);
+            });
+        }
         
         if (this.config.debugLogs) {
             console.log(`[ShardCache] Cached shard ${entry.shardHash} -> ${entry.databaseId}`);
@@ -112,33 +151,75 @@ export class ShardCache {
     /**
      * Gets a database ID from the cache by shard hash
      * 
+     * Lookup order:
+     * 1. In-memory Map (fastest)
+     * 2. KV namespace (persistent, only when configured)
+     * 
+     * A KV hit is written back into the in-memory Map so subsequent calls
+     * within the same Worker instance avoid the KV round-trip.
+     * 
      * @param shardHash - Shard hash to lookup
      * @returns Cache entry or null if not found or expired
      */
-    get(shardHash: string): ShardCacheEntry | null {
+    async get(shardHash: string): Promise<ShardCacheEntry | null> {
         const entry = this.cache.get(shardHash);
         
-        if (!entry) {
-            return null;
-        }
-        
-        // Check if entry has expired
-        if (this.config.ttl > 0 && Date.now() - entry.cachedAt > this.config.ttl) {
-            this.cache.delete(shardHash);
-            if (this.config.debugLogs) {
-                console.log(`[ShardCache] Expired shard ${shardHash}`);
+        if (entry) {
+            // Check if entry has expired
+            if (this.config.ttl > 0 && Date.now() - entry.cachedAt > this.config.ttl) {
+                this.cache.delete(shardHash);
+                if (this.config.debugLogs) {
+                    console.log(`[ShardCache] Expired shard ${shardHash} (in-memory)`);
+                }
+                // Don't return – fall through to KV lookup below
+            } else {
+                return entry;
             }
-            return null;
+        }
+
+        // L2: try KV
+        if (this.config.kv) {
+            try {
+                const kvKey = this.config.kvPrefix + shardHash;
+                const raw = await this.config.kv.get(kvKey);
+                if (raw) {
+                    const kvEntry: ShardCacheEntry = JSON.parse(raw);
+                    // Validate TTL again (KV TTL should handle this, but double-check)
+                    if (this.config.ttl > 0 && Date.now() - kvEntry.cachedAt > this.config.ttl) {
+                        if (this.config.debugLogs) {
+                            console.log(`[ShardCache] Expired shard ${shardHash} (KV)`);
+                        }
+                        return null;
+                    }
+                    // Populate in-memory cache from KV hit
+                    this.cache.set(shardHash, kvEntry);
+                    if (this.config.debugLogs) {
+                        console.log(`[ShardCache] KV hit for shard ${shardHash} -> ${kvEntry.databaseId}`);
+                    }
+                    return kvEntry;
+                }
+            } catch (err) {
+                console.error(`[ShardCache] Failed to read shard ${shardHash} from KV:`, err);
+            }
         }
         
-        return entry;
+        return null;
     }
     
     /**
-     * Removes an entry from the cache
+     * Removes an entry from the cache (in-memory and KV)
      */
     delete(shardHash: string): boolean {
         const deleted = this.cache.delete(shardHash);
+
+        // Remove from KV (fire-and-forget)
+        if (this.config.kv) {
+            const kvKey = this.config.kvPrefix + shardHash;
+            this.config.kv.delete(kvKey).catch(err => {
+                console.error(`[ShardCache] Failed to delete shard ${shardHash} from KV:`, err);
+            });
+        }
+
         if (deleted && this.config.debugLogs) {
             console.log(`[ShardCache] Deleted shard ${shardHash}`);
         }

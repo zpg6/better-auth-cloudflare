@@ -30,12 +30,17 @@ Example: `2k7h3m9n5abc12345xyz9a8b7c6d5e`
 
 ### Shard Cache
 
-The shard cache is an in-memory mapping of `shardHash → databaseId` that enables fast routing without database lookups. The cache:
+The shard cache stores `shardHash → databaseId` mappings for fast routing without database lookups. It operates as a **two-level (L1/L2) cache**:
 
-- Hydrates once at startup (lazy initialization)
-- Updates automatically when tenant databases are created/deleted
-- Has configurable TTL and max entries
-- Provides graceful degradation if lookup fails
+- **L1 – in-memory Map**: zero-latency lookups within a single Worker instance
+- **L2 – Cloudflare KV** *(optional)*: persistent store shared across Worker instances and Worker restarts
+
+Without KV, a cold Worker start requires a full tenant-table re-hydration query. With KV configured, L2 is checked on an L1 miss and the result is written back to L1 automatically. The cache:
+
+- Hydrates once at startup (lazy initialization) – or reads from KV on cold starts
+- Updates automatically when tenant databases are created/deleted (writes through to KV)
+- Has configurable TTL, max entries, and an optional KV namespace
+- Provides graceful degradation if any lookup fails
 
 ### Structured Database Naming
 
@@ -146,6 +151,7 @@ const auth = betterAuth({
                     },
                     mode: "organization", // or "user"
                     databasePrefix: "DB", // Optional, default: "DB"
+                    kv: env.KV, // Optional: persist shard cache in KV for faster cold starts
                     migrations: {
                         currentSchema: tenantSchemaSQL,
                         currentVersion: "1.0.0",
@@ -214,7 +220,7 @@ cache.set({
     databaseName: "DB_20260102_abc12345",
 });
 
-const entry = cache.get("abc12345");
+const entry = await cache.get("abc12345"); // async – checks L1 then KV
 cache.delete("abc12345");
 cache.clear();
 ```
@@ -234,8 +240,9 @@ cache.clear();
 |--------|------------------|-----------------|
 | **Tenant Lookup** | Every tenant-scoped query | Only for non-Universal ID queries |
 | **Routing Logic** | Centralized in AdapterRouter | Distributed in the IDs themselves |
-| **Cache** | Not used | In-memory cache for fast routing |
+| **Cache** | Not used | Two-level cache (in-memory L1 + optional KV L2) |
 | **Database Discovery** | Tenant table required | Self-describing IDs + cache fallback |
+| **Cold Start** | Full tenant-table hydration | KV-backed cache survives restarts (when configured) |
 | **Graceful Degradation** | No fallback | Falls back to tenant table if needed |
 
 ### Reliability Improvements
@@ -244,6 +251,7 @@ cache.clear();
 - **Self-routing** IDs work even if cache is cold
 - **Backward compatible** with existing non-Universal ID records
 - **Easier debugging** with structured database names
+- **KV-backed cache** persists across Worker restarts when configured, eliminating cold-start re-hydration
 
 ## Migration Guide
 
@@ -334,14 +342,16 @@ import { ShardCache, getShardCache } from "better-auth-cloudflare/d1-multi-tenan
 // Get global singleton
 const cache = getShardCache();
 
-// Create custom instance
+// Create custom instance with KV backing store
 const customCache = new ShardCache({
-    ttl: 3600000,        // 1 hour
+    ttl: 3600000,        // 1 hour (also used as KV expirationTtl)
     maxEntries: 10000,
     debugLogs: true,
+    kv: env.KV,          // Optional: Cloudflare KV namespace for L2 persistence
+    kvPrefix: "shard:",  // Optional: KV key prefix (default: "shard:")
 });
 
-// Set entry
+// Set entry (writes to in-memory L1 + KV L2 if configured)
 cache.set({
     shardHash: "abc12345",
     databaseId: "db-uuid",
@@ -349,13 +359,13 @@ cache.set({
     databaseName: "DB_20260102_abc12345",
 });
 
-// Get entry
-const entry = cache.get("abc12345");
+// Get entry (async: checks in-memory L1, falls back to KV L2 on miss)
+const entry = await cache.get("abc12345");
 
-// Delete entry
+// Delete entry (removes from in-memory + KV if configured)
 cache.delete("abc12345");
 
-// Clear all entries
+// Clear all in-memory entries
 cache.clear();
 
 // Get size
@@ -474,7 +484,7 @@ await cache.hydrate(adapter, "user");
 const decoded = defaultIdGenerator.decode(universalId);
 console.log("Shard hash:", decoded.shardHash);
 
-const cachedEntry = cache.get(decoded.shardHash);
+const cachedEntry = await cache.get(decoded.shardHash);
 console.log("Cached entry:", cachedEntry);
 ```
 
@@ -498,9 +508,11 @@ await db.findMany({
 
 ```typescript
 const cache = getShardCache({
-    ttl: 7200000,        // 2 hours (increase for less churn)
+    ttl: 7200000,        // 2 hours (increase for less churn; also sets KV expirationTtl)
     maxEntries: 50000,   // Increase for more tenants
     debugLogs: false,    // Disable in production
+    kv: env.KV,          // Persist across restarts and Worker instances
+    kvPrefix: "shard:",  // Namespace KV keys (useful if sharing a KV namespace)
 });
 ```
 
@@ -520,14 +532,15 @@ const generator = new UniversalIdGenerator({
 
 1. **Shard hashes are deterministic** - Don't rely on them for security
 2. **Database UUIDs are in IDs** - Consider this when sharing IDs publicly
-3. **Cache is in-memory** - Lost on restart (automatically rehydrates)
+3. **Cache is in-memory by default** - Lost on restart (automatically rehydrates); configure KV for persistence
 4. **API tokens are sensitive** - Store securely in environment variables
 
 ## Future Enhancements
 
 - [ ] Automatic shard hash migration for existing records
-- [ ] Cache persistence across restarts
-- [ ] Distributed cache support (KV, Durable Objects)
+- [x] Cache persistence across restarts (via KV)
+- [x] Distributed cache support (KV)
+- [ ] Durable Objects cache support
 - [ ] Automatic cache warming strategies
 - [ ] Metrics and monitoring integration
 - [ ] Multi-region shard routing
