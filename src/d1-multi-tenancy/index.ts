@@ -18,6 +18,7 @@ import {
 export * from "./d1-utils.js";
 export * from "./id-generator.js";
 export * from "./schema.js";
+export * from "./schema-detection.js";
 export * from "./shard-cache.js";
 export * from "./types.js";
 
