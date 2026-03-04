@@ -2,7 +2,9 @@ import { drizzle } from "@zpg6-test-pkgs/drizzle-orm/d1-http";
 import { type AuthContext, type BetterAuthPlugin, type User } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { initializeTenantDatabase } from "./d1-utils.js";
+import { generateShardHashFromDatabaseId } from "./id-generator.js";
 import { tenantDatabaseSchema, TenantDatabaseStatus, type Tenant } from "./schema.js";
+import { getShardCache } from "./shard-cache.js";
 import type { CloudflareD1MultiTenancyOptions } from "./types.js";
 import {
     CloudflareD1MultiTenancyError,
@@ -14,7 +16,10 @@ import {
 
 // Export all types and schema
 export * from "./d1-utils.js";
+export * from "./id-generator.js";
 export * from "./schema.js";
+export * from "./schema-detection.js";
+export * from "./shard-cache.js";
 export * from "./types.js";
 
 /**
@@ -24,7 +29,7 @@ export * from "./types.js";
  * Only one mode can be active at a time.
  */
 export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOptions) => {
-    const { cloudflareD1Api, mode, databasePrefix = "tenant_", hooks, migrations } = options;
+    const { cloudflareD1Api, mode, databasePrefix = "DB", hooks, migrations } = options;
 
     // Always use the singular schema key - Better Auth handles pluralization
     const model = Object.keys(tenantDatabaseSchema)[0]; // "tenant" -> table becomes "tenants" with usePlural: true
@@ -65,6 +70,9 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
 
             const databaseId = await createD1Database(cloudflareD1Api, databaseName);
 
+            // Generate shard hash from database UUID
+            const shardHash = generateShardHashFromDatabaseId(databaseId);
+
             // Initialize the tenant database with current schema if provided
             let resolvedVersion = "unknown";
 
@@ -76,9 +84,10 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
                 console.log(`⚠️ No migrations config found - tenant database will be empty`);
             }
 
-            // Update the tenant record with the database ID
+            // Update the tenant record with the database ID and shard hash
             const updateData: any = {
                 databaseId: databaseId,
+                shardHash: shardHash,
                 status: TenantDatabaseStatus.ACTIVE,
                 lastMigrationCheck: new Date(),
             };
@@ -87,6 +96,15 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
                 model,
                 where: [{ field: "id", value: dbRecord.id, operator: "eq" }],
                 update: updateData,
+            });
+
+            // Cache the shard mapping for fast lookups
+            const shardCache = getShardCache({ debugLogs: cloudflareD1Api.debugLogs });
+            shardCache.set({
+                shardHash,
+                databaseId,
+                tenantId,
+                databaseName,
             });
 
             await hooks?.afterCreate?.({
@@ -151,6 +169,12 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
                     deletedAt: new Date(),
                 },
             });
+
+            // Remove from cache
+            if (existing.shardHash) {
+                const shardCache = getShardCache({ debugLogs: cloudflareD1Api.debugLogs });
+                shardCache.delete(existing.shardHash);
+            }
 
             await hooks?.afterDelete?.({ tenantId, mode, user });
         } catch (error) {
