@@ -99,7 +99,7 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
             });
 
             // Cache the shard mapping for fast lookups
-            const shardCache = getShardCache({ debugLogs: cloudflareD1Api.debugLogs });
+            const shardCache = getShardCache({ debugLogs: cloudflareD1Api.debugLogs, kv: options.kv });
             shardCache.set({
                 shardHash,
                 databaseId,
@@ -172,7 +172,7 @@ export const cloudflareD1MultiTenancy = (options: CloudflareD1MultiTenancyOption
 
             // Remove from cache
             if (existing.shardHash) {
-                const shardCache = getShardCache({ debugLogs: cloudflareD1Api.debugLogs });
+                const shardCache = getShardCache({ debugLogs: cloudflareD1Api.debugLogs, kv: options.kv });
                 shardCache.delete(existing.shardHash);
             }
 
