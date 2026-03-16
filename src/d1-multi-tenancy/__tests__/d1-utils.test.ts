@@ -1,30 +1,27 @@
 /**
  * Tests for D1 Database Utilities (executeD1SQL, initializeTenantDatabase, etc.)
- * Drizzle ORM is mocked so that no real HTTP calls are made.
+ *
+ * Uses real D1 databases via wrangler local persistence — no Drizzle mocks.
+ * The `d1-http` driver is redirected to the `d1` binding driver so that SQL
+ * actually executes against SQLite-backed D1 instances.
  */
 
-import { describe, test, expect, jest, beforeEach } from "@jest/globals";
+import { describe, test, expect, vi } from "vitest";
+import { getD1Pool, queryD1, tableExists, listTables, assertD1FilesExist } from "./helpers";
 
 // ---------------------------------------------------------------------------
-// Mock Drizzle ORM before any imports that pull in the real module
+// Mock d1-http → real d1 binding driver (no HTTP calls)
 // ---------------------------------------------------------------------------
-const mockRun = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
-const mockDb = { run: mockRun };
-
-jest.mock("@zpg6-test-pkgs/drizzle-orm/d1-http", () => ({
-    drizzle: jest.fn(() => mockDb),
-}));
-
-jest.mock("@zpg6-test-pkgs/drizzle-orm", () => ({
-    sql: Object.assign(
-        // sql`` tagged-template form – not used directly by the helpers, but needed for re-exports
-        (_strings: TemplateStringsArray, ..._values: unknown[]) => ({ __sql: true }),
-        {
-            // sql.raw(str) form – used by executeD1SQL
-            raw: jest.fn((str: string) => ({ __sql: true, rawStr: str })),
-        }
-    ),
-}));
+vi.mock("@zpg6-test-pkgs/drizzle-orm/d1-http", async () => {
+    const { drizzle: d1Drizzle } = await import("@zpg6-test-pkgs/drizzle-orm/d1");
+    return {
+        drizzle: (config: any, options?: any) => {
+            const pool = (globalThis as any).__d1TestPool;
+            const binding = pool.allocate(config.databaseId);
+            return d1Drizzle(binding, options);
+        },
+    };
+});
 
 import {
     executeD1SQL,
@@ -62,76 +59,105 @@ describe("defaultChecksumGenerator", () => {
 });
 
 // ---------------------------------------------------------------------------
-// executeD1SQL – Drizzle's db.run is mocked
+// executeD1SQL – real D1 via local persistence
 // ---------------------------------------------------------------------------
 describe("executeD1SQL", () => {
-    beforeEach(() => {
-        mockRun.mockClear();
-    });
+    test("should execute a single SQL statement and create a real table", async () => {
+        const pool = getD1Pool();
+        const dbId = "exec-single-001";
 
-    test("should execute a single SQL statement", async () => {
-        await executeD1SQL(baseConfig, "db-id-1", "CREATE TABLE t (id TEXT);");
+        await executeD1SQL(baseConfig, dbId, "CREATE TABLE exec_single (id TEXT PRIMARY KEY, name TEXT);");
 
-        expect(mockRun).toHaveBeenCalledTimes(1);
+        // Verify the table was actually created via D1 binding
+        const binding = pool.get(dbId);
+        expect(await tableExists(binding, "exec_single")).toBe(true);
+
+        // Verify SQLite files are persisted to disk
+        assertD1FilesExist(pool.persistDir);
     });
 
     test("should split on statement-breakpoints and execute each statement separately", async () => {
+        const pool = getD1Pool();
+        const dbId = "exec-split-002";
+
         const sql =
-            "CREATE TABLE a (id TEXT);\n--> statement-breakpoint\nCREATE TABLE b (id TEXT);";
+            "CREATE TABLE split_a (id TEXT PRIMARY KEY);\n--> statement-breakpoint\nCREATE TABLE split_b (id TEXT PRIMARY KEY);";
 
-        await executeD1SQL(baseConfig, "db-id-1", sql);
+        await executeD1SQL(baseConfig, dbId, sql);
 
-        expect(mockRun).toHaveBeenCalledTimes(2);
+        const binding = pool.get(dbId);
+        expect(await tableExists(binding, "split_a")).toBe(true);
+        expect(await tableExists(binding, "split_b")).toBe(true);
+
+        // Both tables should appear in the listing
+        const tables = await listTables(binding);
+        expect(tables).toContain("split_a");
+        expect(tables).toContain("split_b");
+
+        // SQLite files are on disk
+        assertD1FilesExist(pool.persistDir);
     });
 
     test("should skip empty segments after splitting", async () => {
+        const pool = getD1Pool();
+        const dbId = "exec-empty-003";
+
         const sql =
-            "--> statement-breakpoint\nCREATE TABLE t (id TEXT);\n--> statement-breakpoint\n";
+            "--> statement-breakpoint\nCREATE TABLE skip_empty (id TEXT PRIMARY KEY);\n--> statement-breakpoint\n";
 
-        await executeD1SQL(baseConfig, "db-id-1", sql);
+        await executeD1SQL(baseConfig, dbId, sql);
 
-        // Only one non-empty statement
-        expect(mockRun).toHaveBeenCalledTimes(1);
+        const binding = pool.get(dbId);
+        expect(await tableExists(binding, "skip_empty")).toBe(true);
+
+        // SQLite files are on disk
+        assertD1FilesExist(pool.persistDir);
     });
 
     test("should log statements when debugLogs is true", async () => {
-        const consoleSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+        const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
         await executeD1SQL(
             { ...baseConfig, debugLogs: true },
-            "db-id-1",
-            "CREATE TABLE t (id TEXT);"
+            "exec-debug-004",
+            "CREATE TABLE debug_table (id TEXT PRIMARY KEY);"
         );
 
         expect(consoleSpy).toHaveBeenCalled();
         consoleSpy.mockRestore();
     });
 
-    test("should throw INVALID_CREDENTIALS on authentication error from Drizzle", async () => {
-        mockRun.mockRejectedValueOnce(new Error("authentication failed unexpectedly"));
+    test("should actually insert and persist data", async () => {
+        const pool = getD1Pool();
+        const dbId = "exec-data-005";
 
-        await expect(executeD1SQL(baseConfig, "db-id-1", "SELECT 1;")).rejects.toThrow(
-            CloudflareD1MultiTenancyError
+        await executeD1SQL(
+            baseConfig,
+            dbId,
+            "CREATE TABLE data_test (id TEXT PRIMARY KEY, value TEXT);"
+        );
+        await executeD1SQL(
+            baseConfig,
+            dbId,
+            "INSERT INTO data_test (id, value) VALUES ('row1', 'hello');"
         );
 
-        try {
-            mockRun.mockRejectedValueOnce(new Error("authentication failed"));
-            await executeD1SQL(baseConfig, "db-id-1", "SELECT 1;");
-        } catch (e) {
-            expect((e as CloudflareD1MultiTenancyError).code).toBe("INVALID_CREDENTIALS");
-        }
+        const binding = pool.get(dbId);
+        const rows = await queryD1(binding, "SELECT * FROM data_test WHERE id = ?", "row1");
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toEqual({ id: "row1", value: "hello" });
+
+        // SQLite files are on disk
+        assertD1FilesExist(pool.persistDir);
     });
 
-    test("should throw CLOUDFLARE_D1_API_ERROR on generic Drizzle error", async () => {
-        mockRun.mockRejectedValueOnce(new Error("connection timeout"));
-
-        await expect(executeD1SQL(baseConfig, "db-id-1", "SELECT 1;")).rejects.toThrow(
-            CloudflareD1MultiTenancyError
-        );
+    test("should throw CLOUDFLARE_D1_API_ERROR on invalid SQL", async () => {
+        await expect(
+            executeD1SQL(baseConfig, "exec-bad-006", "THIS IS NOT VALID SQL;")
+        ).rejects.toThrow(CloudflareD1MultiTenancyError);
 
         try {
-            mockRun.mockRejectedValueOnce(new Error("connection timeout"));
-            await executeD1SQL(baseConfig, "db-id-1", "SELECT 1;");
+            await executeD1SQL(baseConfig, "exec-bad-006b", "INVALID;");
         } catch (e) {
             expect((e as CloudflareD1MultiTenancyError).code).toBe("CLOUDFLARE_D1_API_ERROR");
         }
@@ -139,53 +165,76 @@ describe("executeD1SQL", () => {
 });
 
 // ---------------------------------------------------------------------------
-// initializeTenantDatabase – relies on executeD1SQL (Drizzle mocked)
+// initializeTenantDatabase – real D1 via local persistence
 // ---------------------------------------------------------------------------
 describe("initializeTenantDatabase", () => {
-    beforeEach(() => {
-        mockRun.mockClear().mockResolvedValue(undefined);
-    });
-
     test("should execute schema SQL and return schema and version", async () => {
-        const result = await initializeTenantDatabase(baseConfig, "db-id-2", {
-            currentSchema: "CREATE TABLE t (id TEXT);",
+        const pool = getD1Pool();
+        const dbId = "init-basic-001";
+
+        const result = await initializeTenantDatabase(baseConfig, dbId, {
+            currentSchema: "CREATE TABLE init_basic (id TEXT PRIMARY KEY, name TEXT);",
             currentVersion: "v1.0.0",
         });
 
-        expect(result.schema).toBe("CREATE TABLE t (id TEXT);");
+        expect(result.schema).toBe("CREATE TABLE init_basic (id TEXT PRIMARY KEY, name TEXT);");
         expect(result.version).toBe("v1.0.0");
-        expect(mockRun).toHaveBeenCalledTimes(1);
+
+        // Verify the table was actually created via D1 binding
+        const binding = pool.get(dbId);
+        expect(await tableExists(binding, "init_basic")).toBe(true);
+
+        // SQLite files are on disk
+        assertD1FilesExist(pool.persistDir);
     });
 
     test("should resolve schema and version from functions", async () => {
-        const result = await initializeTenantDatabase(baseConfig, "db-id-2", {
-            currentSchema: () => "CREATE TABLE t (id TEXT);",
+        const pool = getD1Pool();
+        const dbId = "init-func-002";
+
+        const result = await initializeTenantDatabase(baseConfig, dbId, {
+            currentSchema: () => "CREATE TABLE init_func (id TEXT PRIMARY KEY);",
             currentVersion: () => "v2.0.0",
         });
 
         expect(result.version).toBe("v2.0.0");
+
+        const binding = pool.get(dbId);
+        expect(await tableExists(binding, "init_func")).toBe(true);
+
+        // SQLite files are on disk
+        assertD1FilesExist(pool.persistDir);
     });
 
     test("should resolve schema and version from async functions", async () => {
-        const result = await initializeTenantDatabase(baseConfig, "db-id-2", {
-            currentSchema: async () => "CREATE TABLE async_t (id TEXT);",
+        const pool = getD1Pool();
+        const dbId = "init-async-003";
+
+        const result = await initializeTenantDatabase(baseConfig, dbId, {
+            currentSchema: async () => "CREATE TABLE init_async (id TEXT PRIMARY KEY);",
             currentVersion: async () => "v3.0.0",
         });
 
-        expect(result.schema).toBe("CREATE TABLE async_t (id TEXT);");
+        expect(result.schema).toBe("CREATE TABLE init_async (id TEXT PRIMARY KEY);");
         expect(result.version).toBe("v3.0.0");
+
+        const binding = pool.get(dbId);
+        expect(await tableExists(binding, "init_async")).toBe(true);
+
+        // SQLite files are on disk
+        assertD1FilesExist(pool.persistDir);
     });
 
     test("should throw DATABASE_CREATION_FAILED when schema is empty", async () => {
         await expect(
-            initializeTenantDatabase(baseConfig, "db-id-2", {
+            initializeTenantDatabase(baseConfig, "init-empty-004", {
                 currentSchema: "",
                 currentVersion: "v1.0.0",
             })
         ).rejects.toThrow(CloudflareD1MultiTenancyError);
 
         try {
-            await initializeTenantDatabase(baseConfig, "db-id-2", {
+            await initializeTenantDatabase(baseConfig, "init-empty-004b", {
                 currentSchema: "   ",
                 currentVersion: "v1.0.0",
             });
@@ -194,74 +243,129 @@ describe("initializeTenantDatabase", () => {
         }
     });
 
-    test("should throw DATABASE_CREATION_FAILED when Drizzle run fails", async () => {
-        mockRun.mockRejectedValueOnce(new Error("disk full"));
-
+    test("should throw DATABASE_CREATION_FAILED when SQL is invalid", async () => {
         await expect(
-            initializeTenantDatabase(baseConfig, "db-id-2", {
-                currentSchema: "CREATE TABLE t (id TEXT);",
+            initializeTenantDatabase(baseConfig, "init-bad-005", {
+                currentSchema: "NOT VALID SQL AT ALL;",
                 currentVersion: "v1.0.0",
             })
         ).rejects.toThrow(CloudflareD1MultiTenancyError);
 
         try {
-            mockRun.mockRejectedValueOnce(new Error("disk full"));
-            await initializeTenantDatabase(baseConfig, "db-id-2", {
-                currentSchema: "CREATE TABLE t (id TEXT);",
+            await initializeTenantDatabase(baseConfig, "init-bad-005b", {
+                currentSchema: "BAD SQL;",
                 currentVersion: "v1.0.0",
             });
         } catch (e) {
             expect((e as CloudflareD1MultiTenancyError).code).toBe("DATABASE_CREATION_FAILED");
         }
     });
+
+    test("should create multi-table schema with statement-breakpoints", async () => {
+        const pool = getD1Pool();
+        const dbId = "init-multi-006";
+
+        const schema = `CREATE TABLE documents (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL
+        );
+        --> statement-breakpoint
+        CREATE TABLE attachments (
+            id TEXT PRIMARY KEY,
+            doc_id TEXT NOT NULL
+        );`;
+
+        await initializeTenantDatabase(baseConfig, dbId, {
+            currentSchema: schema,
+            currentVersion: "v1.0.0",
+        });
+
+        const binding = pool.get(dbId);
+        expect(await tableExists(binding, "documents")).toBe(true);
+        expect(await tableExists(binding, "attachments")).toBe(true);
+
+        // Both tables should appear in the listing
+        const tables = await listTables(binding);
+        expect(tables).toContain("documents");
+        expect(tables).toContain("attachments");
+
+        // SQLite files are on disk
+        assertD1FilesExist(pool.persistDir);
+    });
 });
 
 // ---------------------------------------------------------------------------
-// applyTenantMigrations – relies on executeD1SQL (Drizzle mocked)
+// applyTenantMigrations – real D1 via local persistence
 // ---------------------------------------------------------------------------
 describe("applyTenantMigrations", () => {
-    beforeEach(() => {
-        mockRun.mockClear().mockResolvedValue(undefined);
-    });
-
     test("should apply each migration in order", async () => {
-        await applyTenantMigrations(baseConfig, "db-id-3", [
-            "CREATE TABLE a (id TEXT);",
-            "CREATE TABLE b (id TEXT);",
+        const pool = getD1Pool();
+        const dbId = "migrate-order-001";
+
+        await applyTenantMigrations(baseConfig, dbId, [
+            "CREATE TABLE mig_a (id TEXT PRIMARY KEY);",
+            "CREATE TABLE mig_b (id TEXT PRIMARY KEY);",
         ]);
 
-        expect(mockRun).toHaveBeenCalledTimes(2);
+        const binding = pool.get(dbId);
+        expect(await tableExists(binding, "mig_a")).toBe(true);
+        expect(await tableExists(binding, "mig_b")).toBe(true);
+
+        // SQLite files are on disk
+        assertD1FilesExist(pool.persistDir);
     });
 
     test("should do nothing for empty migrations array", async () => {
-        await applyTenantMigrations(baseConfig, "db-id-3", []);
-
-        expect(mockRun).not.toHaveBeenCalled();
+        await applyTenantMigrations(baseConfig, "migrate-empty-002", []);
+        // No error = success
     });
 
     test("should throw DATABASE_CREATION_FAILED when a migration fails", async () => {
-        mockRun.mockRejectedValueOnce(new Error("syntax error"));
-
         await expect(
-            applyTenantMigrations(baseConfig, "db-id-3", ["BAD SQL;"])
+            applyTenantMigrations(baseConfig, "migrate-bad-003", ["NOT VALID SQL;"])
         ).rejects.toThrow(CloudflareD1MultiTenancyError);
 
         try {
-            mockRun.mockRejectedValueOnce(new Error("syntax error"));
-            await applyTenantMigrations(baseConfig, "db-id-3", ["BAD SQL;"]);
+            await applyTenantMigrations(baseConfig, "migrate-bad-003b", ["BAD SQL;"]);
         } catch (e) {
             expect((e as CloudflareD1MultiTenancyError).code).toBe("DATABASE_CREATION_FAILED");
         }
     });
+
+    test("should apply ALTER TABLE migration after initial schema", async () => {
+        const pool = getD1Pool();
+        const dbId = "migrate-alter-004";
+
+        // Initial schema
+        await executeD1SQL(
+            baseConfig,
+            dbId,
+            "CREATE TABLE evolving (id TEXT PRIMARY KEY, name TEXT);"
+        );
+
+        // Migration adds a column
+        await applyTenantMigrations(baseConfig, dbId, [
+            "ALTER TABLE evolving ADD COLUMN email TEXT;",
+        ]);
+
+        // Verify by inserting data with the new column
+        const binding = pool.get(dbId);
+        await binding.exec("INSERT INTO evolving (id, name, email) VALUES ('1', 'test', 'a@b.com');");
+        const rows = await queryD1(binding, "SELECT * FROM evolving WHERE id = ?", "1");
+        expect(rows[0]).toEqual({ id: "1", name: "test", email: "a@b.com" });
+
+        // SQLite files are on disk
+        assertD1FilesExist(pool.persistDir);
+    });
 });
 
 // ---------------------------------------------------------------------------
-// getTenantMigrationStatus – uses Better Auth adapter mock (no Drizzle)
+// getTenantMigrationStatus – uses Better Auth adapter mock (no D1)
 // ---------------------------------------------------------------------------
 describe("getTenantMigrationStatus", () => {
     test("should return currentVersion and empty migrationHistory for new tenant", async () => {
         const mockAdapter = {
-            findOne: jest.fn<any>().mockResolvedValue({
+            findOne: vi.fn<any>().mockResolvedValue({
                 tenantId: "tenant-1",
                 lastMigrationVersion: "v1.0.0",
                 migrationHistory: null,
@@ -277,7 +381,7 @@ describe("getTenantMigrationStatus", () => {
     test("should parse JSON migrationHistory when present", async () => {
         const history = [{ version: "v1.0.0", appliedAt: "2024-01-01" }];
         const mockAdapter = {
-            findOne: jest.fn<any>().mockResolvedValue({
+            findOne: vi.fn<any>().mockResolvedValue({
                 tenantId: "tenant-1",
                 lastMigrationVersion: "v1.0.0",
                 migrationHistory: JSON.stringify(history),
@@ -291,7 +395,7 @@ describe("getTenantMigrationStatus", () => {
 
     test("should return 'unknown' version when lastMigrationVersion is not set", async () => {
         const mockAdapter = {
-            findOne: jest.fn<any>().mockResolvedValue({
+            findOne: vi.fn<any>().mockResolvedValue({
                 tenantId: "tenant-1",
             }),
         };
@@ -303,7 +407,7 @@ describe("getTenantMigrationStatus", () => {
 
     test("should throw DATABASE_CREATION_FAILED when tenant is not found", async () => {
         const mockAdapter = {
-            findOne: jest.fn<any>().mockResolvedValue(null),
+            findOne: vi.fn<any>().mockResolvedValue(null),
         };
 
         await expect(getTenantMigrationStatus(mockAdapter, "missing", "user")).rejects.toThrow(
@@ -320,7 +424,7 @@ describe("getTenantMigrationStatus", () => {
 
     test("should throw DATABASE_CREATION_FAILED when adapter rejects", async () => {
         const mockAdapter = {
-            findOne: jest.fn<any>().mockRejectedValue(new Error("DB offline")),
+            findOne: vi.fn<any>().mockRejectedValue(new Error("DB offline")),
         };
 
         await expect(getTenantMigrationStatus(mockAdapter, "tenant-1", "user")).rejects.toThrow(
@@ -330,7 +434,7 @@ describe("getTenantMigrationStatus", () => {
 
     test("should query with correct model and where clause", async () => {
         const mockAdapter = {
-            findOne: jest.fn<any>().mockResolvedValue({
+            findOne: vi.fn<any>().mockResolvedValue({
                 tenantId: "org-1",
                 lastMigrationVersion: "v2",
             }),

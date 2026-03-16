@@ -1,0 +1,140 @@
+name: Test Suite
+
+on:
+    push:
+        branches:
+          - main
+          - "feat/d1-multi-tenancy"
+    pull_request:
+        branches:
+          - main
+          - "feat/d1-multi-tenancy"
+    workflow_dispatch:
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    unit-tests:
+        name: Unit & Integration Tests (Node ${{ matrix.node-version }})
+        runs-on: ubuntu-latest
+
+        strategy:
+            fail-fast: false
+            matrix:
+                node-version: ["20", "22", "24"]
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ matrix.node-version }}
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 10.10.0
+                  run_install: false
+
+            - name: Get pnpm store directory
+              shell: bash
+              run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+            - name: Cache pnpm dependencies
+              uses: actions/cache@v4
+              with:
+                  path: ${{ env.STORE_PATH }}
+                  key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+                  restore-keys: |
+                      ${{ runner.os }}-pnpm-
+
+            - name: Install dependencies
+              run: pnpm install
+
+            - name: Run tests
+              run: pnpm test
+
+            - name: Run tests with coverage
+              run: pnpm test:coverage
+              if: matrix.node-version == '22'
+
+    typecheck:
+        name: Typecheck
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 10.10.0
+                  run_install: false
+
+            - name: Install dependencies
+              run: pnpm install
+
+            - name: Typecheck
+              run: pnpm typecheck
+
+    sharding-scenarios:
+        name: Sharding Scenarios
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                scenario:
+                    - name: "Multi-DB Sharding"
+                      test-filter: "sharding-multi-db"
+                    - name: "Integration Sharding"
+                      test-filter: "integration-sharding"
+                    - name: "Shard Cache"
+                      test-filter: "shard-cache"
+                    - name: "ID Generator & Routing"
+                      test-filter: "id-generator"
+                    - name: "Schema Detection"
+                      test-filter: "schema-detection"
+                    - name: "D1 Utils"
+                      test-filter: "d1-utils"
+                    - name: "Plugin Index"
+                      test-filter: "__tests__/index"
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "24"
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 10.10.0
+                  run_install: false
+
+            - name: Get pnpm store directory
+              shell: bash
+              run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+            - name: Cache pnpm dependencies
+              uses: actions/cache@v4
+              with:
+                  path: ${{ env.STORE_PATH }}
+                  key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+                  restore-keys: |
+                      ${{ runner.os }}-pnpm-
+
+            - name: Install dependencies
+              run: pnpm install
+
+            - name: "Run: ${{ matrix.scenario.name }}"
+              run: npx vitest run --reporter=verbose ${{ matrix.scenario.test-filter }}

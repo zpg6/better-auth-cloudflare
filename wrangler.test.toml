@@ -1,0 +1,55 @@
+# Wrangler configuration for local D1 testing via getPlatformProxy.
+# Each binding provides a real SQLite-backed D1 instance via local persistence.
+# Persistence path can be overridden via WRANGLER_PERSIST_DIR env var.
+name = "better-auth-cloudflare-test"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "TEST_DB_0"
+database_name = "test-db-0"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+[[d1_databases]]
+binding = "TEST_DB_1"
+database_name = "test-db-1"
+database_id = "00000000-0000-0000-0000-000000000001"
+
+[[d1_databases]]
+binding = "TEST_DB_2"
+database_name = "test-db-2"
+database_id = "00000000-0000-0000-0000-000000000002"
+
+[[d1_databases]]
+binding = "TEST_DB_3"
+database_name = "test-db-3"
+database_id = "00000000-0000-0000-0000-000000000003"
+
+[[d1_databases]]
+binding = "TEST_DB_4"
+database_name = "test-db-4"
+database_id = "00000000-0000-0000-0000-000000000004"
+
+[[d1_databases]]
+binding = "TEST_DB_5"
+database_name = "test-db-5"
+database_id = "00000000-0000-0000-0000-000000000005"
+
+[[d1_databases]]
+binding = "TEST_DB_6"
+database_name = "test-db-6"
+database_id = "00000000-0000-0000-0000-000000000006"
+
+[[d1_databases]]
+binding = "TEST_DB_7"
+database_name = "test-db-7"
+database_id = "00000000-0000-0000-0000-000000000007"
+
+[[d1_databases]]
+binding = "TEST_DB_8"
+database_name = "test-db-8"
+database_id = "00000000-0000-0000-0000-000000000008"
+
+[[d1_databases]]
+binding = "TEST_DB_9"
+database_name = "test-db-9"
+database_id = "00000000-0000-0000-0000-000000000009"

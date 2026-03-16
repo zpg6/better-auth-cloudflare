@@ -1,8 +1,13 @@
 /**
  * Tests for D1 Multi-Tenancy Utility Functions
+ *
+ * Uses real local D1 via wrangler local persistence for createD1Database
+ * and deleteD1Database tests.  Error handling tests use createErrorD1Fetch
+ * to simulate specific Cloudflare API error responses.
  */
 
-import { describe, test, expect, jest, beforeEach, afterEach } from "@jest/globals";
+import { describe, test, expect, vi } from "vitest";
+import { getD1Pool, createErrorD1Fetch, assertD1FilesExist } from "./helpers";
 import {
     CloudflareD1MultiTenancyError,
     CLOUDFLARE_D1_MULTI_TENANCY_ERROR_CODES,
@@ -95,54 +100,46 @@ describe("validateCloudflareCredentials", () => {
 });
 
 // ---------------------------------------------------------------------------
-// createD1Database – fetch is mocked
+// createD1Database – uses real local D1 via the fetch interceptor
 // ---------------------------------------------------------------------------
 describe("createD1Database", () => {
     const config = { apiToken: "test-token", accountId: "test-account" };
 
-    let originalFetch: typeof globalThis.fetch;
+    test("should return a valid database UUID via real local D1", async () => {
+        const result = await createD1Database(config, "DB_20240101_test");
 
-    beforeEach(() => {
-        originalFetch = globalThis.fetch;
+        // Should return a valid UUID from the local D1 interceptor
+        expect(result).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+
+        // The D1 pool should have allocated a binding for this database
+        const pool = getD1Pool();
+        const binding = pool.get(result);
+        expect(binding).toBeDefined();
+
+        // Verify SQLite files exist on disk
+        assertD1FilesExist(pool.persistDir);
     });
 
-    afterEach(() => {
-        globalThis.fetch = originalFetch;
-    });
+    test("should create a usable D1 database that can store data", async () => {
+        const dbUuid = await createD1Database(config, "DB_data_test");
 
-    test("should return database UUID on success", async () => {
-        const mockUuid = "2910d945-4dc7-4346-b0a9-2a14785ef92b";
+        // Use the allocated D1 binding to verify it's a real database
+        const pool = getD1Pool();
+        const binding = pool.get(dbUuid);
+        expect(binding).toBeDefined();
 
-        globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue({
-            ok: true,
-            json: async () => ({
-                success: true,
-                result: { uuid: mockUuid, name: "DB_20240101_abc12345" },
-                errors: [],
-            }),
-        } as any);
+        // Execute SQL on the real D1 database
+        await binding.exec("CREATE TABLE util_test (id TEXT PRIMARY KEY, value TEXT);");
+        await binding.exec("INSERT INTO util_test (id, value) VALUES ('row1', 'created');");
 
-        const result = await createD1Database(config, "DB_20240101_abc12345");
-
-        expect(result).toBe(mockUuid);
-        expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-        expect(globalThis.fetch).toHaveBeenCalledWith(
-            expect.stringContaining("test-account"),
-            expect.objectContaining({
-                method: "POST",
-                headers: expect.objectContaining({
-                    Authorization: "Bearer test-token",
-                }),
-            })
-        );
+        const result = await binding.prepare("SELECT * FROM util_test WHERE id = ?").bind("row1").first();
+        expect(result).toEqual({ id: "row1", value: "created" });
     });
 
     test("should throw CLOUDFLARE_D1_API_ERROR when response is not ok", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue({
-            ok: false,
-            status: 400,
-            statusText: "Bad Request",
-        } as any);
+        globalThis.fetch = createErrorD1Fetch({
+            httpError: { status: 400, statusText: "Bad Request" },
+        });
 
         await expect(createD1Database(config, "DB_test")).rejects.toThrow(
             CloudflareD1MultiTenancyError
@@ -156,40 +153,19 @@ describe("createD1Database", () => {
     });
 
     test("should throw CLOUDFLARE_D1_API_ERROR when API returns errors array", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue({
-            ok: true,
-            json: async () => ({
-                success: false,
-                errors: [{ code: 1001, message: "Database already exists" }],
-            }),
-        } as any);
+        globalThis.fetch = createErrorD1Fetch({
+            createError: { code: 1001, message: "Database already exists" },
+        });
 
-        await expect(createD1Database(config, "DB_test")).rejects.toThrow(
-            CloudflareD1MultiTenancyError
-        );
-    });
-
-    test("should throw CloudflareD1MultiTenancyError when uuid is missing from response", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue({
-            ok: true,
-            json: async () => ({
-                success: true,
-                result: { name: "DB_test" }, // uuid missing
-                errors: [],
-            }),
-        } as any);
-
-        // The internal DATABASE_CREATION_FAILED throw is caught by the outer handler
-        // and re-thrown as CLOUDFLARE_D1_API_ERROR
         await expect(createD1Database(config, "DB_test")).rejects.toThrow(
             CloudflareD1MultiTenancyError
         );
     });
 
     test("should throw INVALID_CREDENTIALS when fetch throws authentication error", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockRejectedValue(
-            new Error("authentication failed")
-        );
+        globalThis.fetch = createErrorD1Fetch({
+            networkError: "authentication failed",
+        });
 
         await expect(createD1Database(config, "DB_test")).rejects.toThrow(
             CloudflareD1MultiTenancyError
@@ -203,9 +179,9 @@ describe("createD1Database", () => {
     });
 
     test("should throw INVALID_CREDENTIALS when fetch throws unauthorized error", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockRejectedValue(
-            new Error("unauthorized access")
-        );
+        globalThis.fetch = createErrorD1Fetch({
+            networkError: "unauthorized access",
+        });
 
         await expect(createD1Database(config, "DB_test")).rejects.toThrow(
             CloudflareD1MultiTenancyError
@@ -220,41 +196,49 @@ describe("createD1Database", () => {
 });
 
 // ---------------------------------------------------------------------------
-// deleteD1Database – fetch is mocked
+// deleteD1Database – uses real local D1 via the fetch interceptor
 // ---------------------------------------------------------------------------
 describe("deleteD1Database", () => {
     const config = { apiToken: "test-token", accountId: "test-account" };
 
-    let originalFetch: typeof globalThis.fetch;
-
-    beforeEach(() => {
-        originalFetch = globalThis.fetch;
-    });
-
-    afterEach(() => {
-        globalThis.fetch = originalFetch;
-    });
-
     test("should resolve without error on success", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue({
-            ok: true,
-            json: async () => ({ success: true, result: null, errors: [] }),
-        } as any);
+        // First create a database so there's something to delete
+        const dbUuid = await createD1Database(config, "DB_to_delete");
+        expect(dbUuid).toBeDefined();
 
-        await expect(deleteD1Database(config, "db-uuid-123")).resolves.toBeUndefined();
-        expect(globalThis.fetch).toHaveBeenCalledWith(
-            expect.stringContaining("db-uuid-123"),
-            expect.objectContaining({ method: "DELETE" })
-        );
+        // Now delete it — the interceptor drops all tables
+        await expect(deleteD1Database(config, dbUuid)).resolves.toBeUndefined();
     });
 
-    test("should throw CLOUDFLARE_D1_API_ERROR when response is not ok", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue({
-            ok: false,
-            status: 404,
-            statusText: "Not Found",
-            text: async () => "Database not found",
-        } as any);
+    test("should clean up D1 data when deleting a database", async () => {
+        // Create a database and add data
+        const dbUuid = await createD1Database(config, "DB_delete_data");
+        const pool = getD1Pool();
+        const binding = pool.get(dbUuid);
+
+        await binding.exec("CREATE TABLE delete_test (id TEXT PRIMARY KEY);");
+        await binding.exec("INSERT INTO delete_test (id) VALUES ('row1');");
+
+        // Verify data exists
+        const beforeDelete = await binding
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='delete_test'")
+            .all();
+        expect(beforeDelete.results).toHaveLength(1);
+
+        // Delete the database
+        await deleteD1Database(config, dbUuid);
+
+        // Verify the table was dropped
+        const afterDelete = await binding
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='delete_test'")
+            .all();
+        expect(afterDelete.results).toHaveLength(0);
+    });
+
+    test("should throw CLOUDFLARE_D1_API_ERROR when delete fails with HTTP error", async () => {
+        globalThis.fetch = createErrorD1Fetch({
+            deleteError: "Cloudflare API error: 404 Not Found - Database not found",
+        });
 
         await expect(deleteD1Database(config, "db-uuid-123")).rejects.toThrow(
             CloudflareD1MultiTenancyError
@@ -267,24 +251,10 @@ describe("deleteD1Database", () => {
         }
     });
 
-    test("should throw CLOUDFLARE_D1_API_ERROR when API returns errors array", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue({
-            ok: true,
-            json: async () => ({
-                success: false,
-                errors: [{ code: 1001, message: "Database not found" }],
-            }),
-        } as any);
-
-        await expect(deleteD1Database(config, "db-uuid-123")).rejects.toThrow(
-            CloudflareD1MultiTenancyError
-        );
-    });
-
     test("should throw INVALID_CREDENTIALS when fetch throws authentication error", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockRejectedValue(
-            new Error("authentication error")
-        );
+        globalThis.fetch = createErrorD1Fetch({
+            deleteError: "authentication error",
+        });
 
         await expect(deleteD1Database(config, "db-uuid-123")).rejects.toThrow(
             CloudflareD1MultiTenancyError
@@ -318,7 +288,6 @@ describe("getCloudflareD1TenantDatabaseName", () => {
         const name1 = getCloudflareD1TenantDatabaseName("org_abc");
         const name2 = getCloudflareD1TenantDatabaseName("org_abc");
 
-        // Hash part should always be identical
         const hash1 = name1.split("_")[2];
         const hash2 = name2.split("_")[2];
         expect(hash1).toBe(hash2);

@@ -2,7 +2,7 @@
  * Tests for multi-tenancy with Better Auth plugins and schema relationships
  */
 
-import { describe, test, expect, beforeEach } from "@jest/globals";
+import { describe, test, expect } from "vitest";
 
 describe("D1 Multi-Tenancy with Plugins", () => {
     describe("Schema Separation", () => {
@@ -39,23 +39,17 @@ describe("D1 Multi-Tenancy with Plugins", () => {
         });
 
         test("should handle plugin-added tables correctly", () => {
-            // When a plugin adds tables with relationships to user table
             const pluginTables = ["apiKey", "apiKeys", "twoFactor", "twoFactors"];
-            
+
             const defaultCoreModels = [
                 "user", "users",
                 "account", "accounts",
                 "session", "sessions"
             ];
 
-            // By default, plugin tables might reference user table
-            // We need to determine if they should go to main or tenant DB
-            // Rule: If table references ONLY core tables, it stays in main DB
-            // If table has tenantId field, it goes to tenant DB
-
             const CORE_AUTH_TABLES = new Set([
                 ...defaultCoreModels,
-                ...pluginTables // Add plugin tables to core by default
+                ...pluginTables
             ]);
 
             expect(CORE_AUTH_TABLES.has("apiKey")).toBe(true);
@@ -69,7 +63,6 @@ describe("D1 Multi-Tenancy with Plugins", () => {
                 "session", "sessions"
             ];
 
-            // User wants to move sessions to tenant databases
             const customCoreModels = defaultCoreModels.filter(
                 m => m !== "session" && m !== "sessions"
             );
@@ -77,43 +70,30 @@ describe("D1 Multi-Tenancy with Plugins", () => {
             const CORE_AUTH_TABLES = new Set(customCoreModels);
 
             expect(CORE_AUTH_TABLES.has("user")).toBe(true);
-            expect(CORE_AUTH_TABLES.has("session")).toBe(false); // Moved to tenant DB
+            expect(CORE_AUTH_TABLES.has("session")).toBe(false);
         });
     });
 
     describe("Schema Relationships", () => {
         test("should handle relationships between main and tenant tables", () => {
-            // Simulating a scenario where tenant table references main table
             const mainTables = ["user", "organization"];
-            const tenantTables = ["userBirthday"]; // Has userId field referencing main.user
+            const tenantTables = ["userBirthday"];
 
-            // In adapter router, when querying userBirthday by userId:
-            // 1. We need userId to be resolved in main DB
-            // 2. Then use that user's tenantId to route to tenant DB
-            // 3. Query userBirthday in tenant DB
-
-            // This is handled by the routing logic that extracts tenantId
             const mockUserId = "user_123";
             const mockTenantId = "org_456";
 
-            // Simulating the lookup chain
-            const tenantId = mockTenantId; // Would be extracted from user record
-            
+            const tenantId = mockTenantId;
+
             expect(tenantId).toBe("org_456");
         });
 
         test("should handle plugin relationships correctly", () => {
-            // Example: twoFactor plugin adds twoFactor table with userId foreign key
-            // This table should stay in main DB because it references user table
             const coreTables = ["user", "twoFactor"];
             const tenantTables = ["userBirthday"];
 
             const CORE_AUTH_TABLES = new Set(coreTables);
 
-            // twoFactor stays in main DB to maintain referential integrity
             expect(CORE_AUTH_TABLES.has("twoFactor")).toBe(true);
-            
-            // userBirthday goes to tenant DB
             expect(CORE_AUTH_TABLES.has("userBirthday")).toBe(false);
         });
     });
@@ -127,10 +107,7 @@ describe("D1 Multi-Tenancy with Plugins", () => {
         });
 
         test("should apply migrations to correct database", () => {
-            // Main migrations go to main DB
             const mainMigrations = ["0000_add_tenant_table.sql", "0001_add_shard_hash.sql"];
-            
-            // Tenant migrations go to all tenant DBs
             const tenantMigrations = ["0000_add_birthdays.sql", "0001_add_reminders.sql"];
 
             expect(mainMigrations.length).toBeGreaterThan(0);
@@ -140,7 +117,6 @@ describe("D1 Multi-Tenancy with Plugins", () => {
 
     describe("Drizzle Schema Filtering", () => {
         test("should properly filter Drizzle schema objects", () => {
-            // Mock full schema with both main and tenant tables
             const fullSchema = {
                 user: { /* table def */ },
                 users: { /* table def */ },
@@ -151,7 +127,6 @@ describe("D1 Multi-Tenancy with Plugins", () => {
 
             const coreModels = new Set(["user", "users", "account", "accounts"]);
 
-            // Filter to get tenant schema only
             const tenantSchema = Object.fromEntries(
                 Object.entries(fullSchema).filter(
                     ([tableName]) => !coreModels.has(tableName)
