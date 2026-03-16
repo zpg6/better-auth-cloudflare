@@ -84,9 +84,6 @@ jobs:
     sharding-scenarios:
         name: Sharding Scenarios
         runs-on: ubuntu-latest
-        env:
-            RUNNER_TEMP: ${{ runner.temp }}
-
         strategy:
             fail-fast: false
             matrix:
