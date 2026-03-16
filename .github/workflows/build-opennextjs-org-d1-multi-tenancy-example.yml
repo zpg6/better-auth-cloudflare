@@ -19,6 +19,10 @@ on:
             - ".github/workflows/build-opennextjs-org-d1-multi-tenancy-example.yml" # This file
     workflow_dispatch:
 
+concurrency:
+    group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
 jobs:
     build:
         runs-on: ubuntu-latest

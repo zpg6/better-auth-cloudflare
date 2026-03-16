@@ -19,6 +19,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - 🚀 **Hyperdrive Support**: Connect to Postgres and MySQL databases through Cloudflare Hyperdrive.
 - 🔌 **KV Storage Integration**: Optionally use Cloudflare KV for secondary storage (e.g., session caching).
 - 📁 **R2 File Storage**: Upload, download, and manage user files with Cloudflare R2 object storage and database tracking.
+- 🏢 **D1 Multi-Tenancy**: Automatic tenant database creation with Universal ID-based sharding for optimal performance.
 - 📍 **Automatic Geolocation Tracking**: Enrich user sessions with location data derived from Cloudflare.
 - 🌐 **Cloudflare IP Detection**: Utilize Cloudflare's IP detection headers out-of-the-box.
 - 🔍 **Rich Client-Side Context**: Access timezone, city, country, region, and more via the client plugin.
@@ -34,7 +35,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - [x] R2
 - [ ] Cloudflare Images
 - [ ] Durable Objects
-- [ ] D1 Multi-Tenancy
+- [x] D1 Multi-Tenancy with Universal ID-based Sharding
 
 **CLI:**
 
@@ -67,6 +68,8 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
     - [7. Initialize the Client](#7-initialize-the-client)
 - [Usage Examples](#usage-examples)
     - [Accessing Geolocation Data](#accessing-geolocation-data)
+- [D1 Multi-Tenancy with Universal ID Sharding](./docs/d1-multi-tenancy-universal-ids.md)
+- [D1 Multi-Tenancy Plugin Integration Guide](./docs/d1-multi-tenancy-plugins.md)
 - [R2 File Storage Guide](./docs/r2.md)
 - [License](#license)
 - [Contributing](#contributing)
@@ -338,6 +341,15 @@ For integrating the generated `auth.schema.ts` with your existing Drizzle schema
 ### 5. Configure KV as Secondary Storage (Optional)
 
 If you provide a KV namespace in the `withCloudflare` configuration (as shown in `src/auth/index.ts`), it will be used as [Secondary Storage](https://www.better-auth.com/docs/concepts/database#secondary-storage) by Better Auth. This is typically used for caching or storing session data that doesn't need to reside in your primary database.
+
+When D1 multi-tenancy is configured, the same KV namespace (or a dedicated one passed as `multiTenancy.kv`) is also used as a **persistent L2 backing store for the shard cache**. This means the `shardHash → databaseId` mapping survives Worker cold starts and is shared across all Worker instances, eliminating the tenant-table re-hydration query on startup.
+
+```typescript
+multiTenancy: {
+    // ... other options
+    kv: env.KV, // uses this KV for the shard cache; falls back to top-level kv if omitted
+},
+```
 
 Ensure your KV namespace (e.g., `USER_SESSIONS`) is correctly bound in your `wrangler.toml` file.
 

@@ -75,6 +75,7 @@ export const tenants = sqliteTable("tenants", {
     tenantType: text("tenant_type").notNull(),
     databaseName: text("database_name").notNull(),
     databaseId: text("database_id").notNull(),
+    shardHash: text("shard_hash"),
     status: text("status").default("creating").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
         .$defaultFn(() => new Date())
