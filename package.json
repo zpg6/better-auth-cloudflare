@@ -43,6 +43,7 @@
         "test:schema-detection": "vitest run --reporter=verbose schema-detection",
         "test:d1-utils": "vitest run --reporter=verbose d1-utils",
         "test:plugin": "vitest run --reporter=verbose __tests__/index",
+        "test:all": "vitest run --reporter=verbose",
         "typecheck": "tsc --noEmit",
         "format": "prettier --write ."
     },
