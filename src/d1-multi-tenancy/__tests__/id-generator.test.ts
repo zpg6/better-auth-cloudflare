@@ -2,7 +2,7 @@
  * Tests for Universal ID Generator
  */
 
-import { describe, test, expect, beforeEach } from "@jest/globals";
+import { describe, test, expect, beforeEach } from "vitest";
 import {
     UniversalIdGenerator,
     defaultIdGenerator,
@@ -71,7 +71,7 @@ describe("UniversalIdGenerator", () => {
         test("should decode valid Universal ID", () => {
             const originalShardHash = "abc12345";
             const originalRecordType = "birthday";
-            
+
             const id = generator.generate({
                 shardHash: originalShardHash,
                 recordType: originalRecordType,

@@ -2,7 +2,7 @@
  * Tests for Schema Detection and Validation
  */
 
-import { describe, test, expect } from "@jest/globals";
+import { describe, test, expect } from "vitest";
 import {
     detectSchemas,
     analyzeCrossDbReferences,
@@ -218,9 +218,9 @@ describe("Schema Detection", () => {
             const fullSchema = {
                 user: { /* def */ },
                 tenant: { /* def */ },
-                userBirthday: { 
+                userBirthday: {
                     userId: "string",  // References main.user
-                    tenantId: "string" 
+                    tenantId: "string"
                 },
             };
 

@@ -2,7 +2,7 @@
  * Tests for D1 Multi-Tenancy Utility Functions
  */
 
-import { describe, test, expect, jest, beforeEach, afterEach } from "@jest/globals";
+import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import {
     CloudflareD1MultiTenancyError,
     CLOUDFLARE_D1_MULTI_TENANCY_ERROR_CODES,
@@ -113,7 +113,7 @@ describe("createD1Database", () => {
     test("should return database UUID on success", async () => {
         const mockUuid = "2910d945-4dc7-4346-b0a9-2a14785ef92b";
 
-        globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue({
+        globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
             ok: true,
             json: async () => ({
                 success: true,
@@ -138,7 +138,7 @@ describe("createD1Database", () => {
     });
 
     test("should throw CLOUDFLARE_D1_API_ERROR when response is not ok", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue({
+        globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
             ok: false,
             status: 400,
             statusText: "Bad Request",
@@ -156,7 +156,7 @@ describe("createD1Database", () => {
     });
 
     test("should throw CLOUDFLARE_D1_API_ERROR when API returns errors array", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue({
+        globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
             ok: true,
             json: async () => ({
                 success: false,
@@ -170,7 +170,7 @@ describe("createD1Database", () => {
     });
 
     test("should throw CloudflareD1MultiTenancyError when uuid is missing from response", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue({
+        globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
             ok: true,
             json: async () => ({
                 success: true,
@@ -187,7 +187,7 @@ describe("createD1Database", () => {
     });
 
     test("should throw INVALID_CREDENTIALS when fetch throws authentication error", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockRejectedValue(
+        globalThis.fetch = vi.fn<typeof fetch>().mockRejectedValue(
             new Error("authentication failed")
         );
 
@@ -203,7 +203,7 @@ describe("createD1Database", () => {
     });
 
     test("should throw INVALID_CREDENTIALS when fetch throws unauthorized error", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockRejectedValue(
+        globalThis.fetch = vi.fn<typeof fetch>().mockRejectedValue(
             new Error("unauthorized access")
         );
 
@@ -236,7 +236,7 @@ describe("deleteD1Database", () => {
     });
 
     test("should resolve without error on success", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue({
+        globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
             ok: true,
             json: async () => ({ success: true, result: null, errors: [] }),
         } as any);
@@ -249,7 +249,7 @@ describe("deleteD1Database", () => {
     });
 
     test("should throw CLOUDFLARE_D1_API_ERROR when response is not ok", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue({
+        globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
             ok: false,
             status: 404,
             statusText: "Not Found",
@@ -268,7 +268,7 @@ describe("deleteD1Database", () => {
     });
 
     test("should throw CLOUDFLARE_D1_API_ERROR when API returns errors array", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue({
+        globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
             ok: true,
             json: async () => ({
                 success: false,
@@ -282,7 +282,7 @@ describe("deleteD1Database", () => {
     });
 
     test("should throw INVALID_CREDENTIALS when fetch throws authentication error", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockRejectedValue(
+        globalThis.fetch = vi.fn<typeof fetch>().mockRejectedValue(
             new Error("authentication error")
         );
 

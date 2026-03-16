@@ -2,7 +2,7 @@
  * Tests for Shard Cache
  */
 
-import { describe, test, expect, beforeEach, jest } from "@jest/globals";
+import { describe, test, expect, beforeEach, vi } from "vitest";
 import { ShardCache, getShardCache, resetShardCache } from "../shard-cache";
 
 describe("ShardCache", () => {
@@ -205,7 +205,7 @@ describe("ShardCache", () => {
     describe("hydrate", () => {
         test("should hydrate cache from adapter", async () => {
             const mockAdapter = {
-                findMany: jest.fn<any>().mockResolvedValue([
+                findMany: vi.fn<any>().mockResolvedValue([
                     {
                         tenantId: "tenant-1",
                         databaseId: "db-uuid-123",
@@ -231,7 +231,7 @@ describe("ShardCache", () => {
 
         test("should handle empty tenant list", async () => {
             const mockAdapter = {
-                findMany: jest.fn<any>().mockResolvedValue([]),
+                findMany: vi.fn<any>().mockResolvedValue([]),
             };
 
             await cache.hydrate(mockAdapter, "user");
@@ -242,7 +242,7 @@ describe("ShardCache", () => {
 
         test("should skip tenants without shard hash", async () => {
             const mockAdapter = {
-                findMany: jest.fn<any>().mockResolvedValue([
+                findMany: vi.fn<any>().mockResolvedValue([
                     {
                         tenantId: "tenant-1",
                         databaseId: "db-uuid-123",
@@ -266,7 +266,7 @@ describe("ShardCache", () => {
 
         test("should only hydrate once", async () => {
             const mockAdapter = {
-                findMany: jest.fn<any>().mockResolvedValue([
+                findMany: vi.fn<any>().mockResolvedValue([
                     {
                         tenantId: "tenant-1",
                         databaseId: "db-uuid-123",
@@ -285,8 +285,8 @@ describe("ShardCache", () => {
 
         test("should wait for in-progress hydration", async () => {
             const mockAdapter = {
-                findMany: jest.fn<any>().mockImplementation(() => 
-                    new Promise(resolve => 
+                findMany: vi.fn<any>().mockImplementation(() =>
+                    new Promise(resolve =>
                         setTimeout(() => resolve([
                             {
                                 tenantId: "tenant-1",
@@ -314,7 +314,7 @@ describe("ShardCache", () => {
     describe("ensureHydrated", () => {
         test("should hydrate if not ready", async () => {
             const mockAdapter = {
-                findMany: jest.fn<any>().mockResolvedValue([
+                findMany: vi.fn<any>().mockResolvedValue([
                     {
                         tenantId: "tenant-1",
                         databaseId: "db-uuid-123",
@@ -334,7 +334,7 @@ describe("ShardCache", () => {
 
         test("should skip if already hydrated", async () => {
             const mockAdapter = {
-                findMany: jest.fn<any>().mockResolvedValue([]),
+                findMany: vi.fn<any>().mockResolvedValue([]),
             };
 
             await cache.hydrate(mockAdapter, "user");
@@ -377,13 +377,13 @@ describe("KV-backed ShardCache", () => {
         const store = new Map<string, string>();
         return {
             store,
-            put: jest.fn<any>().mockImplementation(async (key: string, value: string) => {
+            put: vi.fn<any>().mockImplementation(async (key: string, value: string) => {
                 store.set(key, value);
             }),
-            get: jest.fn<any>().mockImplementation(async (key: string) => {
+            get: vi.fn<any>().mockImplementation(async (key: string) => {
                 return store.get(key) ?? null;
             }),
-            delete: jest.fn<any>().mockImplementation(async (key: string) => {
+            delete: vi.fn<any>().mockImplementation(async (key: string) => {
                 store.delete(key);
             }),
         };
@@ -554,7 +554,7 @@ describe("KV-backed ShardCache", () => {
 
     test("KV errors are handled gracefully on get", async () => {
         const mockKv = createMockKV();
-        mockKv.get = jest.fn<any>().mockRejectedValue(new Error("KV unavailable"));
+        mockKv.get = vi.fn<any>().mockRejectedValue(new Error("KV unavailable"));
         const cache = new ShardCache({ kv: mockKv as any });
 
         // Should not throw; returns null gracefully
@@ -564,7 +564,7 @@ describe("KV-backed ShardCache", () => {
 
     test("KV errors are handled gracefully on set", async () => {
         const mockKv = createMockKV();
-        mockKv.put = jest.fn<any>().mockRejectedValue(new Error("KV unavailable"));
+        mockKv.put = vi.fn<any>().mockRejectedValue(new Error("KV unavailable"));
         const cache = new ShardCache({ kv: mockKv as any });
 
         // set should not throw even when KV write fails

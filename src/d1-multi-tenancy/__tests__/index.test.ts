@@ -3,23 +3,26 @@
  * Fetch, Drizzle ORM, and Better Auth adapter are mocked.
  */
 
-import { describe, test, expect, jest, beforeEach, afterEach } from "@jest/globals";
+import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mock Drizzle before any imports that use it
 // ---------------------------------------------------------------------------
-const mockDrizzleRun = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
-const mockDrizzleDb = { run: mockDrizzleRun };
-const mockDrizzle = jest.fn(() => mockDrizzleDb);
+const { mockDrizzleRun, mockDrizzleDb, mockDrizzle } = vi.hoisted(() => {
+    const mockDrizzleRun = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    const mockDrizzleDb = { run: mockDrizzleRun };
+    const mockDrizzle = vi.fn(() => mockDrizzleDb);
+    return { mockDrizzleRun, mockDrizzleDb, mockDrizzle };
+});
 
-jest.mock("@zpg6-test-pkgs/drizzle-orm/d1-http", () => ({
+vi.mock("@zpg6-test-pkgs/drizzle-orm/d1-http", () => ({
     drizzle: mockDrizzle,
 }));
 
-jest.mock("@zpg6-test-pkgs/drizzle-orm", () => ({
+vi.mock("@zpg6-test-pkgs/drizzle-orm", () => ({
     sql: Object.assign(
         (_strings: TemplateStringsArray, ..._values: unknown[]) => ({ __sql: true }),
-        { raw: jest.fn((str: string) => ({ __sql: true, rawStr: str })) }
+        { raw: vi.fn((str: string) => ({ __sql: true, rawStr: str })) }
     ),
 }));
 
@@ -41,15 +44,15 @@ const cloudflareD1Api = { apiToken: "test-token", accountId: "test-account" };
 // ---------------------------------------------------------------------------
 function makeAdapter(overrides: Partial<{ findOne: any; create: any; update: any }> = {}) {
     return {
-        findOne: jest.fn<any>().mockResolvedValue(null),
-        create: jest.fn<any>().mockResolvedValue({ id: "rec-123" }),
-        update: jest.fn<any>().mockResolvedValue({}),
+        findOne: vi.fn<any>().mockResolvedValue(null),
+        create: vi.fn<any>().mockResolvedValue({ id: "rec-123" }),
+        update: vi.fn<any>().mockResolvedValue({}),
         ...overrides,
     };
 }
 
 function mockFetchSuccess(uuid = "db-uuid-abc") {
-    return jest.fn<typeof fetch>().mockResolvedValue({
+    return vi.fn<typeof fetch>().mockResolvedValue({
         ok: true,
         json: async () => ({
             success: true,
@@ -60,7 +63,7 @@ function mockFetchSuccess(uuid = "db-uuid-abc") {
 }
 
 function mockFetchDeleteSuccess() {
-    return jest.fn<typeof fetch>().mockResolvedValue({
+    return vi.fn<typeof fetch>().mockResolvedValue({
         ok: true,
         json: async () => ({ success: true, result: null, errors: [] }),
     } as any);
@@ -150,8 +153,8 @@ describe("createTenantDatabase (user mode)", () => {
         globalThis.fetch = mockFetchSuccess("new-db-uuid");
 
         const adapter = makeAdapter({
-            findOne: jest.fn<any>().mockResolvedValue(null), // no existing tenant
-            create: jest.fn<any>().mockResolvedValue({ id: "rec-001" }),
+            findOne: vi.fn<any>().mockResolvedValue(null), // no existing tenant
+            create: vi.fn<any>().mockResolvedValue({ id: "rec-001" }),
         });
 
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;
@@ -184,7 +187,7 @@ describe("createTenantDatabase (user mode)", () => {
 
     test("should skip creation if tenant database already exists and is active", async () => {
         const adapter = makeAdapter({
-            findOne: jest.fn<any>().mockResolvedValue({
+            findOne: vi.fn<any>().mockResolvedValue({
                 id: "rec-001",
                 tenantId: "user-1",
                 status: TenantDatabaseStatus.ACTIVE,
@@ -205,12 +208,12 @@ describe("createTenantDatabase (user mode)", () => {
         globalThis.fetch = mockFetchSuccess("rebuilt-db-uuid");
 
         const adapter = makeAdapter({
-            findOne: jest.fn<any>().mockResolvedValue({
+            findOne: vi.fn<any>().mockResolvedValue({
                 id: "rec-001",
                 tenantId: "user-1",
                 status: TenantDatabaseStatus.DELETED,
             }),
-            create: jest.fn<any>().mockResolvedValue({ id: "rec-002" }),
+            create: vi.fn<any>().mockResolvedValue({ id: "rec-002" }),
         });
 
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;
@@ -226,11 +229,11 @@ describe("createTenantDatabase (user mode)", () => {
     test("should call beforeCreate and afterCreate hooks when provided", async () => {
         globalThis.fetch = mockFetchSuccess("hook-db-uuid");
 
-        const beforeCreate = jest.fn<any>().mockResolvedValue(undefined);
-        const afterCreate = jest.fn<any>().mockResolvedValue(undefined);
+        const beforeCreate = vi.fn<any>().mockResolvedValue(undefined);
+        const afterCreate = vi.fn<any>().mockResolvedValue(undefined);
 
         const adapter = makeAdapter({
-            create: jest.fn<any>().mockResolvedValue({ id: "rec-hooks" }),
+            create: vi.fn<any>().mockResolvedValue({ id: "rec-hooks" }),
         });
 
         const plugin = cloudflareD1MultiTenancy({
@@ -260,7 +263,7 @@ describe("createTenantDatabase (user mode)", () => {
         globalThis.fetch = mockFetchSuccess("migrated-db-uuid");
 
         const adapter = makeAdapter({
-            create: jest.fn<any>().mockResolvedValue({ id: "rec-mig" }),
+            create: vi.fn<any>().mockResolvedValue({ id: "rec-mig" }),
         });
 
         const plugin = cloudflareD1MultiTenancy({
@@ -282,7 +285,7 @@ describe("createTenantDatabase (user mode)", () => {
     });
 
     test("should throw CloudflareD1MultiTenancyError when fetch fails", async () => {
-        globalThis.fetch = jest.fn<typeof fetch>().mockRejectedValue(new Error("network error"));
+        globalThis.fetch = vi.fn<typeof fetch>().mockRejectedValue(new Error("network error"));
 
         const adapter = makeAdapter();
 
@@ -300,7 +303,7 @@ describe("createTenantDatabase (user mode)", () => {
         globalThis.fetch = mockFetchSuccess("prefix-db-uuid");
 
         const adapter = makeAdapter({
-            create: jest.fn<any>().mockResolvedValue({ id: "rec-prefix" }),
+            create: vi.fn<any>().mockResolvedValue({ id: "rec-prefix" }),
         });
 
         const plugin = cloudflareD1MultiTenancy({
@@ -352,7 +355,7 @@ describe("deleteTenantDatabase (user mode)", () => {
         };
 
         const adapter = makeAdapter({
-            findOne: jest.fn<any>().mockResolvedValue(existingTenant),
+            findOne: vi.fn<any>().mockResolvedValue(existingTenant),
         });
 
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;
@@ -380,7 +383,7 @@ describe("deleteTenantDatabase (user mode)", () => {
 
     test("should skip deletion if no existing active tenant found", async () => {
         const adapter = makeAdapter({
-            findOne: jest.fn<any>().mockResolvedValue(null),
+            findOne: vi.fn<any>().mockResolvedValue(null),
         });
 
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;
@@ -402,8 +405,8 @@ describe("deleteTenantDatabase (user mode)", () => {
     test("should call beforeDelete and afterDelete hooks when provided", async () => {
         globalThis.fetch = mockFetchDeleteSuccess();
 
-        const beforeDelete = jest.fn<any>().mockResolvedValue(undefined);
-        const afterDelete = jest.fn<any>().mockResolvedValue(undefined);
+        const beforeDelete = vi.fn<any>().mockResolvedValue(undefined);
+        const afterDelete = vi.fn<any>().mockResolvedValue(undefined);
 
         const existingTenant = {
             id: "rec-hk",
@@ -415,7 +418,7 @@ describe("deleteTenantDatabase (user mode)", () => {
         };
 
         const adapter = makeAdapter({
-            findOne: jest.fn<any>().mockResolvedValue(existingTenant),
+            findOne: vi.fn<any>().mockResolvedValue(existingTenant),
         });
 
         const plugin = cloudflareD1MultiTenancy({
@@ -488,7 +491,7 @@ describe("cloudflareD1MultiTenancy organization mode hooks", () => {
         globalThis.fetch = mockFetchSuccess("org-db-uuid");
 
         const adapter = makeAdapter({
-            create: jest.fn<any>().mockResolvedValue({ id: "rec-org" }),
+            create: vi.fn<any>().mockResolvedValue({ id: "rec-org" }),
         });
 
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "organization" }) as any;
@@ -528,7 +531,7 @@ describe("cloudflareD1MultiTenancy organization mode hooks", () => {
         };
 
         const adapter = makeAdapter({
-            findOne: jest.fn<any>().mockResolvedValue(existingTenant),
+            findOne: vi.fn<any>().mockResolvedValue(existingTenant),
         });
 
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "organization" }) as any;
@@ -556,7 +559,7 @@ describe("cloudflareD1MultiTenancy organization mode hooks", () => {
         globalThis.fetch = mockFetchSuccess("org-alt-uuid");
 
         const adapter = makeAdapter({
-            create: jest.fn<any>().mockResolvedValue({ id: "rec-alt" }),
+            create: vi.fn<any>().mockResolvedValue({ id: "rec-alt" }),
         });
 
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "organization" }) as any;
@@ -604,7 +607,7 @@ describe("Shard cache after tenant creation", () => {
         globalThis.fetch = mockFetchSuccess("shard-db-uuid");
 
         const adapter = makeAdapter({
-            create: jest.fn<any>().mockResolvedValue({ id: "rec-shard" }),
+            create: vi.fn<any>().mockResolvedValue({ id: "rec-shard" }),
         });
 
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;

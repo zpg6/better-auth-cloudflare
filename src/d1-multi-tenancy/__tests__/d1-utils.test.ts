@@ -3,25 +3,26 @@
  * Drizzle ORM is mocked so that no real HTTP calls are made.
  */
 
-import { describe, test, expect, jest, beforeEach } from "@jest/globals";
+import { describe, test, expect, vi, beforeEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mock Drizzle ORM before any imports that pull in the real module
 // ---------------------------------------------------------------------------
-const mockRun = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
-const mockDb = { run: mockRun };
+const { mockRun, mockDb } = vi.hoisted(() => {
+    const mockRun = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    const mockDb = { run: mockRun };
+    return { mockRun, mockDb };
+});
 
-jest.mock("@zpg6-test-pkgs/drizzle-orm/d1-http", () => ({
-    drizzle: jest.fn(() => mockDb),
+vi.mock("@zpg6-test-pkgs/drizzle-orm/d1-http", () => ({
+    drizzle: vi.fn(() => mockDb),
 }));
 
-jest.mock("@zpg6-test-pkgs/drizzle-orm", () => ({
+vi.mock("@zpg6-test-pkgs/drizzle-orm", () => ({
     sql: Object.assign(
-        // sql`` tagged-template form – not used directly by the helpers, but needed for re-exports
         (_strings: TemplateStringsArray, ..._values: unknown[]) => ({ __sql: true }),
         {
-            // sql.raw(str) form – used by executeD1SQL
-            raw: jest.fn((str: string) => ({ __sql: true, rawStr: str })),
+            raw: vi.fn((str: string) => ({ __sql: true, rawStr: str })),
         }
     ),
 }));
@@ -95,7 +96,7 @@ describe("executeD1SQL", () => {
     });
 
     test("should log statements when debugLogs is true", async () => {
-        const consoleSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+        const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
         await executeD1SQL(
             { ...baseConfig, debugLogs: true },
@@ -261,7 +262,7 @@ describe("applyTenantMigrations", () => {
 describe("getTenantMigrationStatus", () => {
     test("should return currentVersion and empty migrationHistory for new tenant", async () => {
         const mockAdapter = {
-            findOne: jest.fn<any>().mockResolvedValue({
+            findOne: vi.fn<any>().mockResolvedValue({
                 tenantId: "tenant-1",
                 lastMigrationVersion: "v1.0.0",
                 migrationHistory: null,
@@ -277,7 +278,7 @@ describe("getTenantMigrationStatus", () => {
     test("should parse JSON migrationHistory when present", async () => {
         const history = [{ version: "v1.0.0", appliedAt: "2024-01-01" }];
         const mockAdapter = {
-            findOne: jest.fn<any>().mockResolvedValue({
+            findOne: vi.fn<any>().mockResolvedValue({
                 tenantId: "tenant-1",
                 lastMigrationVersion: "v1.0.0",
                 migrationHistory: JSON.stringify(history),
@@ -291,7 +292,7 @@ describe("getTenantMigrationStatus", () => {
 
     test("should return 'unknown' version when lastMigrationVersion is not set", async () => {
         const mockAdapter = {
-            findOne: jest.fn<any>().mockResolvedValue({
+            findOne: vi.fn<any>().mockResolvedValue({
                 tenantId: "tenant-1",
             }),
         };
@@ -303,7 +304,7 @@ describe("getTenantMigrationStatus", () => {
 
     test("should throw DATABASE_CREATION_FAILED when tenant is not found", async () => {
         const mockAdapter = {
-            findOne: jest.fn<any>().mockResolvedValue(null),
+            findOne: vi.fn<any>().mockResolvedValue(null),
         };
 
         await expect(getTenantMigrationStatus(mockAdapter, "missing", "user")).rejects.toThrow(
@@ -320,7 +321,7 @@ describe("getTenantMigrationStatus", () => {
 
     test("should throw DATABASE_CREATION_FAILED when adapter rejects", async () => {
         const mockAdapter = {
-            findOne: jest.fn<any>().mockRejectedValue(new Error("DB offline")),
+            findOne: vi.fn<any>().mockRejectedValue(new Error("DB offline")),
         };
 
         await expect(getTenantMigrationStatus(mockAdapter, "tenant-1", "user")).rejects.toThrow(
@@ -330,7 +331,7 @@ describe("getTenantMigrationStatus", () => {
 
     test("should query with correct model and where clause", async () => {
         const mockAdapter = {
-            findOne: jest.fn<any>().mockResolvedValue({
+            findOne: vi.fn<any>().mockResolvedValue({
                 tenantId: "org-1",
                 lastMigrationVersion: "v2",
             }),
