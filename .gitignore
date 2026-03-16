@@ -7,3 +7,4 @@ pnpm-lock.yaml
 bun.lock
 *.log
 .wrangler
+coverage
