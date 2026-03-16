@@ -2,17 +2,19 @@ name: Test Suite
 
 on:
     push:
-        branches: [main]
+        branches:
+          - main
+          - "feat/d1-multi-tenancy"
     pull_request:
-        branches: [main]
+        branches:
+          - main
+          - "feat/d1-multi-tenancy"
     workflow_dispatch:
 
 jobs:
     unit-tests:
         name: Unit & Integration Tests (Node ${{ matrix.node-version }})
         runs-on: ubuntu-latest
-        env:
-            RUNNER_TEMP: ${{ runner.temp }}
 
         strategy:
             fail-fast: false
