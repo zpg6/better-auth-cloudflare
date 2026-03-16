@@ -1,35 +1,29 @@
 /**
  * Integration tests for D1 multi-tenancy sharding flows.
  *
- * Uses nock for HTTP-level mocking of the Cloudflare D1 API and faker
- * for realistic test data generation. Tests end-to-end sharding flows
- * including tenant lifecycle, shard routing, cache hydration, and
- * error recovery.
+ * Uses real local D1 databases via wrangler local persistence.
+ * Cloudflare REST API calls are intercepted and redirected to real
+ * local D1 operations — no HTTP mocking.  Data is verified on the
+ * filesystem via node:fs and through direct D1 binding queries.
  */
 
-import { describe, test, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from "vitest";
-import nock from "nock";
+import { describe, test, expect, vi } from "vitest";
 import { faker } from "@faker-js/faker";
+import fs from "node:fs";
 
 // ---------------------------------------------------------------------------
-// Mock Drizzle (required because source code imports it)
+// Redirect d1-http drizzle to real D1 binding driver
 // ---------------------------------------------------------------------------
-const { mockDrizzleRun, mockDrizzle } = vi.hoisted(() => {
-    const mockDrizzleRun = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
-    const mockDrizzle = vi.fn(() => ({ run: mockDrizzleRun }));
-    return { mockDrizzleRun, mockDrizzle };
+vi.mock("@zpg6-test-pkgs/drizzle-orm/d1-http", async () => {
+    const { drizzle: d1Drizzle } = await import("@zpg6-test-pkgs/drizzle-orm/d1");
+    return {
+        drizzle: (config: any, options?: any) => {
+            const pool = (globalThis as any).__d1TestPool;
+            const binding = pool.allocate(config.databaseId);
+            return d1Drizzle(binding, options);
+        },
+    };
 });
-
-vi.mock("@zpg6-test-pkgs/drizzle-orm/d1-http", () => ({
-    drizzle: mockDrizzle,
-}));
-
-vi.mock("@zpg6-test-pkgs/drizzle-orm", () => ({
-    sql: Object.assign(
-        (_s: TemplateStringsArray, ..._v: unknown[]) => ({ __sql: true }),
-        { raw: vi.fn((str: string) => ({ __sql: true, rawStr: str })) }
-    ),
-}));
 
 import {
     cloudflareD1MultiTenancy,
@@ -37,96 +31,34 @@ import {
     generateShardHashFromDatabaseId,
     defaultIdGenerator,
 } from "../index";
-import { ShardCache, resetShardCache, getShardCache } from "../shard-cache";
+import { ShardCache, getShardCache } from "../shard-cache";
 import { CloudflareD1MultiTenancyError } from "../utils";
+import {
+    getD1Pool,
+    makeAdapter,
+    tableExists,
+    queryD1,
+    assertD1FilesExist,
+    createErrorD1Fetch,
+    listD1SqliteFiles,
+    listTables,
+    getD1SqliteDir,
+} from "./helpers";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 const ACCOUNT_ID = "test-acct-" + faker.string.alphanumeric(8);
 const API_TOKEN = "test-token-" + faker.string.alphanumeric(16);
-const CF_API_BASE = "https://api.cloudflare.com";
-const D1_PATH = `/client/v4/accounts/${ACCOUNT_ID}/d1/database`;
 
 const cloudflareD1Api = { apiToken: API_TOKEN, accountId: ACCOUNT_ID };
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-function makeAdapter(overrides: Record<string, any> = {}) {
-    return {
-        findOne: vi.fn<any>().mockResolvedValue(null),
-        create: vi.fn<any>().mockResolvedValue({ id: faker.string.uuid() }),
-        update: vi.fn<any>().mockResolvedValue({}),
-        findMany: vi.fn<any>().mockResolvedValue([]),
-        ...overrides,
-    };
-}
-
-function nockCreateDb(uuid: string, name?: string) {
-    return nock(CF_API_BASE)
-        .post(D1_PATH)
-        .reply(200, {
-            success: true,
-            result: { uuid, name: name ?? `DB_${uuid.slice(0, 8)}` },
-            errors: [],
-        });
-}
-
-function nockDeleteDb(databaseId: string) {
-    return nock(CF_API_BASE)
-        .delete(`${D1_PATH}/${databaseId}`)
-        .reply(200, { success: true, result: null, errors: [] });
-}
-
-function nockCreateDbError(code: number, message: string) {
-    return nock(CF_API_BASE)
-        .post(D1_PATH)
-        .reply(200, {
-            success: false,
-            errors: [{ code, message }],
-        });
-}
-
-function nockCreateDbHttpError(status: number, statusText: string) {
-    return nock(CF_API_BASE)
-        .post(D1_PATH)
-        .reply(status, statusText);
-}
-
-// ---------------------------------------------------------------------------
-// Setup / Teardown
-// ---------------------------------------------------------------------------
-beforeAll(() => {
-    nock.disableNetConnect();
-});
-
-afterAll(() => {
-    nock.enableNetConnect();
-    nock.cleanAll();
-});
-
-beforeEach(() => {
-    resetShardCache();
-    mockDrizzleRun.mockClear().mockResolvedValue(undefined);
-    mockDrizzle.mockClear();
-});
-
-afterEach(() => {
-    nock.cleanAll();
-});
-
-// ---------------------------------------------------------------------------
-// Full tenant lifecycle integration
+// Integration: Full tenant lifecycle
 // ---------------------------------------------------------------------------
 describe("Integration: Full tenant lifecycle", () => {
     test("should create and then delete a user tenant database end-to-end", async () => {
         const userId = faker.string.uuid();
-        const dbUuid = faker.string.uuid();
-        const shardHash = generateShardHashFromDatabaseId(dbUuid);
-
-        // Mock the create API call
-        const createScope = nockCreateDb(dbUuid);
 
         const adapter = makeAdapter();
         const hooks = {
@@ -148,8 +80,15 @@ describe("Integration: Full tenant lifecycle", () => {
             { context: { adapter } }
         );
 
-        expect(createScope.isDone()).toBe(true);
         expect(hooks.beforeCreate).toHaveBeenCalledOnce();
+
+        // Extract the database UUID from the adapter.update call (set by the interceptor)
+        const updateCall = adapter.update.mock.calls[0][0];
+        const dbUuid = updateCall.update.databaseId;
+        expect(dbUuid).toBeTruthy();
+
+        const shardHash = generateShardHashFromDatabaseId(dbUuid);
+
         expect(hooks.afterCreate).toHaveBeenCalledWith(
             expect.objectContaining({
                 tenantId: userId,
@@ -164,9 +103,11 @@ describe("Integration: Full tenant lifecycle", () => {
         expect(cachedEntry).not.toBeNull();
         expect(cachedEntry!.databaseId).toBe(dbUuid);
 
-        // === DELETE ===
-        const deleteScope = nockDeleteDb(dbUuid);
+        // SQLite files should exist on disk
+        const pool = getD1Pool();
+        assertD1FilesExist(pool.persistDir);
 
+        // === DELETE ===
         // Simulate the adapter returning the active tenant for lookup
         adapter.findOne.mockResolvedValueOnce({
             id: "rec-1",
@@ -188,7 +129,6 @@ describe("Integration: Full tenant lifecycle", () => {
             },
         });
 
-        expect(deleteScope.isDone()).toBe(true);
         expect(hooks.beforeDelete).toHaveBeenCalledOnce();
         expect(hooks.afterDelete).toHaveBeenCalledWith(
             expect.objectContaining({ tenantId: userId, mode: "user" })
@@ -197,13 +137,18 @@ describe("Integration: Full tenant lifecycle", () => {
         // Shard cache should be cleared for this tenant
         const deletedEntry = await cache.get(shardHash);
         expect(deletedEntry).toBeNull();
+
+        // Tables should be dropped from the D1 binding after deletion
+        const binding = pool.get(dbUuid);
+        if (binding) {
+            const tables = await listTables(binding);
+            // User tables should have been dropped by the delete interceptor
+            expect(tables).toHaveLength(0);
+        }
     });
 
     test("should create and delete an organization tenant database", async () => {
         const orgId = faker.string.uuid();
-        const dbUuid = faker.string.uuid();
-
-        const createScope = nockCreateDb(dbUuid);
 
         const adapter = makeAdapter();
 
@@ -225,7 +170,6 @@ describe("Integration: Full tenant lifecycle", () => {
             },
         });
 
-        expect(createScope.isDone()).toBe(true);
         expect(adapter.create).toHaveBeenCalledWith(
             expect.objectContaining({
                 data: expect.objectContaining({
@@ -235,9 +179,16 @@ describe("Integration: Full tenant lifecycle", () => {
             })
         );
 
-        // === DELETE ORG ===
-        const deleteScope = nockDeleteDb(dbUuid);
+        // Extract the database UUID from adapter.update
+        const updateCall = adapter.update.mock.calls[0][0];
+        const dbUuid = updateCall.update.databaseId;
+        expect(dbUuid).toBeTruthy();
 
+        // SQLite files should exist on disk
+        const pool = getD1Pool();
+        assertD1FilesExist(pool.persistDir);
+
+        // === DELETE ORG ===
         adapter.findOne.mockResolvedValueOnce({
             id: "rec-org",
             tenantId: orgId,
@@ -259,55 +210,54 @@ describe("Integration: Full tenant lifecycle", () => {
             body: { organizationId: orgId },
         });
 
-        expect(deleteScope.isDone()).toBe(true);
+        // Adapter should have updated status to DELETED
+        const deleteUpdateCalls = adapter.update.mock.calls.map((c: any) => c[0]);
+        const deletedUpdate = deleteUpdateCalls.find(
+            (c: any) => c.update?.status === TenantDatabaseStatus.DELETED
+        );
+        expect(deletedUpdate).toBeDefined();
     });
 });
 
 // ---------------------------------------------------------------------------
-// Multi-tenant batch creation with nock
+// Integration: Batch tenant creation
 // ---------------------------------------------------------------------------
 describe("Integration: Batch tenant creation", () => {
-    test("should create 10 tenant databases with unique UUIDs via API", async () => {
-        const tenants: Array<{ userId: string; dbUuid: string }> = [];
-
-        for (let i = 0; i < 10; i++) {
-            const userId = faker.string.uuid();
-            const dbUuid = faker.string.uuid();
-            tenants.push({ userId, dbUuid });
-            nockCreateDb(dbUuid);
-        }
-
+    test("should create 10 tenant databases via default fetch interceptor", async () => {
         const adapter = makeAdapter();
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;
 
-        for (const { userId, dbUuid } of tenants) {
-            adapter.findOne.mockResolvedValueOnce(null);
-            adapter.create.mockResolvedValueOnce({ id: faker.string.uuid() });
-
+        for (let i = 0; i < 10; i++) {
             await plugin.databaseHooks.user.create.after(
-                { id: userId, email: faker.internet.email() },
+                { id: faker.string.uuid(), email: faker.internet.email() },
                 { context: { adapter } }
             );
         }
 
-        // All nock interceptors should have been consumed
-        expect(nock.pendingMocks()).toHaveLength(0);
-
         // All 10 tenants should have been created
         expect(adapter.create).toHaveBeenCalledTimes(10);
 
-        // Shard cache should have entries
+        // Shard cache should have 10 entries
         const cache = getShardCache();
         expect(cache.size()).toBe(10);
+
+        // Pool allocation count should reflect all 10 databases
+        const pool = getD1Pool();
+        expect(pool.allocationCount()).toBe(10);
+
+        // SQLite files should exist on disk
+        assertD1FilesExist(pool.persistDir);
     });
 });
 
 // ---------------------------------------------------------------------------
-// Error recovery scenarios
+// Integration: Error recovery
 // ---------------------------------------------------------------------------
 describe("Integration: Error recovery", () => {
     test("should handle API returning database limit exceeded error", async () => {
-        nockCreateDbError(7502, "D1 database limit exceeded for this account");
+        globalThis.fetch = createErrorD1Fetch({
+            createError: { code: 7502, message: "D1 database limit exceeded for this account" },
+        });
 
         const adapter = makeAdapter();
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;
@@ -319,16 +269,18 @@ describe("Integration: Error recovery", () => {
             )
         ).rejects.toThrow(CloudflareD1MultiTenancyError);
 
-        // Tenant record should be in CREATING state but not updated to ACTIVE
-        expect(adapter.update).not.toHaveBeenCalledWith(
-            expect.objectContaining({
-                update: expect.objectContaining({ status: TenantDatabaseStatus.ACTIVE }),
-            })
+        // Tenant record should not have been updated to ACTIVE
+        const updateCalls = adapter.update.mock.calls.map((c: any) => c[0]);
+        const activeUpdate = updateCalls.find(
+            (c: any) => c.update?.status === TenantDatabaseStatus.ACTIVE
         );
+        expect(activeUpdate).toBeUndefined();
     });
 
     test("should handle HTTP 500 server error from Cloudflare API", async () => {
-        nockCreateDbHttpError(500, "Internal Server Error");
+        globalThis.fetch = createErrorD1Fetch({
+            httpError: { status: 500, statusText: "Internal Server Error" },
+        });
 
         const adapter = makeAdapter();
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;
@@ -341,10 +293,10 @@ describe("Integration: Error recovery", () => {
         ).rejects.toThrow(CloudflareD1MultiTenancyError);
     });
 
-    test("should handle HTTP 403 forbidden (invalid credentials)", async () => {
-        nock(CF_API_BASE)
-            .post(D1_PATH)
-            .replyWithError("unauthorized access denied");
+    test("should handle network error simulating auth failure", async () => {
+        globalThis.fetch = createErrorD1Fetch({
+            networkError: "unauthorized access denied",
+        });
 
         const adapter = makeAdapter();
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;
@@ -358,9 +310,9 @@ describe("Integration: Error recovery", () => {
     });
 
     test("should handle network timeout during database creation", async () => {
-        nock(CF_API_BASE)
-            .post(D1_PATH)
-            .replyWithError("connect ETIMEDOUT");
+        globalThis.fetch = createErrorD1Fetch({
+            networkError: "connect ETIMEDOUT",
+        });
 
         const adapter = makeAdapter();
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;
@@ -374,43 +326,57 @@ describe("Integration: Error recovery", () => {
     });
 
     test("should handle delete failure and not update status to DELETED", async () => {
-        const dbUuid = faker.string.uuid();
-
-        nock(CF_API_BASE)
-            .delete(`${D1_PATH}/${dbUuid}`)
-            .replyWithError("network failure");
-
-        const adapter = makeAdapter({
-            findOne: vi.fn<any>().mockResolvedValue({
-                id: "rec-del-fail",
-                tenantId: "user-del-fail",
-                databaseId: dbUuid,
-                databaseName: "DB_test",
-                shardHash: "ab123456",
-                status: TenantDatabaseStatus.ACTIVE,
-            }),
-        });
-
+        // First, create a tenant with the default (working) fetch
+        const adapter = makeAdapter();
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;
+
+        const userId = faker.string.uuid();
+
+        await plugin.databaseHooks.user.create.after(
+            { id: userId, email: faker.internet.email() },
+            { context: { adapter } }
+        );
+
+        const updateCall = adapter.update.mock.calls[0][0];
+        const dbUuid = updateCall.update.databaseId;
+        const shardHash = generateShardHashFromDatabaseId(dbUuid);
+
+        // Now switch to an error fetch for the delete
+        globalThis.fetch = createErrorD1Fetch({ deleteError: "network failure" });
+
+        adapter.findOne.mockResolvedValueOnce({
+            id: "rec-del-fail",
+            tenantId: userId,
+            databaseId: dbUuid,
+            databaseName: `DB_${shardHash}`,
+            shardHash,
+            status: TenantDatabaseStatus.ACTIVE,
+        });
 
         const deleteHook = plugin.hooks.after.find((h: any) =>
             h.matcher({ path: "/delete-user" })
         );
 
-        // The handler should throw (the deletion failed)
         await expect(
             deleteHook.handler({
                 context: {
                     adapter,
-                    returned: { user: { id: "user-del-fail" } },
+                    returned: { user: { id: userId } },
                 },
             })
         ).rejects.toThrow(CloudflareD1MultiTenancyError);
+
+        // Adapter should not have been updated to DELETED status
+        const allUpdateCalls = adapter.update.mock.calls.map((c: any) => c[0]);
+        const deletedUpdate = allUpdateCalls.find(
+            (c: any) => c.update?.status === TenantDatabaseStatus.DELETED
+        );
+        expect(deletedUpdate).toBeUndefined();
     });
 });
 
 // ---------------------------------------------------------------------------
-// Shard cache hydration integration
+// Integration: Shard cache hydration
 // ---------------------------------------------------------------------------
 describe("Integration: Shard cache hydration", () => {
     test("should hydrate cache from adapter with realistic tenant data", async () => {
@@ -464,11 +430,11 @@ describe("Integration: Shard cache hydration", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Universal ID routing integration
+// Integration: Universal ID routing across shards
 // ---------------------------------------------------------------------------
 describe("Integration: Universal ID routing across shards", () => {
     test("should generate IDs that route back to correct shard database", async () => {
-        // Create 5 tenant databases
+        // Create 5 tenant database entries in the cache
         const tenantDbs = Array.from({ length: 5 }, () => {
             const dbUuid = faker.string.uuid();
             return {
@@ -540,7 +506,7 @@ describe("Integration: Universal ID routing across shards", () => {
 });
 
 // ---------------------------------------------------------------------------
-// KV-backed cache integration with nock-based tenant creation
+// Integration: KV-backed shard cache with tenant creation
 // ---------------------------------------------------------------------------
 describe("Integration: KV-backed shard cache with tenant creation", () => {
     test("should write-through to KV when creating new tenant databases", async () => {
@@ -549,11 +515,6 @@ describe("Integration: KV-backed shard cache with tenant creation", () => {
             get: vi.fn<any>().mockResolvedValue(null),
             delete: vi.fn<any>().mockResolvedValue(undefined),
         };
-
-        resetShardCache();
-
-        const dbUuid = faker.string.uuid();
-        nockCreateDb(dbUuid);
 
         const adapter = makeAdapter();
 
@@ -576,53 +537,46 @@ describe("Integration: KV-backed shard cache with tenant creation", () => {
         const [kvKey, kvValue] = mockKv.put.mock.calls[0];
         expect(kvKey).toMatch(/^shard:/);
         const parsed = JSON.parse(kvValue);
+        // Extract the actual dbUuid from adapter.update to verify KV entry
+        const updateCall = adapter.update.mock.calls[0][0];
+        const dbUuid = updateCall.update.databaseId;
         expect(parsed.databaseId).toBe(dbUuid);
     });
 });
 
 // ---------------------------------------------------------------------------
-// Concurrent tenant creation
+// Integration: Concurrent tenant creation
 // ---------------------------------------------------------------------------
 describe("Integration: Concurrent tenant creation", () => {
     test("should handle multiple concurrent tenant creations", async () => {
         const tenantCount = 5;
-        const dbUuids: string[] = [];
-
-        for (let i = 0; i < tenantCount; i++) {
-            const uuid = faker.string.uuid();
-            dbUuids.push(uuid);
-            nockCreateDb(uuid);
-        }
-
         const adapter = makeAdapter();
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;
 
-        // Create all tenants concurrently
-        const promises = dbUuids.map((_, i) => {
-            adapter.findOne.mockResolvedValueOnce(null);
-            adapter.create.mockResolvedValueOnce({ id: `rec-${i}` });
-
-            return plugin.databaseHooks.user.create.after(
+        // Create all tenants concurrently using the default fetch interceptor
+        const promises = Array.from({ length: tenantCount }, () =>
+            plugin.databaseHooks.user.create.after(
                 { id: faker.string.uuid(), email: faker.internet.email() },
                 { context: { adapter } }
-            );
-        });
+            )
+        );
 
         await Promise.all(promises);
 
-        // All nock mocks should have been consumed
-        expect(nock.pendingMocks()).toHaveLength(0);
+        // All 5 tenants should have been created
+        expect(adapter.create).toHaveBeenCalledTimes(tenantCount);
+
+        // Shard cache should have 5 entries
+        const cache = getShardCache();
+        expect(cache.size()).toBe(tenantCount);
     });
 });
 
 // ---------------------------------------------------------------------------
-// Migration initialization during tenant creation
+// Integration: Migration initialization with filesystem verification
 // ---------------------------------------------------------------------------
-describe("Integration: Migration initialization", () => {
+describe("Integration: Migration initialization with filesystem verification", () => {
     test("should execute schema SQL on newly created tenant database", async () => {
-        const dbUuid = faker.string.uuid();
-        nockCreateDb(dbUuid);
-
         const schemaSQL = `CREATE TABLE documents (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
@@ -648,25 +602,55 @@ describe("Integration: Migration initialization", () => {
             },
         }) as any;
 
+        const userId = faker.string.uuid();
         await plugin.databaseHooks.user.create.after(
-            { id: faker.string.uuid(), email: faker.internet.email() },
+            { id: userId, email: faker.internet.email() },
             { context: { adapter } }
         );
 
-        // Drizzle should have been called to execute schema (2 statements split by breakpoint)
-        expect(mockDrizzleRun).toHaveBeenCalledTimes(2);
+        // Extract the database UUID from adapter.update
+        const updateCall = adapter.update.mock.calls[0][0];
+        const dbUuid = updateCall.update.databaseId;
+        expect(dbUuid).toBeTruthy();
+
+        // Verify the tables were actually created in the real D1 database
+        const pool = getD1Pool();
+        const binding = pool.get(dbUuid);
+        expect(binding).toBeDefined();
+        expect(await tableExists(binding, "documents")).toBe(true);
+        expect(await tableExists(binding, "attachments")).toBe(true);
+
+        // Verify data can be inserted and read back
+        const docId = faker.string.uuid();
+        await queryD1(
+            binding,
+            "INSERT INTO documents (id, title, tenantId) VALUES (?, ?, ?)",
+            docId,
+            "Test Document",
+            userId
+        );
+        const rows = await queryD1<{ id: string; title: string }>(
+            binding,
+            "SELECT id, title FROM documents WHERE id = ?",
+            docId
+        );
+        expect(rows).toHaveLength(1);
+        expect(rows[0].title).toBe("Test Document");
+
+        // Verify SQLite files exist on disk
+        const sqliteDir = getD1SqliteDir(pool.persistDir);
+        expect(fs.existsSync(sqliteDir)).toBe(true);
+        const files = listD1SqliteFiles(pool.persistDir);
+        expect(files.length).toBeGreaterThan(0);
     });
 
     test("should support async schema resolution", async () => {
-        const dbUuid = faker.string.uuid();
-        nockCreateDb(dbUuid);
-
         const adapter = makeAdapter();
         const plugin = cloudflareD1MultiTenancy({
             cloudflareD1Api,
             mode: "user",
             migrations: {
-                currentSchema: async () => "CREATE TABLE async_table (id TEXT);",
+                currentSchema: async () => "CREATE TABLE async_table (id TEXT PRIMARY KEY);",
                 currentVersion: async () => "v2.0.0",
             },
         }) as any;
@@ -676,6 +660,15 @@ describe("Integration: Migration initialization", () => {
             { context: { adapter } }
         );
 
-        expect(mockDrizzleRun).toHaveBeenCalled();
+        // Extract the database UUID from adapter.update
+        const updateCall = adapter.update.mock.calls[0][0];
+        const dbUuid = updateCall.update.databaseId;
+        expect(dbUuid).toBeTruthy();
+
+        // Verify the table was actually created in the real D1 database
+        const pool = getD1Pool();
+        const binding = pool.get(dbUuid);
+        expect(binding).toBeDefined();
+        expect(await tableExists(binding, "async_table")).toBe(true);
     });
 });

@@ -583,9 +583,7 @@ describe("KV-backed ShardCache", () => {
 });
 
 describe("Global cache functions", () => {
-    beforeEach(() => {
-        resetShardCache();
-    });
+    // resetShardCache() is called by the shared setup.ts beforeEach
 
     test("getShardCache should return singleton", () => {
         const cache1 = getShardCache();

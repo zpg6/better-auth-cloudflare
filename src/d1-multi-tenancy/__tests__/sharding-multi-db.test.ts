@@ -1,6 +1,7 @@
 /**
  * Tests for sharding functionality across multiple databases.
  *
+ * Uses real D1 via wrangler local persistence for SQL execution.
  * Covers:
  * - Routing queries to the correct tenant database via Universal IDs
  * - Shard cache interactions across many tenants
@@ -9,28 +10,30 @@
  * - FIFO eviction when cache is full
  */
 
-import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, test, expect, vi } from "vitest";
 import { faker } from "@faker-js/faker";
+import {
+    getD1Pool,
+    makeAdapter,
+    tableExists,
+    queryD1,
+    assertD1FilesExist,
+    createErrorD1Fetch,
+} from "./helpers";
 
 // ---------------------------------------------------------------------------
-// Mock Drizzle
+// Mock d1-http → real d1 binding driver
 // ---------------------------------------------------------------------------
-const { mockDrizzleRun, mockDrizzle } = vi.hoisted(() => {
-    const mockDrizzleRun = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
-    const mockDrizzle = vi.fn(() => ({ run: mockDrizzleRun }));
-    return { mockDrizzleRun, mockDrizzle };
+vi.mock("@zpg6-test-pkgs/drizzle-orm/d1-http", async () => {
+    const { drizzle: d1Drizzle } = await import("@zpg6-test-pkgs/drizzle-orm/d1");
+    return {
+        drizzle: (config: any, options?: any) => {
+            const pool = (globalThis as any).__d1TestPool;
+            const binding = pool.allocate(config.databaseId);
+            return d1Drizzle(binding, options);
+        },
+    };
 });
-
-vi.mock("@zpg6-test-pkgs/drizzle-orm/d1-http", () => ({
-    drizzle: mockDrizzle,
-}));
-
-vi.mock("@zpg6-test-pkgs/drizzle-orm", () => ({
-    sql: Object.assign(
-        (_s: TemplateStringsArray, ..._v: unknown[]) => ({ __sql: true }),
-        { raw: vi.fn((str: string) => ({ __sql: true, rawStr: str })) }
-    ),
-}));
 
 import {
     cloudflareD1MultiTenancy,
@@ -38,7 +41,7 @@ import {
     generateShardHashFromDatabaseId,
     defaultIdGenerator,
 } from "../index";
-import { ShardCache, resetShardCache } from "../shard-cache";
+import { ShardCache } from "../shard-cache";
 import { CloudflareD1MultiTenancyError } from "../utils";
 
 // ---------------------------------------------------------------------------
@@ -46,43 +49,10 @@ import { CloudflareD1MultiTenancyError } from "../utils";
 // ---------------------------------------------------------------------------
 const cloudflareD1Api = { apiToken: "test-token", accountId: "test-account" };
 
-function makeAdapter(overrides: Record<string, any> = {}) {
-    return {
-        findOne: vi.fn<any>().mockResolvedValue(null),
-        create: vi.fn<any>().mockResolvedValue({ id: faker.string.uuid() }),
-        update: vi.fn<any>().mockResolvedValue({}),
-        findMany: vi.fn<any>().mockResolvedValue([]),
-        ...overrides,
-    };
-}
-
-function mockFetchCreate(uuid: string) {
-    return vi.fn<typeof fetch>().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-            success: true,
-            result: { uuid, name: `DB_20240101_${uuid.slice(0, 8)}` },
-            errors: [],
-        }),
-    } as any);
-}
-
 // ---------------------------------------------------------------------------
 // Multi-DB sharding – routing via Universal IDs
 // ---------------------------------------------------------------------------
 describe("Sharding across multiple databases", () => {
-    let originalFetch: typeof globalThis.fetch;
-
-    beforeEach(() => {
-        originalFetch = globalThis.fetch;
-        resetShardCache();
-        mockDrizzleRun.mockClear().mockResolvedValue(undefined);
-    });
-
-    afterEach(() => {
-        globalThis.fetch = originalFetch;
-    });
-
     test("should route records to different databases via shard hash", async () => {
         const dbUuid1 = faker.string.uuid();
         const dbUuid2 = faker.string.uuid();
@@ -90,14 +60,11 @@ describe("Sharding across multiple databases", () => {
         const hash1 = generateShardHashFromDatabaseId(dbUuid1);
         const hash2 = generateShardHashFromDatabaseId(dbUuid2);
 
-        // Hashes for different UUIDs should be distinct
         expect(hash1).not.toBe(hash2);
 
-        // Generate IDs embedding each shard hash
         const id1 = defaultIdGenerator.generate({ shardHash: hash1, recordType: "document" });
         const id2 = defaultIdGenerator.generate({ shardHash: hash2, recordType: "document" });
 
-        // Extract and verify routing
         const extracted1 = defaultIdGenerator.extractShardHash(id1);
         const extracted2 = defaultIdGenerator.extractShardHash(id2);
 
@@ -112,23 +79,6 @@ describe("Sharding across multiple databases", () => {
             email: faker.internet.email(),
         }));
 
-        let callIndex = 0;
-        const createdDbs: string[] = [];
-
-        // Each user creation triggers a separate fetch for a new DB
-        globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async () => {
-            const uuid = faker.string.uuid();
-            createdDbs.push(uuid);
-            return {
-                ok: true,
-                json: async () => ({
-                    success: true,
-                    result: { uuid, name: `DB_${uuid.slice(0, 8)}` },
-                    errors: [],
-                }),
-            } as any;
-        });
-
         const adapter = makeAdapter();
 
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;
@@ -142,12 +92,9 @@ describe("Sharding across multiple databases", () => {
             });
         }
 
-        // Each user should get a unique database
-        expect(createdDbs).toHaveLength(5);
-        expect(new Set(createdDbs).size).toBe(5);
-
-        // fetch should have been called once per user for DB creation
-        expect(globalThis.fetch).toHaveBeenCalledTimes(5);
+        // The default interceptor in setup.ts handles fetch; verify via adapter calls and pool state
+        expect(adapter.create).toHaveBeenCalledTimes(5);
+        expect(getD1Pool().allocationCount()).toBe(5);
     });
 
     test("should populate shard cache with entries for each created database", async () => {
@@ -169,7 +116,6 @@ describe("Sharding across multiple databases", () => {
 
         expect(cache.size()).toBe(tenantCount);
 
-        // All entries should be retrievable
         const allEntries = cache.getAll();
         expect(allEntries).toHaveLength(tenantCount);
         for (const entry of allEntries) {
@@ -182,7 +128,6 @@ describe("Sharding across multiple databases", () => {
     test("should handle shard hash collisions gracefully by overwriting", async () => {
         const cache = new ShardCache();
 
-        // Force same shard hash for two different tenants (simulates collision)
         const shardHash = "collide1";
         cache.set({
             shardHash,
@@ -198,11 +143,60 @@ describe("Sharding across multiple databases", () => {
             databaseName: "DB_new",
         });
 
-        // Latest entry wins
         const entry = await cache.get(shardHash);
         expect(entry!.databaseId).toBe("db-2");
         expect(entry!.tenantId).toBe("tenant-new");
         expect(cache.size()).toBe(1);
+    });
+
+    test("should write data to correct tenant D1 database via migrations", async () => {
+        const adapter = makeAdapter({
+            create: vi.fn<any>().mockResolvedValue({ id: "rec-verify" }),
+        });
+
+        const plugin = cloudflareD1MultiTenancy({
+            cloudflareD1Api,
+            mode: "user",
+            migrations: {
+                currentSchema: "CREATE TABLE shard_docs (id TEXT PRIMARY KEY, content TEXT);",
+                currentVersion: "v1.0.0",
+            },
+        }) as any;
+
+        await plugin.databaseHooks.user.create.after(
+            { id: faker.string.uuid(), email: faker.internet.email() },
+            { context: { adapter } }
+        );
+
+        // Retrieve the databaseId that was assigned during DB creation
+        const updateCall = adapter.update.mock.calls[0]?.[0];
+        expect(updateCall).toBeDefined();
+        const databaseId: string = updateCall.update.databaseId;
+        expect(databaseId).toBeDefined();
+
+        // Verify the table was created in the real D1 database
+        const pool = getD1Pool();
+        const binding = pool.get(databaseId);
+        expect(binding).toBeDefined();
+        expect(await tableExists(binding, "shard_docs")).toBe(true);
+
+        // Write and read data to verify the binding is real
+        await binding.exec("INSERT INTO shard_docs (id, content) VALUES ('doc1', 'shard test');");
+        const rows = await queryD1(binding, "SELECT * FROM shard_docs WHERE id = ?", "doc1");
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toEqual({ id: "doc1", content: "shard test" });
+    });
+
+    test("should persist SQLite files on disk", async () => {
+        const adapter = makeAdapter();
+        const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;
+
+        await plugin.databaseHooks.user.create.after(
+            { id: faker.string.uuid(), email: faker.internet.email() },
+            { context: { adapter } }
+        );
+
+        assertD1FilesExist(getD1Pool().persistDir);
     });
 });
 
@@ -210,29 +204,13 @@ describe("Sharding across multiple databases", () => {
 // Database full scenario – simulating capacity and new DB creation
 // ---------------------------------------------------------------------------
 describe("Database full scenario", () => {
-    let originalFetch: typeof globalThis.fetch;
-
-    beforeEach(() => {
-        originalFetch = globalThis.fetch;
-        resetShardCache();
-        mockDrizzleRun.mockClear().mockResolvedValue(undefined);
-    });
-
-    afterEach(() => {
-        globalThis.fetch = originalFetch;
-    });
-
     test("should handle Cloudflare API error indicating database limit reached", async () => {
-        // Simulate Cloudflare returning an error when DB limit is reached
-        globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
-            ok: true,
-            json: async () => ({
-                success: false,
-                errors: [
-                    { code: 7502, message: "You have exceeded the maximum number of D1 databases for this account" },
-                ],
-            }),
-        } as any);
+        globalThis.fetch = createErrorD1Fetch({
+            createError: {
+                code: 7502,
+                message: "You have exceeded the maximum number of D1 databases for this account",
+            },
+        });
 
         const adapter = makeAdapter();
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;
@@ -246,11 +224,9 @@ describe("Database full scenario", () => {
     });
 
     test("should handle fetch returning non-ok status (e.g. 429 rate limit)", async () => {
-        globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
-            ok: false,
-            status: 429,
-            statusText: "Too Many Requests",
-        } as any);
+        globalThis.fetch = createErrorD1Fetch({
+            httpError: { status: 429, statusText: "Too Many Requests" },
+        });
 
         const adapter = makeAdapter();
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;
@@ -264,10 +240,6 @@ describe("Database full scenario", () => {
     });
 
     test("should create a new database when previous tenant was deleted", async () => {
-        // Simulate: first tenant was deleted, a new one should be created
-        const freshUuid = faker.string.uuid();
-        globalThis.fetch = mockFetchCreate(freshUuid);
-
         const adapter = makeAdapter({
             findOne: vi.fn<any>().mockResolvedValue({
                 id: "old-rec",
@@ -284,13 +256,11 @@ describe("Database full scenario", () => {
             { context: { adapter } }
         );
 
-        // A new record should have been created
         expect(adapter.create).toHaveBeenCalled();
-        // It should be updated to ACTIVE with the new DB UUID
         expect(adapter.update).toHaveBeenCalledWith(
             expect.objectContaining({
                 update: expect.objectContaining({
-                    databaseId: freshUuid,
+                    databaseId: expect.any(String),
                     status: TenantDatabaseStatus.ACTIVE,
                 }),
             })
@@ -298,19 +268,13 @@ describe("Database full scenario", () => {
     });
 
     test("should handle migration failure during new DB initialization", async () => {
-        const uuid = faker.string.uuid();
-        globalThis.fetch = mockFetchCreate(uuid);
-
-        // Drizzle run fails (simulates schema execution error on new DB)
-        mockDrizzleRun.mockRejectedValueOnce(new Error("SQLITE_FULL: database or disk is full"));
-
         const adapter = makeAdapter();
 
         const plugin = cloudflareD1MultiTenancy({
             cloudflareD1Api,
             mode: "user",
             migrations: {
-                currentSchema: "CREATE TABLE t (id TEXT);",
+                currentSchema: "THIS IS NOT VALID SQL;",
                 currentVersion: "v1",
             },
         }) as any;
@@ -336,13 +300,11 @@ describe("Data validation across shards", () => {
             const hash = generateShardHashFromDatabaseId(uuid);
             expect(hash).toHaveLength(8);
 
-            // Same UUID always produces same hash
             expect(generateShardHashFromDatabaseId(uuid)).toBe(hash);
 
             hashMap.set(uuid, hash);
         }
 
-        // Most hashes should be unique (very unlikely to collide with 20 samples)
         const uniqueHashes = new Set(hashMap.values());
         expect(uniqueHashes.size).toBeGreaterThan(15);
     });
@@ -356,12 +318,10 @@ describe("Data validation across shards", () => {
             defaultIdGenerator.generate({ shardHash, recordType: rt })
         );
 
-        // All IDs should contain the same shard hash
         for (const id of ids) {
             expect(defaultIdGenerator.extractShardHash(id)).toBe(shardHash);
         }
 
-        // But all IDs should be unique
         expect(new Set(ids).size).toBe(ids.length);
     });
 
@@ -396,9 +356,6 @@ describe("Data validation across shards", () => {
             }),
         };
 
-        const uuid = faker.string.uuid();
-        globalThis.fetch = mockFetchCreate(uuid);
-
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;
 
         await plugin.databaseHooks.user.create.after(
@@ -406,24 +363,13 @@ describe("Data validation across shards", () => {
             { context: { adapter } }
         );
 
-        // Status should transition: creating -> active
         expect(statusTransitions).toEqual([
             TenantDatabaseStatus.CREATING,
             TenantDatabaseStatus.ACTIVE,
         ]);
-
-        globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
-            ok: true,
-            json: async () => ({ success: true, result: null, errors: [] }),
-        } as any);
     });
 
     test("should store shard hash derived from database UUID in tenant record", async () => {
-        const dbUuid = "aabbccdd-1122-3344-5566-778899001122";
-        const expectedShardHash = generateShardHashFromDatabaseId(dbUuid);
-
-        globalThis.fetch = mockFetchCreate(dbUuid);
-
         const adapter = makeAdapter();
         const plugin = cloudflareD1MultiTenancy({ cloudflareD1Api, mode: "user" }) as any;
 
@@ -432,12 +378,19 @@ describe("Data validation across shards", () => {
             { context: { adapter } }
         );
 
-        // The update call should include the computed shard hash
+        // Retrieve the databaseId assigned by the interceptor (a real UUID from crypto.randomUUID())
+        const updateCall = adapter.update.mock.calls[0]?.[0];
+        expect(updateCall).toBeDefined();
+        const databaseId: string = updateCall.update.databaseId;
+        expect(databaseId).toBeDefined();
+
+        const expectedShardHash = generateShardHashFromDatabaseId(databaseId);
+
         expect(adapter.update).toHaveBeenCalledWith(
             expect.objectContaining({
                 update: expect.objectContaining({
                     shardHash: expectedShardHash,
-                    databaseId: dbUuid,
+                    databaseId,
                 }),
             })
         );
@@ -452,7 +405,6 @@ describe("Shard cache FIFO eviction under load", () => {
         const maxEntries = 5;
         const cache = new ShardCache({ maxEntries });
 
-        // Fill cache to capacity
         const entries = Array.from({ length: maxEntries }, (_, i) => ({
             shardHash: `shard_${i}`,
             databaseId: faker.string.uuid(),
@@ -465,7 +417,6 @@ describe("Shard cache FIFO eviction under load", () => {
         }
         expect(cache.size()).toBe(maxEntries);
 
-        // Add one more – should evict shard_0 (oldest)
         cache.set({
             shardHash: "shard_new",
             databaseId: faker.string.uuid(),
@@ -477,7 +428,6 @@ describe("Shard cache FIFO eviction under load", () => {
         expect(await cache.get("shard_0")).toBeNull();
         expect(await cache.get("shard_new")).not.toBeNull();
 
-        // shard_1 through shard_4 should still exist
         for (let i = 1; i < maxEntries; i++) {
             expect(await cache.get(`shard_${i}`)).not.toBeNull();
         }
@@ -486,7 +436,6 @@ describe("Shard cache FIFO eviction under load", () => {
     test("should handle rapid set/get cycles under high tenant counts", async () => {
         const cache = new ShardCache({ maxEntries: 100, ttl: 0 });
 
-        // Simulate 200 tenants being created
         const shardHashes: string[] = [];
         for (let i = 0; i < 200; i++) {
             const uuid = faker.string.uuid();
@@ -501,10 +450,8 @@ describe("Shard cache FIFO eviction under load", () => {
             });
         }
 
-        // Only 100 should remain (maxEntries)
         expect(cache.size()).toBe(100);
 
-        // Last 100 should be accessible
         for (let i = 100; i < 200; i++) {
             const entry = await cache.get(shardHashes[i]);
             expect(entry).not.toBeNull();
