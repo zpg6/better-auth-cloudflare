@@ -36,6 +36,13 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
+        "test:sharding": "vitest run --reporter=verbose sharding-multi-db",
+        "test:integration": "vitest run --reporter=verbose integration-sharding",
+        "test:shard-cache": "vitest run --reporter=verbose shard-cache",
+        "test:id-generator": "vitest run --reporter=verbose id-generator",
+        "test:schema-detection": "vitest run --reporter=verbose schema-detection",
+        "test:d1-utils": "vitest run --reporter=verbose d1-utils",
+        "test:plugin": "vitest run --reporter=verbose __tests__/index",
         "typecheck": "tsc --noEmit",
         "format": "prettier --write ."
     },

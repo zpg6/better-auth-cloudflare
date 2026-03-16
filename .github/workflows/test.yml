@@ -11,6 +11,10 @@ on:
           - "feat/d1-multi-tenancy"
     workflow_dispatch:
 
+concurrency:
+    group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
 jobs:
     unit-tests:
         name: Unit & Integration Tests (Node ${{ matrix.node-version }})
