@@ -23,10 +23,11 @@ describe("env.d.ts Generator", () => {
 
         const result = generateEnvDFile(config);
 
+        expect(result).toContain('import type { D1Database } from "@cloudflare/workers-types"');
         expect(result).toContain("export interface CloudflareBindings");
         expect(result).toContain("DATABASE: D1Database;");
-        expect(result).toContain("declare global");
-        expect(result).toContain("interface ProcessEnv extends CloudflareBindings");
+        expect(result).toContain("BETTER_AUTH_SECRET: string;");
+        expect(result).toContain("BETTER_AUTH_URL: string;");
         expect(result).not.toContain("KVNamespace");
         expect(result).not.toContain("R2Bucket");
     });
@@ -48,10 +49,12 @@ describe("env.d.ts Generator", () => {
 
         const result = generateEnvDFile(config);
 
-        expect(result).toContain("export interface CloudflareBindings");
-        expect(result).toContain("DATABASE: D1Database;");
+        expect(result).toContain('import type { D1Database } from "@cloudflare/workers-types"');
+        expect(result).toContain("interface CloudflareEnv");
         expect(result).toContain("declare global");
-        expect(result).toContain("interface ProcessEnv extends CloudflareBindings");
+        expect(result).toContain("DATABASE: D1Database;");
+        expect(result).toContain("BETTER_AUTH_TRUSTED_ORIGINS: string;");
+        expect(result).toContain("export {};");
     });
 
     test("generates env.d.ts with custom D1 binding name", () => {
@@ -94,7 +97,7 @@ describe("env.d.ts Generator", () => {
         const result = generateEnvDFile(config);
 
         expect(result).toContain("DATABASE: D1Database;");
-        expect(result).toContain("KV_STORE: KVNamespace;");
+        expect(result).toContain("KV_STORE: KVNamespace<string>;");
         expect(result).not.toContain("R2Bucket");
     });
 
@@ -138,7 +141,7 @@ describe("env.d.ts Generator", () => {
 
         const result = generateEnvDFile(config);
 
-        expect(result).toContain("HYPERDRIVE: any;");
+        expect(result).toContain("HYPERDRIVE: Hyperdrive;");
         expect(result).not.toContain("D1Database");
         expect(result).not.toContain("KVNamespace");
         expect(result).not.toContain("R2Bucket");
@@ -161,8 +164,8 @@ describe("env.d.ts Generator", () => {
 
         const result = generateEnvDFile(config);
 
-        expect(result).toContain("MY_DB_CONNECTION: any;");
-        expect(result).not.toContain("HYPERDRIVE: any;");
+        expect(result).toContain("MY_DB_CONNECTION: Hyperdrive;");
+        expect(result).not.toContain("HYPERDRIVE: Hyperdrive;");
     });
 
     test("generates env.d.ts with all resources enabled", () => {
@@ -185,7 +188,7 @@ describe("env.d.ts Generator", () => {
         const result = generateEnvDFile(config);
 
         expect(result).toContain("DATABASE: D1Database;");
-        expect(result).toContain("KV_STORE: KVNamespace;");
+        expect(result).toContain("KV_STORE: KVNamespace<string>;");
         expect(result).toContain("R2_BUCKET: R2Bucket;");
     });
 
@@ -207,8 +210,8 @@ describe("env.d.ts Generator", () => {
 
         const result = generateEnvDFile(config);
 
-        expect(result).toContain("SESSION_STORE: KVNamespace;");
-        expect(result).toContain("DATABASE_CONNECTION: any;");
+        expect(result).toContain("SESSION_STORE: KVNamespace<string>;");
+        expect(result).toContain("DATABASE_CONNECTION: Hyperdrive;");
         expect(result).not.toContain("D1Database");
         expect(result).not.toContain("R2Bucket");
     });
@@ -230,8 +233,7 @@ describe("env.d.ts Generator", () => {
 
         expect(result).toContain("export interface CloudflareBindings");
         expect(result).toContain("// No Cloudflare bindings configured");
-        expect(result).toContain("declare global");
-        expect(result).toContain("interface ProcessEnv extends CloudflareBindings");
+        expect(result).toContain("BETTER_AUTH_SECRET: string;");
     });
 
     test("ignores bindings when resources are disabled", () => {
@@ -255,72 +257,67 @@ describe("env.d.ts Generator", () => {
         const result = generateEnvDFile(config);
 
         expect(result).not.toContain("DATABASE: D1Database;");
-        expect(result).not.toContain("KV_STORE: KVNamespace;");
+        expect(result).not.toContain("KV_STORE: KVNamespace");
         expect(result).not.toContain("R2_BUCKET: R2Bucket;");
-        expect(result).not.toContain("HYPERDRIVE: any;");
+        expect(result).not.toContain("HYPERDRIVE: Hyperdrive;");
         expect(result).toContain("// No Cloudflare bindings configured");
     });
 
-    test("validates correct env.d.ts content", () => {
+    test("validates correct Hono env.d.ts content", () => {
         const validContent = `export interface CloudflareBindings {
     DATABASE: D1Database;
-    KV: KVNamespace;
-}
-
-declare global {
-    namespace NodeJS {
-        interface ProcessEnv extends CloudflareBindings {
-        }
-    }
+    KV: KVNamespace<string>;
+    BETTER_AUTH_SECRET: string;
+    BETTER_AUTH_URL: string;
 }`;
 
-        const result = validateEnvDContent(validContent);
+        const result = validateEnvDContent(validContent, "hono");
 
         expect(result.isValid).toBe(true);
         expect(result.errors).toHaveLength(0);
     });
 
-    test("detects missing CloudflareBindings interface", () => {
-        const invalidContent = `declare global {
-    namespace NodeJS {
-        interface ProcessEnv {
-        }
+    test("validates correct Next.js env.d.ts content", () => {
+        const validContent = `declare global {
+    interface CloudflareEnv {
+        DATABASE: D1Database;
+        BETTER_AUTH_SECRET: string;
+        BETTER_AUTH_URL: string;
+        BETTER_AUTH_TRUSTED_ORIGINS: string;
     }
+}
+
+export {};`;
+
+        const result = validateEnvDContent(validContent, "nextjs");
+
+        expect(result.isValid).toBe(true);
+        expect(result.errors).toHaveLength(0);
+    });
+
+    test("detects missing CloudflareBindings in Hono template", () => {
+        const invalidContent = `interface Something {
+    DATABASE: D1Database;
 }`;
 
-        const result = validateEnvDContent(invalidContent);
+        const result = validateEnvDContent(invalidContent, "hono");
 
         expect(result.isValid).toBe(false);
         expect(result.errors).toContain("Missing CloudflareBindings interface export");
     });
 
-    test("detects missing global declaration", () => {
-        const invalidContent = `export interface CloudflareBindings {
-    DATABASE: D1Database;
-}`;
-
-        const result = validateEnvDContent(invalidContent);
-
-        expect(result.isValid).toBe(false);
-        expect(result.errors).toContain("Missing global declaration");
-    });
-
-    test("detects missing ProcessEnv extension", () => {
-        const invalidContent = `export interface CloudflareBindings {
-    DATABASE: D1Database;
+    test("detects missing CloudflareEnv in Next.js template", () => {
+        const invalidContent = `declare global {
+    interface Something {
+    }
 }
 
-declare global {
-    namespace NodeJS {
-        interface ProcessEnv {
-        }
-    }
-}`;
+export {};`;
 
-        const result = validateEnvDContent(invalidContent);
+        const result = validateEnvDContent(invalidContent, "nextjs");
 
         expect(result.isValid).toBe(false);
-        expect(result.errors).toContain("Missing ProcessEnv interface extension");
+        expect(result.errors).toContain("Missing CloudflareEnv interface");
     });
 
     test("detects mismatched braces", () => {
@@ -329,12 +326,10 @@ declare global {
 
 declare global {
     namespace NodeJS {
-        interface ProcessEnv extends CloudflareBindings {
-        }
     }
 }`;
 
-        const result = validateEnvDContent(invalidContent);
+        const result = validateEnvDContent(invalidContent, "hono");
 
         expect(result.isValid).toBe(false);
         expect(result.errors).toContain("Mismatched braces in generated content");
@@ -364,7 +359,7 @@ declare global {
 
         for (const config of configs) {
             const generated = generateEnvDFile(config);
-            const validation = validateEnvDContent(generated);
+            const validation = validateEnvDContent(generated, config.template);
 
             expect(validation.isValid).toBe(true);
             if (!validation.isValid) {

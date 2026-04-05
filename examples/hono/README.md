@@ -60,7 +60,7 @@ wrangler d1 create your-database-name
 3. Create a KV namespace:
 
 ```bash
-wrangler kv:namespace create "KV"
+wrangler kv namespace create "KV"
 ```
 
 4. Update the KV `id` in `wrangler.toml` with the ID from the previous command.

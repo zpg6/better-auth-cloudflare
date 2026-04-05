@@ -115,7 +115,7 @@ describe("Auth Generator", () => {
 
             // Check imports
             expect(result).toContain('import { getCloudflareContext } from "@opennextjs/cloudflare"');
-            expect(result).toContain('import { getDb, schema } from "../db"');
+            expect(result).toContain('import { getDb } from "../db"');
             expect(result).toContain('import { anonymous, openAPI } from "better-auth/plugins"');
 
             // Check D1 configuration
@@ -143,7 +143,7 @@ describe("Auth Generator", () => {
             const result = generateAuthFile(config);
 
             // Check imports
-            expect(result).toContain('import { getDb, schema } from "../db"');
+            expect(result).toContain('import { getDb } from "../db"');
 
             // Check PostgreSQL configuration
             expect(result).toContain("postgres: {");
@@ -164,8 +164,7 @@ describe("Auth Generator", () => {
 
             const result = generateAuthFile(config);
 
-            expect(result).toContain('import { KVNamespace } from "@cloudflare/workers-types"');
-            expect(result).toContain("kv: process.env.MY_KV as KVNamespace<string>");
+            expect(result).toContain("kv: cfCtx.env.MY_KV");
         });
 
         test("generates R2 configuration with schema generation", () => {

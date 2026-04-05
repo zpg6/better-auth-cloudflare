@@ -1,6 +1,6 @@
 {
     "name": "@better-auth-cloudflare/cli",
-    "version": "0.1.17",
+    "version": "0.1.18",
     "description": "CLI to generate Better Auth Cloudflare projects (Hono or OpenNext.js)",
     "author": "Zach Grimaldi",
     "repository": {

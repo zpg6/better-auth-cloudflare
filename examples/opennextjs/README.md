@@ -1,6 +1,6 @@
 # `better-auth-cloudflare` Example: Next.js on Cloudflare Workers
 
-This example demonstrates how to use [`better-auth-cloudflare`](https://github.com/better-auth/better-auth), our authentication package specifically designed for Cloudflare, with a Next.js application deployed to [Cloudflare Workers](https://workers.cloudflare.com/) using the [OpenNext Cloudflare adapter](https://github.com/opennextjs/opennextjs-cloudflare).
+This example demonstrates how to use [`better-auth-cloudflare`](https://github.com/zpg6/better-auth-cloudflare), our authentication package specifically designed for Cloudflare, with a Next.js application deployed to [Cloudflare Workers](https://workers.cloudflare.com/) using the [OpenNext Cloudflare adapter](https://github.com/opennextjs/opennextjs-cloudflare).
 
 ## About `better-auth-cloudflare`
 
@@ -70,7 +70,6 @@ OpenNext.js requires a more complex auth configuration due to its async database
 ### Async Database Initialization
 
 ```typescript
-import { KVNamespace } from "@cloudflare/workers-types";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
@@ -80,38 +79,30 @@ import { getDb } from "../db";
 
 // Define an asynchronous function to build your auth configuration
 async function authBuilder() {
-    const dbInstance = await getDb(); // Get your D1 database instance
+    const dbInstance = await getDb();
+    const cfCtx = getCloudflareContext();
     return betterAuth({
         ...withCloudflare(
             {
                 autoDetectIpAddress: true,
                 geolocationTracking: true,
-                cf: getCloudflareContext().cf, // OpenNext.js context access
+                cf: cfCtx.cf,
                 d1: {
-                    db: dbInstance, // Async database instance
+                    db: dbInstance,
                     options: {
                         usePlural: true,
                         debugLogs: true,
                     },
                 },
-                kv: process.env.KV as KVNamespace<string>,
+                kv: cfCtx.env.KV,
             },
             {
+                baseURL: cfCtx.env.BETTER_AUTH_URL,
+                trustedOrigins: (cfCtx.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "").split(",").filter(Boolean),
                 rateLimit: {
                     enabled: true,
                     window: 60, // Minimum KV TTL is 60s
                     max: 100, // reqs/window
-                    customRules: {
-                        // https://github.com/better-auth/better-auth/issues/5452
-                        "/sign-in/email": {
-                            window: 60,
-                            max: 100,
-                        },
-                        "/sign-in/social": {
-                            window: 60,
-                            max: 100,
-                        },
-                    },
                 },
                 plugins: [openAPI(), anonymous()],
             }
@@ -135,7 +126,8 @@ export async function initAuth() {
 
 For production deployment, set the following via `wrangler.toml` `[vars]` or Cloudflare secrets:
 
-- `BETTER_AUTH_URL` — Your worker's base URL (e.g., `https://your-app.workers.dev`). Set as a `[vars]` entry.
+- `BETTER_AUTH_URL` — Your worker's primary base URL (e.g., `https://your-app.com`). Set as a `[vars]` entry.
+- `BETTER_AUTH_TRUSTED_ORIGINS` — Comma-separated list of additional trusted origins (e.g., `https://your-app.workers.dev`). Set as a `[vars]` entry.
 - `BETTER_AUTH_SECRET` — A random 32+ character secret. Set via `wrangler secret put BETTER_AUTH_SECRET`.
 
 ### CLI Schema Generation Configuration
@@ -152,15 +144,20 @@ export const auth = betterAuth({
             autoDetectIpAddress: true,
             geolocationTracking: true,
             cf: {},
-            // No actual database or KV instance needed, only schema-affecting options
+            r2: {
+                bucket: {} as any, // Mock bucket for schema generation
+                additionalFields: {
+                    category: { type: "string", required: false },
+                    isPublic: { type: "boolean", required: false },
+                    description: { type: "string", required: false },
+                },
+            },
         },
         {
-            // Include only configurations that influence the Drizzle schema
             plugins: [openAPI(), anonymous()],
         }
     ),
 
-    // Used by the Better Auth CLI for schema generation
     database: drizzleAdapter(process.env.DATABASE as any, {
         provider: "sqlite",
         usePlural: true,
@@ -181,7 +178,7 @@ For simpler frameworks like Hono, see the [Hono example](../hono/README.md) for 
 
 ## Learn More
 
-To learn more about Better Auth and its features, visit [our documentation](https://github.com/better-auth/better-auth).
+To learn more about Better Auth and its features, visit the [Better Auth documentation](https://www.better-auth.com/docs). For `better-auth-cloudflare` specifics, see the [package documentation](https://github.com/zpg6/better-auth-cloudflare).
 
 For Next.js resources:
 

@@ -491,14 +491,6 @@ export const createR2Storage = (
 };
 
 /**
- * Helper function to get the correct model name - just returns userFile
- * The adapter handles plural/singular internally
- */
-const getModelName = (ctx: AuthContext, baseName: string = "userFile"): string => {
-    return "userFile";
-};
-
-/**
  * Validates that the auth context and adapter are properly configured
  */
 const validateAuthContext = (ctx: AuthContext): void => {

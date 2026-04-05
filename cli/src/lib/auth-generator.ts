@@ -29,7 +29,7 @@ function generateHonoAuth(config: AuthConfig): string {
         `import { betterAuth } from "better-auth";`,
         `import { withCloudflare } from "better-auth-cloudflare";`,
         `import { anonymous } from "better-auth/plugins";`,
-        `import { drizzleAdapter } from "better-auth/adapters/drizzle";`,
+        `import { drizzleAdapter } from "@better-auth/drizzle-adapter";`,
     ];
 
     // Database-specific imports
@@ -49,11 +49,12 @@ function generateHonoAuth(config: AuthConfig): string {
     return `${imports.join("\n")}
 
 // Single auth configuration that handles both CLI and runtime scenarios
-function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties) {
+function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, baseURL?: string) {
     // Use actual DB for runtime, empty object for CLI
     const db = env ? ${generateDbConnection(config)} : ({} as any);
 
     return betterAuth({
+        baseURL,
         ...withCloudflare(
             {
                 autoDetectIpAddress: true,
@@ -67,6 +68,8 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties) 
                 plugins: [anonymous()],
                 rateLimit: {
                     enabled: true,
+                    window: 60,
+                    max: 100,
                 },
             }
         ),
@@ -92,15 +95,15 @@ function generateNextjsAuth(config: AuthConfig): string {
         `import { getCloudflareContext } from "@opennextjs/cloudflare";`,
         `import { betterAuth } from "better-auth";`,
         `import { withCloudflare } from "better-auth-cloudflare";`,
-        `import { drizzleAdapter } from "better-auth/adapters/drizzle";`,
+        `import { drizzleAdapter } from "@better-auth/drizzle-adapter";`,
         `import { anonymous, openAPI } from "better-auth/plugins";`,
     ];
 
-    if (config.resources.kv) {
-        imports.unshift(`import { KVNamespace } from "@cloudflare/workers-types";`);
+    if (config.database === "sqlite") {
+        imports.push(`import type { D1Database } from "@cloudflare/workers-types";`);
     }
 
-    imports.push(`import { getDb, schema } from "../db";`);
+    imports.push(`import { getDb } from "../db";`);
 
     const cloudflareConfig = generateNextjsCloudflareConfig(config);
     const cliDatabaseConfig = generateCliDatabaseConfig(config);
@@ -110,24 +113,26 @@ function generateNextjsAuth(config: AuthConfig): string {
 // Define an asynchronous function to build your auth configuration
 async function authBuilder() {
     const dbInstance = await getDb();
-    return betterAuth(
-        withCloudflare(
+    const cfCtx = getCloudflareContext();
+    return betterAuth({
+        ...withCloudflare(
             {
                 autoDetectIpAddress: true,
                 geolocationTracking: true,
-                cf: getCloudflareContext().cf,${cloudflareConfig}
+                cf: cfCtx.cf,${cloudflareConfig}
             },
-            // Your core Better Auth configuration (see Better Auth docs for all options)
             {
+                baseURL: cfCtx.env.BETTER_AUTH_URL,
+                trustedOrigins: (cfCtx.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "").split(",").filter(Boolean),
                 rateLimit: {
                     enabled: true,
-                    // ... other rate limiting options
+                    window: 60,
+                    max: 100,
                 },
                 plugins: [openAPI(), anonymous()],
-                // ... other Better Auth options
             }
-        )
-    );
+        ),
+    });
 }
 
 // Singleton pattern to ensure a single auth instance
@@ -156,12 +161,8 @@ export const auth = betterAuth({
             autoDetectIpAddress: true,
             geolocationTracking: true,
             cf: {},${generateNextjsSchemaConfig(config)}
-            // No actual database or KV instance is needed here, only schema-affecting options
         },
         {
-            // Include only configurations that influence the Drizzle schema,
-            // e.g., if certain features add tables or columns.
-            // socialProviders: { /* ... */ } // If they add specific tables/columns
             plugins: [openAPI(), anonymous()],
         }
     ),
@@ -273,8 +274,7 @@ function generateNextjsCloudflareConfig(config: AuthConfig): string {
     // KV configuration
     if (config.resources.kv) {
         parts.push(`
-                // Make sure "${config.bindings.kv || "KV"}" is the binding in your wrangler.toml
-                kv: process.env.${config.bindings.kv || "KV"} as KVNamespace<string>,`);
+                kv: cfCtx.env.${config.bindings.kv || "KV"},`);
     }
 
     // R2 configuration
