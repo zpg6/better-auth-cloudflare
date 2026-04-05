@@ -192,11 +192,12 @@ import { drizzle } from "drizzle-orm/d1";
 import { schema } from "../db";
 
 // Single auth configuration that handles both CLI and runtime scenarios
-function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties) {
+function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, baseURL?: string) {
     // Use actual DB for runtime, empty object for CLI
     const db = env ? drizzle(env.DATABASE, { schema, logger: true }) : ({} as any);
 
     return betterAuth({
+        baseURL,
         ...withCloudflare(
             {
                 autoDetectIpAddress: true,
@@ -265,6 +266,8 @@ export const auth = createAuth();
 // Export for runtime usage
 export { createAuth };
 ```
+
+The `baseURL` is derived per-request in Hono middleware via `new URL(c.req.url).origin`. On Cloudflare Workers, `request.url` reflects the actual URL the client connected to — Cloudflare's edge routes requests to your worker based on DNS and [route configuration](https://developers.cloudflare.com/workers/configuration/routing/routes/), not the HTTP `Host` header alone. Alternatively, you can set the `BETTER_AUTH_URL` environment variable and omit the `baseURL` parameter.
 
 **For OpenNext.js with complex async requirements:**
 See the [OpenNext.js example](./examples/opennextjs/README.md) for a more complex configuration that handles async database initialization and singleton patterns.
@@ -347,12 +350,12 @@ const auth = betterAuth({
 
 This path does **not** require `@better-auth/drizzle-adapter` at all. Trade-offs vs. the Drizzle D1 option:
 
-| | `d1Native` | `d1` (Drizzle) |
-|---|---|---|
-| Bundle size | Smaller | Larger (includes Drizzle) |
-| Schema management | Manual SQL / better-auth CLI | Drizzle Kit migrations |
-| Type-safe queries | No | Yes |
-| Setup complexity | Simpler | More boilerplate |
+|                   | `d1Native`                   | `d1` (Drizzle)            |
+| ----------------- | ---------------------------- | ------------------------- |
+| Bundle size       | Smaller                      | Larger (includes Drizzle) |
+| Schema management | Manual SQL / better-auth CLI | Drizzle Kit migrations    |
+| Type-safe queries | No                           | Yes                       |
+| Setup complexity  | Simpler                      | More boilerplate          |
 
 **Using `better-auth/minimal` for smaller bundles:**
 

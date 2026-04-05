@@ -171,11 +171,12 @@ import { schema } from "../db";
 import type { CloudflareBindings } from "../env";
 
 // Single auth configuration that handles both CLI and runtime scenarios
-function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties) {
+function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, baseURL?: string) {
     // Use actual DB for runtime, empty object for CLI
     const db = env ? drizzle(env.DATABASE, { schema, logger: true }) : ({} as any);
 
     return betterAuth({
+        baseURL,
         ...withCloudflare(
             {
                 autoDetectIpAddress: true, // Auto-detect IP from Cloudflare headers
@@ -193,6 +194,9 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties) 
                 kv: env?.KV,
             },
             {
+                emailAndPassword: {
+                    enabled: true,
+                },
                 plugins: [anonymous()], // Enable anonymous authentication
                 rateLimit: {
                     enabled: true,
@@ -231,3 +235,5 @@ export const auth = createAuth();
 // Export for runtime usage
 export { createAuth };
 ```
+
+The `baseURL` is derived from each incoming request in the Hono middleware (`new URL(c.req.url).origin`) and passed to `createAuth`. On Cloudflare Workers, `request.url` reflects the actual URL the client connected to — Cloudflare's edge routes requests to your worker based on DNS and [route configuration](https://developers.cloudflare.com/workers/configuration/routing/routes/), not the HTTP `Host` header alone. Alternatively, you can set the `BETTER_AUTH_URL` environment variable and omit the `baseURL` parameter.
