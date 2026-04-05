@@ -42,6 +42,7 @@
     },
     "peerDependencies": {
         "@better-auth/drizzle-adapter": "^1.5.0",
+        "@cloudflare/workers-types": "^4.0.0",
         "better-auth": "^1.5.0"
     },
     "devDependencies": {

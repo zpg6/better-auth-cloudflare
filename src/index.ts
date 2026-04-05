@@ -1,10 +1,10 @@
-import type { D1Database, KVNamespace } from "@cloudflare/workers-types";
 import { type BetterAuthOptions, type BetterAuthPlugin, type GenericEndpointContext, type Session } from "better-auth";
 import { type SecondaryStorage } from "better-auth/db";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
 import { schema } from "./schema";
 import { createR2Storage, createR2Endpoints } from "./r2";
+import type { D1Database, KVNamespace } from "@cloudflare/workers-types";
 import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types";
 export * from "./client";
 export * from "./schema";
@@ -113,7 +113,7 @@ function extractGeolocationData(input: CloudflareGeolocation): CloudflareGeoloca
  * @param kv - Cloudflare KV namespace
  * @returns SecondaryStorage implementation
  */
-export const createKVStorage = (kv: KVNamespace<string>): SecondaryStorage => {
+export const createKVStorage = (kv: KVNamespace): SecondaryStorage => {
     return {
         get: async (key: string) => {
             return kv.get(key);

@@ -1,7 +1,7 @@
-import type { D1Database, KVNamespace } from "@cloudflare/workers-types";
 import type { AuthContext, Session, User } from "better-auth";
 import type { DrizzleAdapterConfig } from "@better-auth/drizzle-adapter";
 import type { DBFieldAttribute } from "better-auth/db";
+import type { D1Database, KVNamespace, R2Bucket } from "@cloudflare/workers-types";
 import type { drizzle as d1Drizzle } from "drizzle-orm/d1";
 import type { drizzle as mysqlDrizzle } from "drizzle-orm/mysql2";
 import type { drizzle as postgresDrizzle } from "drizzle-orm/postgres-js";
@@ -73,7 +73,7 @@ export interface WithCloudflareOptions extends CloudflarePluginOptions {
     /**
      * KV namespace for secondary storage, if you want to use that.
      */
-    kv?: KVNamespace<string>;
+    kv?: KVNamespace;
 }
 
 /**
@@ -111,18 +111,6 @@ export interface CloudflareSession extends Session {
 export interface CloudflareSessionResponse {
     session: CloudflareSession;
     user: User;
-}
-
-/**
- * Minimal R2Bucket interface - only what we actually need for file storage
- * Avoids complex type conflicts between DOM and Cloudflare Worker types
- */
-export interface R2Bucket {
-    put(key: string, value: Blob | File, options?: any): Promise<any>;
-    get(key: string): Promise<{ body: ReadableStream } | null>;
-    delete(key: string): Promise<void>;
-    head(key: string): Promise<any>;
-    list(options?: { prefix?: string }): Promise<{ objects: any[] }>;
 }
 
 /**

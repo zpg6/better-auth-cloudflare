@@ -1,4 +1,3 @@
-import { KVNamespace } from "@cloudflare/workers-types";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
@@ -8,12 +7,13 @@ import { getDb } from "../db";
 
 async function authBuilder() {
     const dbInstance = await getDb();
+    const cfCtx = getCloudflareContext();
     return betterAuth({
         ...withCloudflare(
             {
                 autoDetectIpAddress: true,
                 geolocationTracking: true,
-                cf: getCloudflareContext().cf,
+                cf: cfCtx.cf,
                 d1: {
                     db: dbInstance,
                     options: {
@@ -22,10 +22,10 @@ async function authBuilder() {
                     },
                 },
                 // Make sure "KV" is the binding in your wrangler.toml
-                kv: process.env.KV as KVNamespace<string>,
+                kv: cfCtx.env.KV,
                 // R2 configuration for file storage (R2_BUCKET binding from wrangler.toml)
                 r2: {
-                    bucket: getCloudflareContext().env.R2_BUCKET,
+                    bucket: cfCtx.env.R2_BUCKET,
                     maxFileSize: 2 * 1024 * 1024, // 2MB
                     allowedTypes: [".jpg", ".jpeg", ".png", ".gif"],
                     additionalFields: {
@@ -68,6 +68,8 @@ async function authBuilder() {
             },
             // Your core Better Auth configuration (see Better Auth docs for all options)
             {
+                baseURL: cfCtx.env.BETTER_AUTH_URL,
+                trustedOrigins: (cfCtx.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "").split(",").filter(Boolean),
                 rateLimit: {
                     enabled: true,
                     window: 60, // Minimum KV TTL is 60s

@@ -383,7 +383,8 @@ export const createR2Storage = (
                     }),
                 };
 
-                const result = await bucket.put(r2Key, file, uploadOptions);
+                // DOM Blob/File and Workers Blob/File are structurally identical at runtime
+                const result = await bucket.put(r2Key, file as Parameters<typeof bucket.put>[1], uploadOptions);
 
                 // Basic result validation - R2 put typically returns an object on success
                 if (!result) {
@@ -427,7 +428,8 @@ export const createR2Storage = (
             }
 
             const object = await bucket.get(fileMetadata.r2Key);
-            const downloadResult = object?.body || null;
+            // Workers ReadableStream and DOM ReadableStream are structurally identical at runtime
+            const downloadResult = (object?.body as ReadableStream | undefined) || null;
 
             if (config.hooks?.download?.after) {
                 await config.hooks.download.after(hookData, ctx);
