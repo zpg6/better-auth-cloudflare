@@ -13,7 +13,7 @@ const app = new Hono<{ Bindings: CloudflareBindings; Variables: Variables }>();
 app.use(
     "/api/auth/**",
     cors({
-        origin: "*", // In production, replace with your actual domain
+        origin: "https://better-auth-cloudflare-hono.zpg6.workers.dev",
         allowHeaders: ["Content-Type", "Authorization"],
         allowMethods: ["POST", "GET", "OPTIONS"],
         exposeHeaders: ["Content-Length"],
