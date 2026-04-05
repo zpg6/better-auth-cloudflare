@@ -1,5 +1,4 @@
-import type { AuthPluginSchema } from "better-auth/db";
-import type { FieldAttribute } from "better-auth/db";
+import type { BetterAuthPluginDBSchema, DBFieldAttribute } from "better-auth/db";
 import type { CloudflarePluginOptions } from "./types";
 
 /**
@@ -10,42 +9,42 @@ const geolocationFields = {
         type: "string",
         required: false,
         input: false,
-    } as FieldAttribute,
+    } as DBFieldAttribute,
     city: {
         type: "string",
         required: false,
         input: false,
-    } as FieldAttribute,
+    } as DBFieldAttribute,
     country: {
         type: "string",
         required: false,
         input: false,
-    } as FieldAttribute,
+    } as DBFieldAttribute,
     region: {
         type: "string",
         required: false,
         input: false,
-    } as FieldAttribute,
+    } as DBFieldAttribute,
     regionCode: {
         type: "string",
         required: false,
         input: false,
-    } as FieldAttribute,
+    } as DBFieldAttribute,
     colo: {
         type: "string",
         required: false,
         input: false,
-    } as FieldAttribute,
+    } as DBFieldAttribute,
     latitude: {
         type: "string",
         required: false,
         input: false,
-    } as FieldAttribute,
+    } as DBFieldAttribute,
     longitude: {
         type: "string",
         required: false,
         input: false,
-    } as FieldAttribute,
+    } as DBFieldAttribute,
 };
 
 /**
@@ -60,43 +59,43 @@ const coreFileFields = {
             model: "user",
             field: "id",
         },
-    } as FieldAttribute,
+    } as DBFieldAttribute,
     filename: {
         type: "string",
         required: true,
         input: false,
-    } as FieldAttribute,
+    } as DBFieldAttribute,
     originalName: {
         type: "string",
         required: true,
         input: false,
-    } as FieldAttribute,
+    } as DBFieldAttribute,
     contentType: {
         type: "string",
         required: true,
         input: false,
-    } as FieldAttribute,
+    } as DBFieldAttribute,
     size: {
         type: "number",
         required: true,
         input: false,
-    } as FieldAttribute,
+    } as DBFieldAttribute,
     r2Key: {
         type: "string",
         required: true,
         input: false,
-    } as FieldAttribute,
+    } as DBFieldAttribute,
     uploadedAt: {
         type: "date",
         required: true,
         input: false,
-    } as FieldAttribute,
+    } as DBFieldAttribute,
 };
 
 /**
  * Generates file tracking fields including custom fields
  */
-function generateFileFields(additionalFields?: Record<string, FieldAttribute>) {
+function generateFileFields(additionalFields?: Record<string, DBFieldAttribute>) {
     const fields = { ...coreFileFields };
 
     if (additionalFields) {
@@ -119,7 +118,7 @@ export const schema = (options: CloudflarePluginOptions) => {
     const sessionFields =
         options.geolocationTracking === undefined || options.geolocationTracking === true ? geolocationFields : {};
 
-    const authSchema: AuthPluginSchema = {
+    const authSchema: BetterAuthPluginDBSchema = {
         session: {
             fields: sessionFields,
         },

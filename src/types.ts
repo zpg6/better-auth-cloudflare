@@ -1,7 +1,7 @@
-import type { KVNamespace } from "@cloudflare/workers-types";
+import type { D1Database, KVNamespace } from "@cloudflare/workers-types";
 import type { AuthContext, Session, User } from "better-auth";
-import type { DrizzleAdapterConfig } from "better-auth/adapters/drizzle";
-import type { FieldAttribute } from "better-auth/db";
+import type { DrizzleAdapterConfig } from "@better-auth/drizzle-adapter";
+import type { DBFieldAttribute } from "better-auth/db";
 import type { drizzle as d1Drizzle } from "drizzle-orm/d1";
 import type { drizzle as mysqlDrizzle } from "drizzle-orm/mysql2";
 import type { drizzle as postgresDrizzle } from "drizzle-orm/postgres-js";
@@ -47,9 +47,18 @@ export type DrizzleConfig<T extends typeof d1Drizzle | typeof postgresDrizzle | 
 
 export interface WithCloudflareOptions extends CloudflarePluginOptions {
     /**
-     * D1 database configuration for SQLite
+     * D1 database configuration for SQLite (via Drizzle ORM).
+     * Mutually exclusive with d1Native, postgres, and mysql.
      */
     d1?: DrizzleConfig<typeof d1Drizzle>;
+
+    /**
+     * Native D1 database binding (no Drizzle required).
+     * Passed directly to better-auth's database option.
+     * Uses better-auth's built-in Kysely D1 dialect.
+     * Mutually exclusive with d1, postgres, and mysql.
+     */
+    d1Native?: D1Database;
 
     /**
      * Postgres database configuration for Hyperdrive
@@ -148,7 +157,7 @@ export interface R2Config {
      * Additional fields to track in the file metadata schema.
      * Uses Better Auth's standard FieldAttribute type for consistency
      */
-    additionalFields?: Record<string, FieldAttribute>;
+    additionalFields?: Record<string, DBFieldAttribute>;
 
     /**
      * Maximum file size in bytes
@@ -179,7 +188,7 @@ export interface R2Config {
                 file: File & {
                     userId: string;
                     r2Key: string;
-                    metadata: any; // Will be properly typed when used with inferR2Config
+                    metadata: FileMetadata;
                 },
                 ctx: AuthContext
             ) => void | null | Promise<void | null | undefined>;
@@ -188,7 +197,7 @@ export interface R2Config {
              * Called after successful file upload
              */
             after?: (
-                file: any, // Will be properly typed when used with inferR2Config
+                file: FileMetadata,
                 ctx: AuthContext
             ) => void | Promise<void>;
         };
@@ -202,7 +211,7 @@ export interface R2Config {
              * Throw ctx.error for structured errors.
              */
             before?: (
-                file: any, // Will be properly typed when used with inferR2Config
+                file: FileMetadata,
                 ctx: AuthContext
             ) => void | null | Promise<void | null | undefined>;
 
@@ -210,7 +219,7 @@ export interface R2Config {
              * Called after successful file download
              */
             after?: (
-                file: any, // Will be properly typed when used with inferR2Config
+                file: FileMetadata,
                 ctx: AuthContext
             ) => void | Promise<void>;
         };
@@ -224,7 +233,7 @@ export interface R2Config {
              * Throw ctx.error for structured errors.
              */
             before?: (
-                file: any, // Will be properly typed when used with inferR2Config
+                file: FileMetadata,
                 ctx: AuthContext
             ) => void | null | Promise<void | null | undefined>;
 
@@ -232,7 +241,7 @@ export interface R2Config {
              * Called after successful file deletion
              */
             after?: (
-                file: any, // Will be properly typed when used with inferR2Config
+                file: FileMetadata,
                 ctx: AuthContext
             ) => void | Promise<void>;
         };
@@ -250,13 +259,12 @@ export interface R2Config {
             /**
              * Called after successful file listing
              */
-            after?: (userId: string, files: any, ctx: AuthContext) => void | Promise<void>;
+            after?: (userId: string, files: { objects: { key: string }[] }, ctx: AuthContext) => void | Promise<void>;
         };
     };
 }
 
-// Helper type to convert FieldAttribute to actual TypeScript types
-type InferFieldType<T extends FieldAttribute> = T["type"] extends "string"
+type InferFieldType<T extends DBFieldAttribute> = T["type"] extends "string"
     ? string
     : T["type"] extends "number"
       ? number
@@ -264,10 +272,9 @@ type InferFieldType<T extends FieldAttribute> = T["type"] extends "string"
         ? boolean
         : T["type"] extends "date"
           ? Date
-          : any;
+          : unknown;
 
-// Convert Record<string, FieldAttribute> to actual typed object
-type InferAdditionalFields<T extends Record<string, FieldAttribute>> = {
+type InferAdditionalFields<T extends Record<string, DBFieldAttribute>> = {
     [K in keyof T]: InferFieldType<T[K]>;
 };
 
@@ -288,12 +295,12 @@ export interface FileMetadata {
 /**
  * File metadata with additional fields merged
  */
-export type FileMetadataWithAdditionalFields<T extends Record<string, FieldAttribute>> = FileMetadata &
+export type FileMetadataWithAdditionalFields<T extends Record<string, DBFieldAttribute>> = FileMetadata &
     InferAdditionalFields<T>;
 
 // Infer R2Config types from runtime definition (eliminates double definition!)
 export type InferR2Config<T extends R2Config> =
-    T["additionalFields"] extends Record<string, FieldAttribute>
+    T["additionalFields"] extends Record<string, DBFieldAttribute>
         ? Omit<T, "hooks"> & {
               hooks?: {
                   upload?: {
@@ -339,7 +346,7 @@ export type InferR2Config<T extends R2Config> =
                   list?: {
                       before?: (userId: string, ctx: AuthContext) => Promise<void | null | undefined>;
 
-                      after?: (userId: string, files: any, ctx: AuthContext) => Promise<void>;
+                      after?: (userId: string, files: { objects: { key: string }[] }, ctx: AuthContext) => Promise<void>;
                   };
               };
           }

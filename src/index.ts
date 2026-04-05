@@ -1,7 +1,7 @@
-import type { KVNamespace } from "@cloudflare/workers-types";
-import { type BetterAuthOptions, type BetterAuthPlugin, type Session } from "better-auth";
+import type { D1Database, KVNamespace } from "@cloudflare/workers-types";
+import { type BetterAuthOptions, type BetterAuthPlugin, type GenericEndpointContext, type Session } from "better-auth";
 import { type SecondaryStorage } from "better-auth/db";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
 import { schema } from "./schema";
 import { createR2Storage, createR2Endpoints } from "./r2";
@@ -63,24 +63,20 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                     databaseHooks: {
                         session: {
                             create: {
-                                before: async (s: any) => {
-                                    if (!geolocationTrackingEnabled) {
-                                        return s;
-                                    }
+                                before: async (
+                                    s: Session & Record<string, unknown>,
+                                    _context: GenericEndpointContext | null,
+                                ) => {
+                                    if (!geolocationTrackingEnabled) return;
                                     const cf = await Promise.resolve(opts.cf);
-                                    if (!cf) {
-                                        return s;
-                                    }
+                                    if (!cf) return;
                                     const geoData = extractGeolocationData(cf);
-                                    s.timezone = geoData.timezone;
-                                    s.city = geoData.city;
-                                    s.country = geoData.country;
-                                    s.region = geoData.region;
-                                    s.regionCode = geoData.regionCode;
-                                    s.colo = geoData.colo;
-                                    s.latitude = geoData.latitude;
-                                    s.longitude = geoData.longitude;
-                                    return s;
+                                    return {
+                                        data: {
+                                            ...s,
+                                            ...geoData,
+                                        },
+                                    };
                                 },
                             },
                         },
@@ -196,17 +192,17 @@ export const withCloudflare = <T extends BetterAuthOptions>(
         // If user explicitly set it to true/false, that will be respected.
     }
 
-    // Assert that only one database configuration is provided
-    const dbConfigs = [cloudFlareOptions.postgres, cloudFlareOptions.mysql, cloudFlareOptions.d1].filter(Boolean);
+    const dbConfigs = [cloudFlareOptions.postgres, cloudFlareOptions.mysql, cloudFlareOptions.d1, cloudFlareOptions.d1Native].filter(Boolean);
     if (dbConfigs.length > 1) {
         throw new Error(
-            "Only one database configuration can be provided. Please provide only one of postgres, mysql, or d1."
+            "Only one database configuration can be provided. Please provide only one of postgres, mysql, d1, or d1Native."
         );
     }
 
-    // Determine which database configuration to use
-    let database;
-    if (cloudFlareOptions.postgres) {
+    let database: ReturnType<typeof drizzleAdapter> | D1Database | undefined;
+    if (cloudFlareOptions.d1Native) {
+        database = cloudFlareOptions.d1Native;
+    } else if (cloudFlareOptions.postgres) {
         database = drizzleAdapter(cloudFlareOptions.postgres.db, {
             provider: "pg",
             ...cloudFlareOptions.postgres.options,

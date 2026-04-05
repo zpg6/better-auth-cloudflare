@@ -1,6 +1,6 @@
 import type { AuthContext } from "better-auth";
 import { createAuthEndpoint, getSessionFromCtx, sessionMiddleware } from "better-auth/api";
-import type { FieldAttribute } from "better-auth/db";
+import type { DBFieldAttribute } from "better-auth/db";
 import mime from "mime/lite";
 import { z, type ZodType } from "zod";
 import type { FileMetadata, R2Config } from "./types";
@@ -86,7 +86,7 @@ function validateFileMetadata(record: any): record is FileMetadata {
 /**
  * Converts Better Auth FieldAttribute to Zod schema (same pattern as feedback plugin)
  */
-function convertFieldAttributesToZodSchema(additionalFields: Record<string, FieldAttribute>) {
+function convertFieldAttributesToZodSchema(additionalFields: Record<string, DBFieldAttribute>) {
     const zodSchema: Record<string, ZodType> = {};
 
     for (const [key, value] of Object.entries(additionalFields)) {
@@ -119,7 +119,7 @@ function convertFieldAttributesToZodSchema(additionalFields: Record<string, Fiel
 }
 
 // Zod schemas for validation
-export const createFileMetadataSchema = (additionalFields?: Record<string, FieldAttribute>) => {
+export const createFileMetadataSchema = (additionalFields?: Record<string, DBFieldAttribute>) => {
     if (!additionalFields || Object.keys(additionalFields).length === 0) {
         return z.record(z.string(), z.any()).optional();
     }
@@ -141,7 +141,7 @@ export const listFilesSchema = z
 /**
  * Creates upload schema dynamically based on additionalFields configuration
  */
-export const createUploadFileSchema = (additionalFields?: Record<string, FieldAttribute>) => {
+export const createUploadFileSchema = (additionalFields?: Record<string, DBFieldAttribute>) => {
     const baseShape: Record<string, ZodType> = {
         file: z.instanceof(File),
     };
