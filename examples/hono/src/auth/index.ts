@@ -2,7 +2,7 @@ import type { D1Database, IncomingRequestCfProperties } from "@cloudflare/worker
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
 import { anonymous } from "better-auth/plugins";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { drizzle } from "drizzle-orm/d1";
 import { schema } from "../db";
 import type { CloudflareBindings } from "../env";

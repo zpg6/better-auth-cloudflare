@@ -188,7 +188,7 @@ export interface R2Config {
                 file: File & {
                     userId: string;
                     r2Key: string;
-                    metadata: FileMetadata;
+                    metadata: FileMetadata & Record<string, unknown>;
                 },
                 ctx: AuthContext
             ) => void | null | Promise<void | null | undefined>;
@@ -196,10 +196,7 @@ export interface R2Config {
             /**
              * Called after successful file upload
              */
-            after?: (
-                file: FileMetadata,
-                ctx: AuthContext
-            ) => void | Promise<void>;
+            after?: (file: FileMetadata & Record<string, unknown>, ctx: AuthContext) => void | Promise<void>;
         };
 
         /**
@@ -211,17 +208,14 @@ export interface R2Config {
              * Throw ctx.error for structured errors.
              */
             before?: (
-                file: FileMetadata,
+                file: FileMetadata & Record<string, unknown>,
                 ctx: AuthContext
             ) => void | null | Promise<void | null | undefined>;
 
             /**
              * Called after successful file download
              */
-            after?: (
-                file: FileMetadata,
-                ctx: AuthContext
-            ) => void | Promise<void>;
+            after?: (file: FileMetadata & Record<string, unknown>, ctx: AuthContext) => void | Promise<void>;
         };
 
         /**
@@ -233,17 +227,14 @@ export interface R2Config {
              * Throw ctx.error for structured errors.
              */
             before?: (
-                file: FileMetadata,
+                file: FileMetadata & Record<string, unknown>,
                 ctx: AuthContext
             ) => void | null | Promise<void | null | undefined>;
 
             /**
              * Called after successful file deletion
              */
-            after?: (
-                file: FileMetadata,
-                ctx: AuthContext
-            ) => void | Promise<void>;
+            after?: (file: FileMetadata & Record<string, unknown>, ctx: AuthContext) => void | Promise<void>;
         };
 
         /**
@@ -346,7 +337,11 @@ export type InferR2Config<T extends R2Config> =
                   list?: {
                       before?: (userId: string, ctx: AuthContext) => Promise<void | null | undefined>;
 
-                      after?: (userId: string, files: { objects: { key: string }[] }, ctx: AuthContext) => Promise<void>;
+                      after?: (
+                          userId: string,
+                          files: { objects: { key: string }[] },
+                          ctx: AuthContext
+                      ) => Promise<void>;
                   };
               };
           }

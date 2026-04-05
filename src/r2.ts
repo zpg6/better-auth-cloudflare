@@ -350,7 +350,11 @@ export const createR2Storage = (
                 // Call beforeUpload hook
                 if (config.hooks?.upload?.before) {
                     const result = await config.hooks.upload.before(
-                        Object.assign(fileForValidation, { userId, r2Key, metadata }),
+                        Object.assign(fileForValidation, {
+                            userId,
+                            r2Key,
+                            metadata: metadata as FileMetadata & Record<string, unknown>,
+                        }),
                         ctx
                     );
                     if (result === null) {
@@ -390,7 +394,7 @@ export const createR2Storage = (
 
                 // Call afterUpload hook
                 if (config.hooks?.upload?.after) {
-                    await config.hooks.upload.after(metadata, ctx);
+                    await config.hooks.upload.after(metadata as FileMetadata & Record<string, unknown>, ctx);
                 }
 
                 return metadata;
@@ -414,9 +418,9 @@ export const createR2Storage = (
          * Downloads a file from R2
          */
         async downloadFile(fileMetadata: FileMetadata, ctx: AuthContext): Promise<ReadableStream | null> {
-            // Call beforeDownload hook
+            const hookData = fileMetadata as FileMetadata & Record<string, unknown>;
             if (config.hooks?.download?.before) {
-                const result = await config.hooks.download.before(fileMetadata, ctx);
+                const result = await config.hooks.download.before(hookData, ctx);
                 if (result === null) {
                     throw new Error("Download prevented by beforeDownload hook");
                 }
@@ -425,9 +429,8 @@ export const createR2Storage = (
             const object = await bucket.get(fileMetadata.r2Key);
             const downloadResult = object?.body || null;
 
-            // Call afterDownload hook
             if (config.hooks?.download?.after) {
-                await config.hooks.download.after(fileMetadata, ctx);
+                await config.hooks.download.after(hookData, ctx);
             }
 
             return downloadResult;
@@ -437,9 +440,9 @@ export const createR2Storage = (
          * Deletes a file from R2
          */
         async deleteFile(fileMetadata: FileMetadata, ctx: AuthContext): Promise<void> {
-            // Call beforeDelete hook
+            const hookData = fileMetadata as FileMetadata & Record<string, unknown>;
             if (config.hooks?.delete?.before) {
-                const result = await config.hooks.delete.before(fileMetadata, ctx);
+                const result = await config.hooks.delete.before(hookData, ctx);
                 if (result === null) {
                     throw new Error("Delete prevented by beforeDelete hook");
                 }
@@ -447,9 +450,8 @@ export const createR2Storage = (
 
             await bucket.delete(fileMetadata.r2Key);
 
-            // Call afterDelete hook
             if (config.hooks?.delete?.after) {
-                await config.hooks.delete.after(fileMetadata, ctx);
+                await config.hooks.delete.after(hookData, ctx);
             }
         },
 

@@ -285,7 +285,7 @@ app.get("/protected", async c => {
             headers: c.req.raw.headers,
         });
 
-        if (session?.session && session?.user) {
+        if (session) {
             return c.html(`
                 <h2>🔒 Protected Content - You're In!</h2>
                 <p>Welcome to the protected area!</p>

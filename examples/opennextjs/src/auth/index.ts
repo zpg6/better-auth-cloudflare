@@ -2,7 +2,7 @@ import { KVNamespace } from "@cloudflare/workers-types";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { anonymous, openAPI } from "better-auth/plugins";
 import { getDb } from "../db";
 

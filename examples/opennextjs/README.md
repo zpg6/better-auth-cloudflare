@@ -73,7 +73,7 @@ OpenNext.js requires a more complex auth configuration due to its async database
 import { KVNamespace } from "@cloudflare/workers-types";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { openAPI } from "better-auth/plugins";
 import { getDb } from "../db";
 import { getCloudflareContext } from "@opennextjs/cloudflare";

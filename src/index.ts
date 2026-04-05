@@ -65,7 +65,7 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
                             create: {
                                 before: async (
                                     s: Session & Record<string, unknown>,
-                                    _context: GenericEndpointContext | null,
+                                    _context: GenericEndpointContext | null
                                 ) => {
                                     if (!geolocationTrackingEnabled) return;
                                     const cf = await Promise.resolve(opts.cf);
@@ -123,7 +123,9 @@ export const createKVStorage = (kv: KVNamespace<string>): SecondaryStorage => {
                 // Cloudflare KV requires TTL >= 60 seconds
                 const minTtl = 60;
                 if (ttl < minTtl) {
-                    console.warn(`[BetterAuthCloudflare] TTL ${ttl}s is less than KV minimum of ${minTtl}s. Using ${minTtl}s instead.`);
+                    console.warn(
+                        `[BetterAuthCloudflare] TTL ${ttl}s is less than KV minimum of ${minTtl}s. Using ${minTtl}s instead.`
+                    );
                     ttl = minTtl;
                 }
                 return kv.put(key, value, { expirationTtl: ttl });
@@ -136,11 +138,13 @@ export const createKVStorage = (kv: KVNamespace<string>): SecondaryStorage => {
     };
 };
 
-/**
- * Type helper to infer the enhanced auth type with Cloudflare plugin
- */
-type WithCloudflareAuth<T extends BetterAuthOptions> = T & {
-    plugins: [ReturnType<typeof cloudflare>, ...(T["plugins"] extends readonly any[] ? T["plugins"] : [])];
+type CloudflarePlugin = ReturnType<typeof cloudflare>;
+
+type MergedPlugins<T extends BetterAuthOptions> =
+    NonNullable<T["plugins"]> extends readonly [...infer P] ? [CloudflarePlugin, ...P] : [CloudflarePlugin];
+
+type WithCloudflareAuth<T extends BetterAuthOptions> = Omit<T, "plugins"> & {
+    plugins: MergedPlugins<T>;
 };
 
 /**
@@ -192,7 +196,12 @@ export const withCloudflare = <T extends BetterAuthOptions>(
         // If user explicitly set it to true/false, that will be respected.
     }
 
-    const dbConfigs = [cloudFlareOptions.postgres, cloudFlareOptions.mysql, cloudFlareOptions.d1, cloudFlareOptions.d1Native].filter(Boolean);
+    const dbConfigs = [
+        cloudFlareOptions.postgres,
+        cloudFlareOptions.mysql,
+        cloudFlareOptions.d1,
+        cloudFlareOptions.d1Native,
+    ].filter(Boolean);
     if (dbConfigs.length > 1) {
         throw new Error(
             "Only one database configuration can be provided. Please provide only one of postgres, mysql, d1, or d1Native."
@@ -219,11 +228,13 @@ export const withCloudflare = <T extends BetterAuthOptions>(
         });
     }
 
+    const plugins = [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])] as MergedPlugins<T>;
+
     return {
         ...options,
         database,
         secondaryStorage: cloudFlareOptions.kv ? createKVStorage(cloudFlareOptions.kv) : undefined,
-        plugins: [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])],
+        plugins,
         advanced: updatedAdvanced,
         session: updatedSession,
     } as WithCloudflareAuth<T>;
