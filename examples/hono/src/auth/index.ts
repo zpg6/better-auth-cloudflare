@@ -8,11 +8,11 @@ import { schema } from "../db";
 import type { CloudflareBindings } from "../env";
 
 // Single auth configuration that handles both CLI and runtime scenarios
-function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties) {
-    // Use actual DB for runtime, empty object for CLI
+function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, baseURL?: string) {
     const db = env ? drizzle(env.DATABASE, { schema, logger: true }) : ({} as any);
 
     return betterAuth({
+        baseURL,
         ...withCloudflare(
             {
                 autoDetectIpAddress: true,
