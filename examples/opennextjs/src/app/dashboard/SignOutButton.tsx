@@ -48,10 +48,9 @@ export default function SignOutButton() {
                     },
                 },
             });
-        } catch (e: any) {
-            // Catch any unexpected errors during the signOut call itself
+        } catch (e) {
             console.error("Unexpected sign out error:", e);
-            setError(e.message || "An unexpected error occurred. Please try again.");
+            setError(e instanceof Error ? e.message : "An unexpected error occurred. Please try again.");
             // router.replace("/"); // Fallback redirect
         } finally {
             setIsLoading(false);

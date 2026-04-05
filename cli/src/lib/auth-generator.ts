@@ -39,6 +39,7 @@ function generateHonoAuth(config: AuthConfig): string {
         imports.push(`import { drizzle } from "drizzle-orm/postgres-js";`);
     } else {
         imports.push(`import { drizzle } from "drizzle-orm/mysql2";`);
+        imports.push(`import mysql from "mysql2";`);
     }
 
     imports.push(`import { schema } from "../db";`, `import type { CloudflareBindings } from "../env";`);
@@ -205,47 +206,49 @@ function generateHonoCloudflareConfig(config: AuthConfig): string {
     if (config.resources.r2) {
         parts.push(`
                 // R2 configuration for file storage (${config.bindings.r2 || "R2_BUCKET"} binding from wrangler.toml)
-                r2: {
-                    bucket: env?.${config.bindings.r2 || "R2_BUCKET"},
-                    maxFileSize: 2 * 1024 * 1024, // 2MB
-                    allowedTypes: [".jpg", ".jpeg", ".png", ".gif"],
-                    additionalFields: {
-                        category: { type: "string", required: false },
-                        isPublic: { type: "boolean", required: false },
-                        description: { type: "string", required: false },
-                    },
-                    hooks: {
-                        upload: {
-                            before: async (file, ctx) => {
-                                // Only allow authenticated users to upload files
-                                if (ctx.session === null) {
-                                    return null; // Blocks upload
-                                }
+                ...(env?.${config.bindings.r2 || "R2_BUCKET"} ? {
+                    r2: {
+                        bucket: env.${config.bindings.r2 || "R2_BUCKET"},
+                        maxFileSize: 2 * 1024 * 1024, // 2MB
+                        allowedTypes: [".jpg", ".jpeg", ".png", ".gif"],
+                        additionalFields: {
+                            category: { type: "string", required: false },
+                            isPublic: { type: "boolean", required: false },
+                            description: { type: "string", required: false },
+                        },
+                        hooks: {
+                            upload: {
+                                before: async (file, ctx) => {
+                                    // Only allow authenticated users to upload files
+                                    if (ctx.session === null) {
+                                        return null; // Blocks upload
+                                    }
 
-                                // Only allow paid users to upload files (for example)
-                                const isPaidUser = (userId: string) => true; // example
-                                if (isPaidUser(ctx.session.user.id) === false) {
-                                    return null; // Blocks upload
-                                }
+                                    // Only allow paid users to upload files (for example)
+                                    const isPaidUser = (userId: string) => true; // example
+                                    if (isPaidUser(ctx.session.user.id) === false) {
+                                        return null; // Blocks upload
+                                    }
 
-                                // Allow upload
+                                    // Allow upload
+                                },
+                                after: async (file, ctx) => {
+                                    // Track your analytics (for example)
+                                    console.log("File uploaded:", file);
+                                },
                             },
-                            after: async (file, ctx) => {
-                                // Track your analytics (for example)
-                                console.log("File uploaded:", file);
+                            download: {
+                                before: async (file, ctx) => {
+                                    // Only allow user to access their own files (by default all files are public)
+                                    if (file.isPublic === false && file.userId !== ctx.session?.user.id) {
+                                        return null; // Blocks download
+                                    }
+                                    // Allow download
+                                },
                             },
                         },
-                        download: {
-                            before: async (file, ctx) => {
-                                // Only allow user to access their own files (by default all files are public)
-                                if (file.isPublic === false && file.userId !== ctx.session?.user.id) {
-                                    return null; // Blocks download
-                                }
-                                // Allow download
-                            },
-                        },
                     },
-                },`);
+                } : {}),`);
     }
 
     return parts.join("");
@@ -351,12 +354,19 @@ const generateHonoSchemaConfig = generateSchemaConfig;
 const generateNextjsSchemaConfig = generateSchemaConfig;
 
 function generateDbConnection(config: AuthConfig): string {
+    const binding = config.bindings.hyperdrive || "HYPERDRIVE";
     if (config.database === "sqlite") {
         return `drizzle(env.${config.bindings.d1 || "DATABASE"}, { schema, logger: true })`;
     } else if (config.database === "postgres") {
-        return `drizzle(env.${config.bindings.hyperdrive || "HYPERDRIVE"}, { schema, logger: true })`;
+        return `drizzle(env.${binding}, { schema, logger: true })`;
     } else {
-        return `drizzle(env.${config.bindings.hyperdrive || "HYPERDRIVE"}, { schema, logger: true })`;
+        return `drizzle(mysql.createPool({
+        host: env.${binding}.host,
+        user: env.${binding}.user,
+        password: env.${binding}.password,
+        database: env.${binding}.database,
+        port: env.${binding}.port,
+    }), { schema, mode: "default", logger: true })`;
     }
 }
 

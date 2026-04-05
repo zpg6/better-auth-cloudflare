@@ -31,8 +31,7 @@ export async function middleware(request: NextRequest) {
             if (isAuthenticated) {
                 try {
                     sessionData = await sessionResponse.json();
-                    // Double-check that we have a valid session
-                    if (!sessionData?.session || !sessionData.session.userId) {
+                    if (!sessionData?.session) {
                         sessionData = null;
                     }
                 } catch {

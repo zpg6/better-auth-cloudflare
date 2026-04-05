@@ -12,6 +12,7 @@ import {
     extractKvNamespaceId,
     initializeGitRepository,
     parseWranglerToml,
+    replaceDemoCorsOrigin,
     updateD1BlockWithId,
     updateHyperdriveBlockWithId,
     updateKvBlockWithId,
@@ -1502,7 +1503,7 @@ export const verification = {} as any;`;
                     );
                 }
                 if (answers.database === "hyperdrive-mysql") {
-                    return code.replace(/dialect:\s*"sqlite"/g, 'dialect: "mysql2"').replace(
+                    return code.replace(/dialect:\s*"sqlite"/g, 'dialect: "mysql"').replace(
                         /\.\.\.\(process\.env\.NODE_ENV === "production"[\s\S]*?\}\),/g,
                         `...(process.env.NODE_ENV === "production"
         ? {
@@ -1519,6 +1520,12 @@ export const verification = {} as any;`;
                 }
                 return code;
             });
+
+            // Replace the demo CORS origin with a dynamic function that derives
+            // the allowed origin from the request URL (works in dev, prod, and custom domains)
+            const honoEntryPath = join(targetDir, "src/index.ts");
+            debugLog("Replacing demo CORS origin with dynamic origin function");
+            tryUpdateFile(honoEntryPath, replaceDemoCorsOrigin);
         }
 
         if (isNext) {
@@ -1584,7 +1591,7 @@ export const verification = {} as any;`;
                     );
                 }
                 if (answers.database === "hyperdrive-mysql") {
-                    return code.replace(/dialect:\s*"sqlite"/g, 'dialect: "mysql2"').replace(
+                    return code.replace(/dialect:\s*"sqlite"/g, 'dialect: "mysql"').replace(
                         /\.\.\.\(process\.env\.NODE_ENV === "production"[\s\S]*?\}\),/g,
                         `...(process.env.NODE_ENV === "production"
         ? {
@@ -1961,7 +1968,9 @@ export const verification = {} as any;`;
         if (authRes.code === 0) {
             genAuth.succeed("Auth schema updated.");
 
-            // Restore original schema.ts and index.ts after successful auth generation for non-D1 databases
+            // Regenerate schema.ts and db/index.ts after auth generation for non-D1 databases.
+            // The pre-auth-generation temp files used simplified versions to avoid circular deps;
+            // now we write back the correct generated content.
             if (answers.database !== "d1") {
                 const tempSchemaBackupPath = join(targetDir, ".schema-backup.tmp");
                 const tempIndexBackupPath = join(targetDir, ".index-backup.tmp");
@@ -1975,12 +1984,23 @@ export const verification = {} as any;`;
                     rmSync(tempSchemaBackupPath, { force: true });
                 }
 
+                // Regenerate the correct db/index.ts instead of restoring the template default,
+                // since the final generated version (with correct DB driver) was already written
+                // before auth:update overwrote it with the temp version.
                 if (existsSync(tempIndexBackupPath)) {
-                    debugLog(`Restoring original index file: ${indexPath}`);
-                    const originalIndexContent = readFileSync(tempIndexBackupPath, "utf8");
-                    writeFileSync(indexPath, originalIndexContent, "utf8");
                     rmSync(tempIndexBackupPath, { force: true });
                 }
+                const { generateDbIndex } = await import("./lib/db-generator");
+                const postAuthDbConfig = {
+                    template: answers.template as "hono" | "nextjs",
+                    database: answers.database === "hyperdrive-postgres" ? ("postgres" as const) : ("mysql" as const),
+                    bindings: {
+                        d1: answers.d1Binding,
+                        hyperdrive: answers.hdBinding,
+                    },
+                };
+                debugLog(`Regenerating db/index.ts with correct driver: ${indexPath}`);
+                writeFileSync(indexPath, generateDbIndex(postAuthDbConfig));
             }
         } else {
             genAuth.fail("Failed to generate auth schema.");

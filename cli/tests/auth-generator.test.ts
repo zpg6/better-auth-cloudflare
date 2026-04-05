@@ -80,7 +80,7 @@ describe("Auth Generator", () => {
 
             const result = generateAuthFile(config);
 
-            expect(result).toContain("bucket: env?.MY_BUCKET");
+            expect(result).toContain("bucket: env.MY_BUCKET");
             expect(result).toContain("maxFileSize: 2 * 1024 * 1024");
             expect(result).toContain('allowedTypes: [".jpg", ".jpeg", ".png", ".gif"]');
             expect(result).toContain("hooks: {");
@@ -98,7 +98,7 @@ describe("Auth Generator", () => {
 
             expect(result).toContain("d1: env");
             expect(result).toContain("kv: env?.KV");
-            expect(result).toContain("bucket: env?.R2_BUCKET");
+            expect(result).toContain("bucket: env.R2_BUCKET");
         });
     });
 
@@ -247,7 +247,7 @@ describe("Auth Generator", () => {
 
             // Should use default binding names
             expect(result).toContain("kv: env?.KV");
-            expect(result).toContain("bucket: env?.R2_BUCKET");
+            expect(result).toContain("bucket: env.R2_BUCKET");
         });
 
         test("handles empty resources", () => {

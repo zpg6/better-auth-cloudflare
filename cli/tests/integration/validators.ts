@@ -350,6 +350,9 @@ export class FileValidator {
                 if (!index.includes("/api/auth/*")) {
                     errors.push("Missing auth routes in Hono app");
                 }
+                if (index.includes('origin: "*"') || index.includes("better-auth-cloudflare-hono.zpg6.workers.dev")) {
+                    errors.push("CORS origin should be replaced with dynamic origin function");
+                }
             } catch (error) {
                 errors.push(`Failed to read index.ts: ${error}`);
             }

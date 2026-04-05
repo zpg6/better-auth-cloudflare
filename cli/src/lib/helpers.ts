@@ -4,6 +4,23 @@ export interface JSONObject {
 }
 export interface JSONArray extends Array<JSONValue> {}
 
+const DYNAMIC_CORS_ORIGIN = `origin: (requestOrigin: string, c) => {
+            const self = new URL(c.req.url).origin;
+            return requestOrigin === self ? requestOrigin : "";
+        },`;
+
+/**
+ * Replace a hardcoded/wildcard CORS origin in the Hono template with a dynamic
+ * origin function that derives the allowed origin from the request URL.
+ * Handles both the demo URL and the wildcard `"*"` placeholder.
+ * Returns the input unchanged if neither pattern is present.
+ */
+export function replaceDemoCorsOrigin(code: string): string {
+    return code
+        .replace(`origin: "https://better-auth-cloudflare-hono.zpg6.workers.dev",`, DYNAMIC_CORS_ORIGIN)
+        .replace(/origin: "\*",.*/, DYNAMIC_CORS_ORIGIN);
+}
+
 export function validateBindingName(name: string): string | undefined {
     if (!name || name.trim().length === 0) return "Please enter a binding name";
     if (!/^[A-Z0-9_]+$/.test(name)) return "Use ONLY A-Z, 0-9, and underscores";
