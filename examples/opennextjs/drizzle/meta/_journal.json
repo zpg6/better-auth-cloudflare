@@ -8,6 +8,13 @@
             "when": 1749946877776,
             "tag": "0000_aspiring_supreme_intelligence",
             "breakpoints": true
+        },
+        {
+            "idx": 1,
+            "version": "6",
+            "when": 1775401840211,
+            "tag": "0001_dry_ulik",
+            "breakpoints": true
         }
     ]
 }

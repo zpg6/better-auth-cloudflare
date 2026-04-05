@@ -6,11 +6,10 @@ import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { anonymous, openAPI } from "better-auth/plugins";
 import { getDb } from "../db";
 
-// Define an asynchronous function to build your auth configuration
 async function authBuilder() {
     const dbInstance = await getDb();
-    return betterAuth(
-        withCloudflare(
+    return betterAuth({
+        ...withCloudflare(
             {
                 autoDetectIpAddress: true,
                 geolocationTracking: true,
@@ -86,10 +85,9 @@ async function authBuilder() {
                     },
                 },
                 plugins: [openAPI(), anonymous()],
-                // ... other Better Auth options
             }
-        )
-    );
+        ),
+    });
 }
 
 // Singleton pattern to ensure a single auth instance
