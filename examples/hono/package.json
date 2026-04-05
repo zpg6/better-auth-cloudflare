@@ -15,10 +15,11 @@
         "db:studio:prod": "NODE_ENV=production drizzle-kit studio"
     },
     "dependencies": {
-        "@cloudflare/workers-types": "^4.20250606.0",
-        "better-auth": "^1.2.8",
+        "@better-auth/drizzle-adapter": "^1.5.0",
+        "@cloudflare/workers-types": "^4.20260405.1",
+        "better-auth": "^1.5.0",
         "better-auth-cloudflare": "file:../../",
-        "drizzle-orm": "^0.44.5",
+        "drizzle-orm": "^0.45.0",
         "hono": "^4.7.11"
     },
     "devDependencies": {

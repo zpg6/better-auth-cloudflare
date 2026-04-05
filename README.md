@@ -15,7 +15,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 
 ## Features
 
-- 🗄️ **Database Integration**: Support for D1 (SQLite), Postgres, and MySQL databases via Drizzle ORM.
+- 🗄️ **Database Integration**: Support for D1 (SQLite), Postgres, and MySQL databases via Drizzle ORM, or native D1 without Drizzle.
 - 🚀 **Hyperdrive Support**: Connect to Postgres and MySQL databases through Cloudflare Hyperdrive.
 - 🔌 **KV Storage Integration**: Optionally use Cloudflare KV for secondary storage (e.g., session caching).
 - 📁 **R2 File Storage**: Upload, download, and manage user files with Cloudflare R2 object storage and database tracking.
@@ -187,16 +187,17 @@ Set up your Better Auth configuration, wrapping it with `withCloudflare` to enab
 import type { D1Database, IncomingRequestCfProperties } from "@cloudflare/workers-types";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { drizzle } from "drizzle-orm/d1";
 import { schema } from "../db";
 
 // Single auth configuration that handles both CLI and runtime scenarios
-function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties) {
+function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, baseURL?: string) {
     // Use actual DB for runtime, empty object for CLI
     const db = env ? drizzle(env.DATABASE, { schema, logger: true }) : ({} as any);
 
     return betterAuth({
+        baseURL,
         ...withCloudflare(
             {
                 autoDetectIpAddress: true,
@@ -266,6 +267,8 @@ export const auth = createAuth();
 export { createAuth };
 ```
 
+The `baseURL` is derived per-request in Hono middleware via `new URL(c.req.url).origin`. On Cloudflare Workers, `request.url` reflects the actual URL the client connected to — Cloudflare's edge routes requests to your worker based on DNS and [route configuration](https://developers.cloudflare.com/workers/configuration/routing/routes/), not the HTTP `Host` header alone. Alternatively, you can set the `BETTER_AUTH_URL` environment variable and omit the `baseURL` parameter.
+
 **For OpenNext.js with complex async requirements:**
 See the [OpenNext.js example](./examples/opennextjs/README.md) for a more complex configuration that handles async database initialization and singleton patterns.
 
@@ -322,6 +325,48 @@ const auth = betterAuth({
     ),
 });
 ```
+
+**Using Native D1 (no Drizzle required):**
+
+If you don't need Drizzle ORM's type-safe schema and migration tooling, you can pass a D1 binding directly. better-auth uses its built-in Kysely D1 dialect under the hood:
+
+```typescript
+import { betterAuth } from "better-auth";
+import { withCloudflare } from "better-auth-cloudflare";
+
+const auth = betterAuth({
+    ...withCloudflare(
+        {
+            d1Native: env.DATABASE, // D1Database binding from wrangler.toml
+            kv: env.KV,
+            // other cloudflare options...
+        },
+        {
+            // your auth options...
+        }
+    ),
+});
+```
+
+This path does **not** require `@better-auth/drizzle-adapter` at all. Trade-offs vs. the Drizzle D1 option:
+
+|                   | `d1Native`                   | `d1` (Drizzle)            |
+| ----------------- | ---------------------------- | ------------------------- |
+| Bundle size       | Smaller                      | Larger (includes Drizzle) |
+| Schema management | Manual SQL / better-auth CLI | Drizzle Kit migrations    |
+| Type-safe queries | No                           | Yes                       |
+| Setup complexity  | Simpler                      | More boilerplate          |
+
+**Using `better-auth/minimal` for smaller bundles:**
+
+better-auth v1.5+ provides a `better-auth/minimal` entry point that tree-shakes unused features for smaller Worker bundles:
+
+```typescript
+import { betterAuth } from "better-auth/minimal";
+import { withCloudflare } from "better-auth-cloudflare";
+```
+
+This works as a drop-in replacement for `betterAuth` from `"better-auth"` but excludes features you haven't explicitly imported (e.g., social providers, admin endpoints).
 
 ### 4. Generate and Manage Auth Schema
 

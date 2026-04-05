@@ -1,6 +1,6 @@
 import type { AuthContext } from "better-auth";
 import { createAuthEndpoint, getSessionFromCtx, sessionMiddleware } from "better-auth/api";
-import type { FieldAttribute } from "better-auth/db";
+import type { DBFieldAttribute } from "better-auth/db";
 import mime from "mime/lite";
 import { z, type ZodType } from "zod";
 import type { FileMetadata, R2Config } from "./types";
@@ -86,7 +86,7 @@ function validateFileMetadata(record: any): record is FileMetadata {
 /**
  * Converts Better Auth FieldAttribute to Zod schema (same pattern as feedback plugin)
  */
-function convertFieldAttributesToZodSchema(additionalFields: Record<string, FieldAttribute>) {
+function convertFieldAttributesToZodSchema(additionalFields: Record<string, DBFieldAttribute>) {
     const zodSchema: Record<string, ZodType> = {};
 
     for (const [key, value] of Object.entries(additionalFields)) {
@@ -119,7 +119,7 @@ function convertFieldAttributesToZodSchema(additionalFields: Record<string, Fiel
 }
 
 // Zod schemas for validation
-export const createFileMetadataSchema = (additionalFields?: Record<string, FieldAttribute>) => {
+export const createFileMetadataSchema = (additionalFields?: Record<string, DBFieldAttribute>) => {
     if (!additionalFields || Object.keys(additionalFields).length === 0) {
         return z.record(z.string(), z.any()).optional();
     }
@@ -141,7 +141,7 @@ export const listFilesSchema = z
 /**
  * Creates upload schema dynamically based on additionalFields configuration
  */
-export const createUploadFileSchema = (additionalFields?: Record<string, FieldAttribute>) => {
+export const createUploadFileSchema = (additionalFields?: Record<string, DBFieldAttribute>) => {
     const baseShape: Record<string, ZodType> = {
         file: z.instanceof(File),
     };
@@ -350,7 +350,11 @@ export const createR2Storage = (
                 // Call beforeUpload hook
                 if (config.hooks?.upload?.before) {
                     const result = await config.hooks.upload.before(
-                        Object.assign(fileForValidation, { userId, r2Key, metadata }),
+                        Object.assign(fileForValidation, {
+                            userId,
+                            r2Key,
+                            metadata: metadata as FileMetadata & Record<string, unknown>,
+                        }),
                         ctx
                     );
                     if (result === null) {
@@ -379,7 +383,8 @@ export const createR2Storage = (
                     }),
                 };
 
-                const result = await bucket.put(r2Key, file, uploadOptions);
+                // DOM Blob/File and Workers Blob/File are structurally identical at runtime
+                const result = await bucket.put(r2Key, file as Parameters<typeof bucket.put>[1], uploadOptions);
 
                 // Basic result validation - R2 put typically returns an object on success
                 if (!result) {
@@ -390,7 +395,7 @@ export const createR2Storage = (
 
                 // Call afterUpload hook
                 if (config.hooks?.upload?.after) {
-                    await config.hooks.upload.after(metadata, ctx);
+                    await config.hooks.upload.after(metadata as FileMetadata & Record<string, unknown>, ctx);
                 }
 
                 return metadata;
@@ -414,20 +419,20 @@ export const createR2Storage = (
          * Downloads a file from R2
          */
         async downloadFile(fileMetadata: FileMetadata, ctx: AuthContext): Promise<ReadableStream | null> {
-            // Call beforeDownload hook
+            const hookData = fileMetadata as FileMetadata & Record<string, unknown>;
             if (config.hooks?.download?.before) {
-                const result = await config.hooks.download.before(fileMetadata, ctx);
+                const result = await config.hooks.download.before(hookData, ctx);
                 if (result === null) {
                     throw new Error("Download prevented by beforeDownload hook");
                 }
             }
 
             const object = await bucket.get(fileMetadata.r2Key);
-            const downloadResult = object?.body || null;
+            // Workers ReadableStream and DOM ReadableStream are structurally identical at runtime
+            const downloadResult = (object?.body as ReadableStream | undefined) || null;
 
-            // Call afterDownload hook
             if (config.hooks?.download?.after) {
-                await config.hooks.download.after(fileMetadata, ctx);
+                await config.hooks.download.after(hookData, ctx);
             }
 
             return downloadResult;
@@ -437,9 +442,9 @@ export const createR2Storage = (
          * Deletes a file from R2
          */
         async deleteFile(fileMetadata: FileMetadata, ctx: AuthContext): Promise<void> {
-            // Call beforeDelete hook
+            const hookData = fileMetadata as FileMetadata & Record<string, unknown>;
             if (config.hooks?.delete?.before) {
-                const result = await config.hooks.delete.before(fileMetadata, ctx);
+                const result = await config.hooks.delete.before(hookData, ctx);
                 if (result === null) {
                     throw new Error("Delete prevented by beforeDelete hook");
                 }
@@ -447,9 +452,8 @@ export const createR2Storage = (
 
             await bucket.delete(fileMetadata.r2Key);
 
-            // Call afterDelete hook
             if (config.hooks?.delete?.after) {
-                await config.hooks.delete.after(fileMetadata, ctx);
+                await config.hooks.delete.after(hookData, ctx);
             }
         },
 

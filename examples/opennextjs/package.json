@@ -27,11 +27,12 @@
         "@radix-ui/react-label": "^2.1.6",
         "@radix-ui/react-slot": "^1.2.2",
         "@radix-ui/react-tabs": "^1.1.12",
-        "better-auth": "^1.2.7",
+        "@better-auth/drizzle-adapter": "^1.5.0",
+        "better-auth": "^1.5.0",
         "better-auth-cloudflare": "file:../../",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
-        "drizzle-orm": "^0.44.5",
+        "drizzle-orm": "^0.45.0",
         "lucide-react": "^0.509.0",
         "next": "15.3.1",
         "react": "^19.0.0",
@@ -39,7 +40,7 @@
         "tailwind-merge": "^3.2.0"
     },
     "devDependencies": {
-        "@cloudflare/workers-types": "^4.20250813.0",
+        "@cloudflare/workers-types": "^4.20260405.1",
         "@opennextjs/cloudflare": "^1.6.5",
         "@types/node": "^20",
         "@types/react": "^19",

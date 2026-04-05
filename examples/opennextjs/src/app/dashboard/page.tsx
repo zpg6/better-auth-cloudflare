@@ -17,10 +17,8 @@ export default async function DashboardPage() {
         redirect("/"); // Redirect to home if no session
     }
 
-    // Get geolocation data from our plugin's endpoint
     const cloudflareGeolocationData = await authInstance.api.getGeolocation({ headers: await headers() });
 
-    // Access another plugin's endpoint to demonstrate plugin type inference is still intact
     const openAPISpec = await authInstance.api.generateOpenAPISchema();
 
     return (

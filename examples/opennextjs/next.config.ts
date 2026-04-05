@@ -12,6 +12,10 @@ const nextConfig: NextConfig = {
 
 export default nextConfig;
 
-// added by create cloudflare to enable calling `getCloudflareContext()` in `next dev`
+// Enable `getCloudflareContext()` during local dev only — running this during
+// `next build` (invoked by `opennextjs-cloudflare build`) starts a second
+// workerd/Miniflare instance that causes SQLITE_BUSY crashes.
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
-initOpenNextCloudflareForDev();
+if (process.env.NODE_ENV === "development") {
+    initOpenNextCloudflareForDev();
+}

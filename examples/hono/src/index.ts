@@ -24,7 +24,7 @@ app.use(
 
 // Middleware to initialize auth instance for each request
 app.use("*", async (c, next) => {
-    const auth = createAuth(c.env, (c.req.raw as any).cf || {});
+    const auth = createAuth(c.env, (c.req.raw as any).cf || {}, new URL(c.req.url).origin);
     c.set("auth", auth);
     await next();
 });
@@ -285,7 +285,7 @@ app.get("/protected", async c => {
             headers: c.req.raw.headers,
         });
 
-        if (session?.session && session?.user) {
+        if (session) {
             return c.html(`
                 <h2>🔒 Protected Content - You're In!</h2>
                 <p>Welcome to the protected area!</p>

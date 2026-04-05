@@ -71,18 +71,18 @@ OpenNext.js requires a more complex auth configuration due to its async database
 
 ```typescript
 import { KVNamespace } from "@cloudflare/workers-types";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { openAPI } from "better-auth/plugins";
+import { drizzleAdapter } from "@better-auth/drizzle-adapter";
+import { anonymous, openAPI } from "better-auth/plugins";
 import { getDb } from "../db";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 // Define an asynchronous function to build your auth configuration
 async function authBuilder() {
     const dbInstance = await getDb(); // Get your D1 database instance
-    return betterAuth(
-        withCloudflare(
+    return betterAuth({
+        ...withCloudflare(
             {
                 autoDetectIpAddress: true,
                 geolocationTracking: true,
@@ -97,12 +97,6 @@ async function authBuilder() {
                 kv: process.env.KV as KVNamespace<string>,
             },
             {
-                emailAndPassword: {
-                    enabled: true,
-                },
-                socialProviders: {
-                    // Configure social providers as needed
-                },
                 rateLimit: {
                     enabled: true,
                     window: 60, // Minimum KV TTL is 60s
@@ -119,10 +113,10 @@ async function authBuilder() {
                         },
                     },
                 },
-                plugins: [openAPI()],
+                plugins: [openAPI(), anonymous()],
             }
-        )
-    );
+        ),
+    });
 }
 
 // Singleton pattern to ensure a single auth instance
@@ -136,6 +130,13 @@ export async function initAuth() {
     return authInstance;
 }
 ```
+
+### Environment Variables
+
+For production deployment, set the following via `wrangler.toml` `[vars]` or Cloudflare secrets:
+
+- `BETTER_AUTH_URL` — Your worker's base URL (e.g., `https://your-app.workers.dev`). Set as a `[vars]` entry.
+- `BETTER_AUTH_SECRET` — A random 32+ character secret. Set via `wrangler secret put BETTER_AUTH_SECRET`.
 
 ### CLI Schema Generation Configuration
 
@@ -155,10 +156,7 @@ export const auth = betterAuth({
         },
         {
             // Include only configurations that influence the Drizzle schema
-            emailAndPassword: {
-                enabled: true,
-            },
-            plugins: [openAPI()],
+            plugins: [openAPI(), anonymous()],
         }
     ),
 
