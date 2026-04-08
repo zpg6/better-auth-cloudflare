@@ -69,6 +69,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - [Usage Examples](#usage-examples)
     - [Accessing Geolocation Data](#accessing-geolocation-data)
 - [R2 File Storage Guide](./docs/r2.md)
+- [Configuration Reference](./docs/configuration.md)
 - [License](#license)
 - [Contributing](#contributing)
 
@@ -128,6 +129,8 @@ bun add better-auth-cloudflare
 | `geolocationTracking` | boolean | `true`      | Track geolocation data in the session table    |
 | `cf`                  | object  | `{}`        | Cloudflare geolocation context                 |
 | `r2`                  | object  | `undefined` | R2 bucket configuration for file storage       |
+
+For the full `WithCloudflareOptions` interface (including database, KV, and Drizzle adapter options), see the [Configuration Reference](./docs/configuration.md).
 
 ## Setup
 
