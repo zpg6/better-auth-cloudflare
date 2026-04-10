@@ -40,7 +40,7 @@ export default function SignOutButton() {
                             router.replace("/"); // Redirect to home page on sign out
                         });
                     },
-                    onError: err => {
+                    onError: (err: { error: { message: string } }) => {
                         console.error("Sign out error:", err);
                         setError(err.error.message || "Sign out failed. Please try again.");
                         // Optionally, still attempt to redirect or handle UI differently
