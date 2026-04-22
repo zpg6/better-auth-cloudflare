@@ -10,7 +10,10 @@ import {
     extractD1DatabaseId,
     extractHyperdriveId,
     extractKvNamespaceId,
+    findWranglerConfig,
+    findWranglerConfigWithExplicitPath,
     initializeGitRepository,
+    parseWranglerConfig,
     parseWranglerToml,
     replaceDemoCorsOrigin,
     updateD1BlockWithId,
@@ -779,27 +782,30 @@ async function migrate(cliArgs?: CliArgs) {
     // Check for updates in the background
     checkForUpdates();
 
-    // Check if we're in a project directory by looking for wrangler.toml
-    const wranglerPath = join(process.cwd(), "wrangler.toml");
-    if (!existsSync(wranglerPath)) {
-        fatal("No wrangler.toml found. Please run this command from a Cloudflare Workers project directory.");
+    // Check for explicit config path from --config flag
+    const explicitConfigPath = cliArgs?.config as string | undefined;
+
+    // Find wrangler config file (supports wrangler.json, wrangler.jsonc, wrangler.toml)
+    const config = explicitConfigPath
+        ? findWranglerConfigWithExplicitPath(explicitConfigPath)
+        : findWranglerConfig(process.cwd());
+
+    if (!config) {
+        fatal(
+            "No wrangler config found. Looked for wrangler.json, wrangler.jsonc, and wrangler.toml in " +
+                (explicitConfigPath ? explicitConfigPath : process.cwd()) +
+                ". Use --config to specify a custom path."
+        );
     }
 
-    // Read and parse wrangler.toml to detect database configurations
-    debugLog(`Reading wrangler.toml from: ${wranglerPath}`);
-    let wranglerContent: string;
-    try {
-        wranglerContent = readFileSync(wranglerPath, "utf8");
-    } catch (e) {
-        fatal("Failed to read wrangler.toml");
-        return;
-    }
-
-    const { databases, hasMultipleDatabases } = parseWranglerToml(wranglerContent);
-    debugLog(`Found ${databases.length} database configuration(s) in wrangler.toml`);
+    // config is guaranteed non-null after fatal call above
+    const wranglerConfig = config!;
+    debugLog(`Reading wrangler config from: ${wranglerConfig.path}`);
+    const { databases, hasMultipleDatabases } = parseWranglerConfig(wranglerConfig.content, wranglerConfig.format);
+    debugLog(`Found ${databases.length} database configuration(s) in ${wranglerConfig.path}`);
 
     if (databases.length === 0) {
-        fatal("No database configurations found in wrangler.toml. Please configure a D1 or Hyperdrive database.");
+        fatal("No database configurations found in wrangler config. Please configure a D1 or Hyperdrive database.");
     }
 
     const pm = detectPackageManager(process.cwd());
@@ -2296,6 +2302,7 @@ function printHelp() {
         `\n` +
         `Migrate command arguments:\n` +
         `  --migrate-target=<target>      For migrate command: dev | remote | skip (default: skip)\n` +
+        `  --config=<path>               Path to wrangler config file (default: auto-detect wrangler.json/jsonc/toml)\n` +
         `\n` +
         `Examples:\n` +
         `  # Create a Hono app with D1 database\n` +
@@ -2325,6 +2332,9 @@ function printHelp() {
         `\n` +
         `  # Run migration workflow with non-interactive target\n` +
         `  npx @better-auth-cloudflare/cli migrate --migrate-target=dev\n` +
+        `\n` +
+        `  # Run migration with explicit wrangler config file\n` +
+        `  npx @better-auth-cloudflare/cli migrate --config=wrangler.jsonc\n` +
         `\n` +
         `Creates a new Better Auth Cloudflare project from Hono or OpenNext.js templates,\n` +
         `optionally creating Cloudflare D1, KV, R2, or Hyperdrive resources for you.\n` +

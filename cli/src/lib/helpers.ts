@@ -177,6 +177,152 @@ export function parseWranglerToml(tomlContent: string): {
     };
 }
 
+export type WranglerConfigFormat = "toml" | "json" | "jsonc";
+
+export interface WranglerConfigResult {
+    path: string;
+    content: string;
+    format: WranglerConfigFormat;
+}
+
+export function findWranglerConfig(cwd: string = process.cwd()): WranglerConfigResult | null {
+    const { existsSync } = require("fs");
+    const { join } = require("path");
+
+    const configFiles: Array<{ name: string; format: WranglerConfigFormat }> = [
+        { name: "wrangler.json", format: "json" },
+        { name: "wrangler.jsonc", format: "jsonc" },
+        { name: "wrangler.toml", format: "toml" },
+    ];
+
+    for (const configFile of configFiles) {
+        const configPath = join(cwd, configFile.name);
+        if (existsSync(configPath)) {
+            const { readFileSync } = require("fs");
+            const content = readFileSync(configPath, "utf8");
+            return {
+                path: configPath,
+                content,
+                format: configFile.format,
+            };
+        }
+    }
+
+    return null;
+}
+
+export function findWranglerConfigWithExplicitPath(configPath: string): WranglerConfigResult | null {
+    const { existsSync, readFileSync } = require("fs");
+    const { extname, resolve } = require("path");
+
+    const resolvedPath = resolve(configPath);
+
+    if (!existsSync(resolvedPath)) {
+        return null;
+    }
+
+    const ext = extname(configPath).toLowerCase();
+    let format: WranglerConfigFormat;
+
+    switch (ext) {
+        case ".json":
+            format = "json";
+            break;
+        case ".jsonc":
+            format = "jsonc";
+            break;
+        case ".toml":
+            format = "toml";
+            break;
+        default:
+            return null;
+    }
+
+    const content = readFileSync(resolvedPath, "utf8");
+    return {
+        path: resolvedPath,
+        content,
+        format,
+    };
+}
+
+export function parseWranglerConfig(
+    content: string,
+    format: WranglerConfigFormat
+): {
+    databases: DatabaseConfig[];
+    hasMultipleDatabases: boolean;
+} {
+    const databases: DatabaseConfig[] = [];
+
+    if (format === "toml") {
+        const toml = require("@iarna/toml");
+        const parsed = toml.parse(content);
+        return parseWranglerConfigObject(parsed);
+    }
+
+    const jsonc = require("jsonc-simple-parser");
+    const parsed = jsonc.parse(content);
+    return parseWranglerConfigObject(parsed);
+}
+
+function parseWranglerConfigObject(parsed: Record<string, unknown>): {
+    databases: DatabaseConfig[];
+    hasMultipleDatabases: boolean;
+} {
+    const databases: DatabaseConfig[] = [];
+
+    const d1Databases = parsed.d1_databases as Array<Record<string, unknown>> | undefined;
+    if (d1Databases && Array.isArray(d1Databases)) {
+        for (const db of d1Databases) {
+            const binding = db.binding as string | undefined;
+            if (binding) {
+                databases.push({
+                    type: "d1",
+                    binding,
+                    name: db.database_name as string | undefined,
+                    id: db.database_id as string | undefined,
+                });
+            }
+        }
+    }
+
+    const hyperdriveConfigs = parsed.hyperdrive as Record<string, unknown> | undefined;
+    if (hyperdriveConfigs) {
+        if (Array.isArray(hyperdriveConfigs)) {
+            for (const hd of hyperdriveConfigs) {
+                const binding = hd.binding as string | undefined;
+                if (binding) {
+                    databases.push({
+                        type: "hyperdrive",
+                        binding,
+                        id: hd.id as string | undefined,
+                    });
+                }
+            }
+        } else if (typeof hyperdriveConfigs === "object") {
+            for (const hd of Object.values(hyperdriveConfigs)) {
+                if (typeof hd === "object" && hd !== null) {
+                    const hdObj = hd as Record<string, unknown>;
+                    const binding = hdObj.binding as string | undefined;
+                    if (binding) {
+                        databases.push({
+                            type: "hyperdrive",
+                            binding,
+                            id: hdObj.id as string | undefined,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    return {
+        databases,
+        hasMultipleDatabases: databases.length > 1,
+    };
+}
+
 // Functions to extract IDs from wrangler command responses
 export function extractD1DatabaseId(wranglerOutput: string): string | null {
     try {
