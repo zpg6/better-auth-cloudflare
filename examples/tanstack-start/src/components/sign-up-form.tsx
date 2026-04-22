@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { authClient } from '#/lib/auth-client'
+import { Field } from '#/components/field'
 
 export default function SignUpForm() {
   const navigate = useNavigate()
@@ -10,24 +11,16 @@ export default function SignUpForm() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
     setIsLoading(true)
 
     try {
-      const { error } = await authClient.signUp.email({
-        name,
-        email,
-        password,
-      })
-
-      if (error) {
-        setError(error.message || 'Failed to sign up')
-      } else {
-        navigate({ to: '/profile' })
-      }
-    } catch (err) {
+      const { error } = await authClient.signUp.email({ name, email, password })
+      if (error) setError(error.message || 'Failed to sign up')
+      else navigate({ to: '/profile' })
+    } catch {
       setError('An unexpected error occurred')
     } finally {
       setIsLoading(false)
@@ -35,67 +28,59 @@ export default function SignUpForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-w-sm">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       {error && (
-        <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-md">
-          {error}
+        <div
+          role="alert"
+          className="px-4 py-3 text-[13px] font-mono"
+          style={{
+            background: 'var(--color-signal-quiet)',
+            color: 'var(--color-signal)',
+            border: '1px solid var(--color-signal)',
+            borderRadius: '2px',
+          }}
+        >
+          ! {error}
         </div>
       )}
 
-      <div>
-        <label htmlFor="name" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-          Name
-        </label>
-        <input
-          id="name"
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-          className="w-full h-10 px-3 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-50 border border-neutral-300 dark:border-neutral-700 rounded-md focus:outline-none focus:ring-2 focus:ring-neutral-500"
-        />
-      </div>
+      <Field
+        id="name"
+        label="Name"
+        type="text"
+        value={name}
+        required
+        autoComplete="name"
+        onChange={setName}
+      />
+      <Field
+        id="email"
+        label="Email"
+        type="email"
+        value={email}
+        required
+        autoComplete="email"
+        onChange={setEmail}
+      />
+      <Field
+        id="password"
+        label="Password"
+        type="password"
+        value={password}
+        required
+        autoComplete="new-password"
+        minLength={8}
+        hint="Minimum 8 characters."
+        onChange={setPassword}
+      />
 
-      <div>
-        <label htmlFor="email" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          className="w-full h-10 px-3 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-50 border border-neutral-300 dark:border-neutral-700 rounded-md focus:outline-none focus:ring-2 focus:ring-neutral-500"
-        />
-      </div>
-
-      <div>
-        <label htmlFor="password" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-          Password
-        </label>
-        <input
-          id="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          minLength={8}
-          className="w-full h-10 px-3 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-50 border border-neutral-300 dark:border-neutral-700 rounded-md focus:outline-none focus:ring-2 focus:ring-neutral-500"
-        />
-      </div>
-
-      <button
-        type="submit"
-        disabled={isLoading}
-        className="h-10 px-4 text-sm font-medium bg-neutral-900 dark:bg-neutral-50 text-white dark:text-neutral-900 rounded-md hover:bg-neutral-700 dark:hover:bg-neutral-200 transition-colors disabled:opacity-50"
-      >
-        {isLoading ? 'Creating account...' : 'Sign up'}
+      <button type="submit" disabled={isLoading} className="btn-primary mt-2">
+        {isLoading ? 'Creating account…' : 'Create account →'}
       </button>
 
-      <p className="text-sm text-neutral-600 dark:text-neutral-400">
-        Already have an account?{' '}
-        <Link to="/sign-in" className="font-medium text-neutral-900 dark:text-neutral-50 hover:underline">
+      <p className="text-[13px] pt-2" style={{ color: 'var(--color-ink-dim)' }}>
+        Already registered?{' '}
+        <Link to="/sign-in" className="link-signal">
           Sign in
         </Link>
       </p>
