@@ -1,5 +1,11 @@
 This is an example TanStack Start application using [better-auth-cloudflare](https://github.com/better-auth/better-auth).
 
+See a live demo at [https://better-auth-cloudflare-tanstack-template.ahut10.workers.dev](https://better-auth-cloudflare-tanstack-template.ahut10.workers.dev).
+
+> ⚠️ intension is The demo database will be wiped on a schedule to keep it from filling up — don't rely on any data you create there persisting.
+
+> 🐛 Known issue: the Cloudflare-aware `request.cf` properties don't appear to be populating in the deployed demo right now. If you know why (or have ideas on how to debug it), contributions / pointers would be very welcome.
+
 # Getting Started
 
 Install dependencies:
