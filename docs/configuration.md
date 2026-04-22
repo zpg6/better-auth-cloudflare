@@ -240,7 +240,9 @@ withCloudflare(
 
 ---
 
-## `wrangler.toml` Reference
+## Wrangler Configuration Reference
+
+The CLI supports `wrangler.json`, `wrangler.jsonc`, or `wrangler.toml` configuration files (in order of precedence).
 
 Complete example with all supported binding types. Include only what you need.
 
@@ -285,7 +287,7 @@ BETTER_AUTH_TRUSTED_ORIGINS = "https://your-app.example.com"
 
 ### Binding Names and `env.d.ts`
 
-The `binding` value in `wrangler.toml` determines the property name on `env`. Declare them for type safety:
+The `binding` value in your wrangler config determines the property name on `env`. Declare them for type safety:
 
 ```typescript
 import type { D1Database, Hyperdrive, KVNamespace, R2Bucket } from "@cloudflare/workers-types";
@@ -300,7 +302,7 @@ interface CloudflareBindings {
 }
 ```
 
-These names are configurable — if you change `binding = "KV"` to `binding = "AUTH_KV"` in `wrangler.toml`, update `env.d.ts` and your auth config to match. The [CLI](../cli/README.md) supports `--kv-binding`, `--d1-binding`, and `--r2-binding` flags for this.
+These names are configurable — if you change `binding = "KV"` to `binding = "AUTH_KV"` in your wrangler config, update `env.d.ts` and your auth config to match. The [CLI](../cli/README.md) supports `--kv-binding`, `--d1-binding`, and `--r2-binding` flags for this.
 
 ---
 

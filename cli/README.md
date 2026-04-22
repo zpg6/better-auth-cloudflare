@@ -21,7 +21,7 @@ Generate a Better Auth Cloudflare project with D1, KV, R2, or Hyperdrive. This C
 
 ☁️ Handles Cloudflare resource creation:
 
-- Runs `wrangler d1/kv/r2 create` commands and configures `wrangler.toml`
+- Runs `wrangler d1/kv/r2 create` commands and configures your wrangler config file
 - Sets up Hyperdrive connections and auth integrations
 
 📦 Runs initial setup: `@better-auth/cli generate`, `drizzle-kit generate`, and optionally applies migrations
@@ -69,7 +69,7 @@ npx @better-auth-cloudflare/cli migrate              # Interactive
 npx @better-auth-cloudflare/cli migrate --migrate-target=dev  # Non-interactive
 ```
 
-The migrate command automatically detects your database configuration from `wrangler.toml`. It supports:
+The migrate command automatically detects your database configuration from your wrangler config file (`wrangler.json`, `wrangler.jsonc`, or `wrangler.toml`). It supports:
 
 - **D1 databases**: Offers migration options (dev/remote)
 - **Hyperdrive databases**: Shows informational message
@@ -121,6 +121,7 @@ The migrate command automatically detects your database configuration from `wran
 
 ```
 --migrate-target=<target>      For migrate command: dev | remote | skip (default: skip)
+--config=<path>                Path to wrangler config file (default: auto-detect wrangler.json/jsonc/toml)
 ```
 
 ## Examples
@@ -191,7 +192,7 @@ Creates a new Better Auth Cloudflare project from Hono or OpenNext.js templates,
 **Error `...Error [ERR_REQUIRE_ESM]: require() of ES Module...`**:
 
 Loading ECMAScript modules using `require()` should be supported by your nodejs.
-Make sure your node version is at least `v23.0.0`, `v22.12.0`, or `v20.19.0`, depending on the major version you use. 
+Make sure your node version is at least `v23.0.0`, `v22.12.0`, or `v20.19.0`, depending on the major version you use.
 Read more [here](https://nodejs.org/api/modules.html#loading-ecmascript-modules-using-require)
 
 ## Related
