@@ -23,6 +23,7 @@ export function ThemeToggle() {
     setMounted(true)
     const saved = (localStorage.getItem(STORAGE_KEY) as Theme | null) ?? 'system'
     setTheme(saved)
+    apply(saved)
   }, [])
 
   const cycle = () => {
