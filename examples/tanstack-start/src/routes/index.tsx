@@ -1,12 +1,8 @@
+import { authClient } from '#/lib/auth-client.ts';
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { authClient } from '#/lib/auth-client'
 
 export const Route = createFileRoute('/')({
-  component: Home,
-  loader: async () => {
-    const { data: session } = await authClient.getSession()
-    return { session }
-  },
+  component: Home
 })
 
 const highlights = [
@@ -63,7 +59,7 @@ const steps = [
 ]
 
 function Home() {
-  const { session } = Route.useLoaderData()
+  const session = authClient.useSession()?.data
 
   return (
     <div className="mx-auto max-w-6xl px-5 md:px-8">
