@@ -85,6 +85,18 @@ function RootDocument({ children }: { children: React.ReactNode }) {
               <span>rev.01</span>
               <span>·</span>
               <span>d1 · kv · workers</span>
+              <span>·</span>
+              <span>
+                {/* at least initially created by */}
+                created by{' '}
+                <a
+                  href="https://github.com/mrhut10"
+                  className="link-signal"
+                  style={{ color: 'var(--color-ink-dim)' }}
+                >
+                  mrhut10 ↗
+                </a>
+              </span>
               <span className="ml-auto">
                 <a
                   href="https://github.com/better-auth/better-auth"
