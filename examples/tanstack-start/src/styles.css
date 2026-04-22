@@ -219,8 +219,57 @@
     white-space: nowrap;
   }
 
+  .edge-status {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: help;
+    outline: none;
+  }
+  .edge-status:focus-visible > .label-meta,
+  .edge-status:focus-visible > span:first-child {
+    color: var(--color-signal);
+  }
+
+  .edge-status__pop {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: min(340px, calc(100vw - 2rem));
+    padding: 16px 16px 14px;
+    opacity: 0;
+    transform: translateY(-4px);
+    pointer-events: none;
+    transition: opacity 140ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    z-index: 50;
+    box-shadow: 0 8px 24px -8px color-mix(in oklch, var(--color-ink) 20%, transparent),
+                0 2px 6px -2px color-mix(in oklch, var(--color-ink) 12%, transparent);
+  }
+
+  .edge-status:hover > .edge-status__pop,
+  .edge-status:focus-visible > .edge-status__pop,
+  .edge-status:focus-within > .edge-status__pop {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .edge-status__arrow {
+    position: absolute;
+    top: -5px;
+    right: 20px;
+    width: 9px;
+    height: 9px;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-line);
+    border-left: 1px solid var(--color-line);
+    transform: rotate(45deg);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .signal-dot { animation: none; }
+    .edge-status__pop { transition: none; }
     * { transition: none !important; animation: none !important; }
   }
 }

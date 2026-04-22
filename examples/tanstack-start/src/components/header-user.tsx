@@ -1,6 +1,13 @@
 import { Link } from '@tanstack/react-router'
 import { authClient } from '#/lib/auth-client'
 
+type GeoSession = {
+  colo?: string | null
+  country?: string | null
+  city?: string | null
+  region?: string | null
+}
+
 export default function BetterAuthHeader() {
   const { data: session, isPending } = authClient.useSession()
 
@@ -14,13 +21,26 @@ export default function BetterAuthHeader() {
   }
 
   if (session?.user) {
+    const geo = (session.session ?? {}) as GeoSession
+    const pieces = [geo.colo, geo.country].filter(Boolean) as string[]
+
     return (
       <div className="flex items-center gap-3">
-        <Link
-          to="/profile"
-          className="flex items-center gap-2 group"
-          aria-label="Profile"
-        >
+        {pieces.length > 0 && (
+          <span
+            className="hidden md:inline-flex items-center label-meta"
+            title={[geo.city, geo.region, geo.country].filter(Boolean).join(', ')}
+            style={{
+              padding: '4px 8px',
+              border: '1px solid var(--color-line)',
+              background: 'var(--color-surface)',
+              borderRadius: '2px',
+            }}
+          >
+            {pieces.join(' · ')}
+          </span>
+        )}
+        <Link to="/profile" className="flex items-center gap-2 group" aria-label="Profile">
           {session.user.image ? (
             <img
               src={session.user.image}

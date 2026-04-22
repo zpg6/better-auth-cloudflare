@@ -3,6 +3,7 @@ import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import BetterAuthHeader from '../components/header-user.tsx'
 import { ThemeToggle } from '../components/theme-toggle.tsx'
+import { EdgeStatus } from '../components/edge-status.tsx'
 
 import appCss from '../styles.css?url'
 
@@ -70,9 +71,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
               </Link>
 
               <div className="ml-auto flex items-center gap-3 md:gap-5">
-                <span className="hidden sm:inline-flex items-center gap-2 label-meta">
-                  <span className="signal-dot" aria-hidden />
-                  edge · live
+                <span className="hidden sm:inline-flex">
+                  <EdgeStatus />
                 </span>
                 <ThemeToggle />
                 <BetterAuthHeader />
