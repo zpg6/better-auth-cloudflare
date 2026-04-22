@@ -6,6 +6,8 @@ import { ThemeToggle } from '../components/theme-toggle.tsx'
 import { EdgeStatus } from '../components/edge-status.tsx'
 
 import appCss from '../styles.css?url'
+import { getRequest } from '@tanstack/react-start/server';
+import { createServerFn } from '@tanstack/react-start';
 
 const GOOGLE_FONTS_CSS =
   'https://fonts.googleapis.com/css2?family=Hubot+Sans:ital,wght@0,200..900;1,200..900&family=Mona+Sans:ital,wght@0,200..900;1,200..900&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap'
@@ -13,7 +15,33 @@ const GOOGLE_FONTS_CSS =
 // Runs before React hydrates to avoid a flash of wrong theme.
 const themeInitScript = `(function(){try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark'){document.documentElement.style.colorScheme=t;document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`
 
+const getGeo = createServerFn().handler(async () => {
+  const cf = getRequest().cf;
+
+  const data : Partial<IncomingRequestCfPropertiesGeographicInformation> = {
+    city: cf?.city as string,
+    continent: cf?.continent as ContinentCode,
+    country: cf?.country as Iso3166Alpha2Code,
+    isEUCountry: cf?.isEUCountry as "1"|undefined,
+    latitude: cf?.latitude as string,
+    longitude: cf?.longitude as string,
+    metroCode: cf?.metroCode as string,
+    postalCode: cf?.postalCode as string,
+    region: cf?.region as string,
+    regionCode: cf?.regionCode as string,
+    timezone: cf?.timezone as string,
+  };
+
+  
+
+  return { data }
+})
+
 export const Route = createRootRoute({
+  loader: async () => {
+    const data = await getGeo();
+    return { geo: data?.data }
+  },
   head: () => ({
     meta: [
       { charSet: 'utf-8' },
@@ -45,6 +73,9 @@ function RootLayout() {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+
+  const {geo} = Route.useLoaderData()
+  
   return (
     <html lang="en">
       <head>
@@ -75,7 +106,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                   <EdgeStatus />
                 </span>
                 <ThemeToggle />
-                <BetterAuthHeader />
+                <BetterAuthHeader geo={geo}/>
               </div>
             </div>
           </header>

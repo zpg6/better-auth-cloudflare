@@ -7,8 +7,9 @@ type GeoSession = {
   city?: string | null
   region?: string | null
 }
+interface props { geo: GeoSession }
 
-export default function BetterAuthHeader() {
+export default function BetterAuthHeader({geo}: props) {
   const { data: session, isPending } = authClient.useSession()
 
   if (isPending) {
@@ -21,7 +22,7 @@ export default function BetterAuthHeader() {
   }
 
   if (session?.user) {
-    const geo = (session.session ?? {}) as GeoSession
+    // const geo = (session.session ?? {})// as GeoSession
     const pieces = [geo.colo, geo.country].filter(Boolean) as string[]
 
     return (
