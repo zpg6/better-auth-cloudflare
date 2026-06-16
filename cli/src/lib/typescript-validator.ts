@@ -69,10 +69,23 @@ export class TypeScriptValidator {
 
             // No need for package.json - if imports fail, that's a validation error we want to catch
 
-            // Try to use TypeScript compiler - use local installation from CLI project
-            // Run from CLI project directory but specify the temp directory's tsconfig
+            // Try to use TypeScript compiler - prefer the local CLI dependency first.
+            // Run from CLI project directory but specify the temp directory's tsconfig.
             const cliProjectDir = join(__dirname, "..", "..");
-            let result = spawnSync("npx", ["tsc", "--project", this.tempDir, "--noEmit"], {
+            const localTsc = join(
+                cliProjectDir,
+                "node_modules",
+                ".bin",
+                process.platform === "win32" ? "tsc.cmd" : "tsc"
+            );
+            const localTscPackage = join(cliProjectDir, "node_modules", "typescript", "bin", "tsc");
+            const command = existsSync(localTsc) ? localTsc : existsSync(localTscPackage) ? "node" : "npx";
+            const args = existsSync(localTsc)
+                ? ["--project", this.tempDir, "--noEmit"]
+                : existsSync(localTscPackage)
+                  ? [localTscPackage, "--project", this.tempDir, "--noEmit"]
+                  : ["tsc", "--project", this.tempDir, "--noEmit"];
+            let result = spawnSync(command, args, {
                 cwd: cliProjectDir,
                 encoding: "utf8",
                 stdio: "pipe",
