@@ -146,7 +146,7 @@ localConnectionString = "${localConnectionString}"`);
 name = "${binding}"
 
 [vars]
-BETTER_AUTH_EMAIL_FROM = "${config.emailFrom || "noreply@example.com"}"`);
+BETTER_AUTH_EMAIL_FROM = "${(config.emailFrom || "noreply@example.com").replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\r?\n/g, "\\n")}"`);
     }
 
     return resources.join("\n");
