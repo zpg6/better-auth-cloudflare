@@ -92,7 +92,7 @@ The migrate command automatically detects your database configuration from `wran
 
 **R2 Integration**: Enables file upload and management capabilities. See [R2 setup guide](../docs/r2.md) for detailed configuration and usage.
 
-**Email Integration**: Adds a Cloudflare Email Sending binding and wires Better Auth verification and password reset callbacks. The sender address must use a domain configured in Cloudflare Email Service.
+**Email Integration**: Adds a Cloudflare Email Sending binding and wires Better Auth verification and password reset callbacks. The sender address must use a domain configured in [Cloudflare Email Service](https://developers.cloudflare.com/email-service/configuration/domains/).
 
 ### Database-specific arguments
 

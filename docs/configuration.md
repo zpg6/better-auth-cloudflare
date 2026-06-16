@@ -206,15 +206,15 @@ withCloudflare(
 
 ### `CloudflareEmailConfig`
 
-| Field                     | Type                      | Default     | Description                                                                       |
-| ------------------------- | ------------------------- | ----------- | --------------------------------------------------------------------------------- |
-| `binding`                 | `SendEmail`               | Required    | Cloudflare Email Sending binding from `wrangler.toml`.                            |
-| `from`                    | `string \| EmailAddress`  | Required    | Default sender address. The domain must be onboarded in Cloudflare Email Service. |
-| `replyTo`                 | `string \| EmailAddress`  | `undefined` | Optional default Reply-To address.                                                |
-| `sendVerificationEmail`   | `boolean`                 | `true`      | Set to `false` to avoid auto-wiring Better Auth email verification.               |
-| `sendResetPassword`       | `boolean`                 | `true`      | Set to `false` to avoid auto-wiring Better Auth password reset emails.            |
-| `templates.verification`  | `CloudflareEmailTemplate` | Built-in    | Optional custom verification email subject/body template.                         |
-| `templates.passwordReset` | `CloudflareEmailTemplate` | Built-in    | Optional custom password reset subject/body template.                             |
+| Field                     | Type                      | Default     | Description                                                                                                                                                 |
+| ------------------------- | ------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `binding`                 | `SendEmail`               | Required    | Cloudflare Email Sending binding from `wrangler.toml`.                                                                                                      |
+| `from`                    | `string \| EmailAddress`  | Required    | Default sender address. The domain must be onboarded in [Cloudflare Email Service](https://developers.cloudflare.com/email-service/configuration/domains/). |
+| `replyTo`                 | `string \| EmailAddress`  | `undefined` | Optional default Reply-To address.                                                                                                                          |
+| `sendVerificationEmail`   | `boolean`                 | `true`      | Set to `false` to avoid auto-wiring Better Auth email verification.                                                                                         |
+| `sendResetPassword`       | `boolean`                 | `true`      | Set to `false` to avoid auto-wiring Better Auth password reset emails.                                                                                      |
+| `templates.verification`  | `CloudflareEmailTemplate` | Built-in    | Optional custom verification email subject/body template.                                                                                                   |
+| `templates.passwordReset` | `CloudflareEmailTemplate` | Built-in    | Optional custom password reset subject/body template.                                                                                                       |
 
 ### `createEmailSender(config)`
 
@@ -236,7 +236,7 @@ await sendEmail({
 });
 ```
 
-At least one of `text` or `html` is required. Cloudflare Email Service requires the `from` domain to be configured for Email Sending.
+At least one of `text` or `html` is required. Cloudflare Email Service requires the `from` domain to be [configured for Email Sending](https://developers.cloudflare.com/email-service/configuration/domains/).
 
 ---
 

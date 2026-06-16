@@ -288,6 +288,8 @@ export const auth = createAuth();
 export { createAuth };
 ```
 
+> Cloudflare Email Sending requires the `from` address to use an onboarded domain. Configure the sender domain in [Cloudflare Email Service domains](https://developers.cloudflare.com/email-service/configuration/domains/) before deploying real emails.
+
 The `baseURL` is derived per-request in Hono middleware via `new URL(c.req.url).origin`. On Cloudflare Workers, `request.url` reflects the actual URL the client connected to — Cloudflare's edge routes requests to your worker based on DNS and [route configuration](https://developers.cloudflare.com/workers/configuration/routing/routes/), not the HTTP `Host` header alone. Alternatively, you can set the `BETTER_AUTH_URL` environment variable and omit the `baseURL` parameter.
 
 **For OpenNext.js with complex async requirements:**
