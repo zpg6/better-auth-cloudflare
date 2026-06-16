@@ -97,6 +97,9 @@ interface GenerateAnswers {
     r2: boolean;
     r2Binding?: string;
     r2BucketName?: string;
+    email: boolean;
+    emailBinding?: string;
+    emailFrom?: string;
     // Cloudflare account configuration
     accountId?: string;
     skipCloudflareSetup?: boolean;
@@ -695,7 +698,7 @@ function validateCliArgs(args: CliArgs): string[] {
     }
 
     // Validate binding names
-    const bindingFields = ["d1-binding", "hd-binding", "kv-binding", "r2-binding"];
+    const bindingFields = ["d1-binding", "hd-binding", "kv-binding", "r2-binding", "email-binding"];
     for (const field of bindingFields) {
         if (args[field] !== undefined && typeof args[field] === "string") {
             const error = validateBindingName(String(args[field]));
@@ -752,6 +755,9 @@ function cliArgsToAnswers(args: CliArgs): Partial<GenerateAnswers> {
     if (args.r2 !== undefined) answers.r2 = Boolean(args.r2);
     if (args["r2-binding"]) answers.r2Binding = args["r2-binding"] as string;
     if (args["r2-bucket-name"]) answers.r2BucketName = args["r2-bucket-name"] as string;
+    if (args.email !== undefined) answers.email = Boolean(args.email);
+    if (args["email-binding"]) answers.emailBinding = args["email-binding"] as string;
+    if (args["email-from"]) answers.emailFrom = args["email-from"] as string;
 
     // Cloudflare account configuration
     if (args["account-id"]) answers.accountId = args["account-id"] as string;
@@ -1007,6 +1013,7 @@ async function generate(cliArgs?: CliArgs) {
             geolocation: partialAnswers.geolocation !== undefined ? partialAnswers.geolocation : true,
             kv: partialAnswers.kv !== undefined ? partialAnswers.kv : true,
             r2: partialAnswers.r2 !== undefined ? partialAnswers.r2 : false,
+            email: partialAnswers.email !== undefined ? partialAnswers.email : false,
             // D1 defaults
             d1Name:
                 partialAnswers.d1Name ||
@@ -1028,6 +1035,9 @@ async function generate(cliArgs?: CliArgs) {
             r2BucketName:
                 partialAnswers.r2BucketName ||
                 (partialAnswers.r2 ? `${partialAnswers.appName || "my-app"}-files` : undefined),
+            // Email defaults
+            emailBinding: partialAnswers.emailBinding || (partialAnswers.email ? "EMAIL" : undefined),
+            emailFrom: partialAnswers.emailFrom || (partialAnswers.email ? "noreply@example.com" : undefined),
             // Cloudflare account configuration
             accountId: partialAnswers.accountId,
             skipCloudflareSetup:
@@ -1165,6 +1175,25 @@ async function generate(cliArgs?: CliArgs) {
                               message: "R2 bucket name",
                               placeholder: `${(results.appName as string) || "my-app"}-files`,
                               defaultValue: `${(results.appName as string) || "my-app"}-files`,
+                          }) as Promise<string>)
+                        : undefined,
+                email: () =>
+                    confirm({ message: "Enable Cloudflare Email sending?", initialValue: false }) as Promise<boolean>,
+                emailBinding: ({ results }: { results: Partial<GenerateAnswers> }) =>
+                    results.email
+                        ? (text({
+                              message: "Email Sending binding name",
+                              placeholder: "EMAIL",
+                              defaultValue: "EMAIL",
+                              validate: validateBindingName,
+                          }) as Promise<string>)
+                        : undefined,
+                emailFrom: ({ results }: { results: Partial<GenerateAnswers> }) =>
+                    results.email
+                        ? (text({
+                              message: "Default sender email address",
+                              placeholder: "noreply@example.com",
+                              defaultValue: "noreply@example.com",
                           }) as Promise<string>)
                         : undefined,
             },
@@ -1370,13 +1399,16 @@ export const verification = {} as any;`;
             kv: Boolean(answers.kv),
             r2: Boolean(answers.r2),
             hyperdrive: answers.database.startsWith("hyperdrive"),
+            email: Boolean(answers.email),
         },
         bindings: {
             d1: answers.d1Binding,
             kv: answers.kvBinding,
             r2: answers.r2Binding,
             hyperdrive: answers.hdBinding,
+            email: answers.emailBinding,
         },
+        emailFrom: answers.emailFrom,
         skipCloudflareSetup: answers.skipCloudflareSetup,
         resourceIds: {
             r2BucketName: answers.r2BucketName,
@@ -1413,12 +1445,14 @@ export const verification = {} as any;`;
                 kv: Boolean(answers.kv),
                 r2: Boolean(answers.r2),
                 hyperdrive: answers.database.startsWith("hyperdrive"),
+                email: Boolean(answers.email),
             },
             bindings: {
                 d1: answers.d1Binding,
                 kv: answers.kvBinding,
                 r2: answers.r2Binding,
                 hyperdrive: answers.hdBinding,
+                email: answers.emailBinding,
             },
         };
 
@@ -1470,12 +1504,14 @@ export const verification = {} as any;`;
                     kv: Boolean(answers.kv),
                     r2: Boolean(answers.r2),
                     hyperdrive: answers.database.startsWith("hyperdrive"),
+                    email: Boolean(answers.email),
                 },
                 bindings: {
                     d1: answers.d1Binding,
                     kv: answers.kvBinding,
                     r2: answers.r2Binding,
                     hyperdrive: answers.hdBinding,
+                    email: answers.emailBinding,
                 },
             };
             const envPath = join(targetDir, "src/env.d.ts");
@@ -1558,12 +1594,14 @@ export const verification = {} as any;`;
                     kv: Boolean(answers.kv),
                     r2: Boolean(answers.r2),
                     hyperdrive: answers.database.startsWith("hyperdrive"),
+                    email: Boolean(answers.email),
                 },
                 bindings: {
                     d1: answers.d1Binding,
                     kv: answers.kvBinding,
                     r2: answers.r2Binding,
                     hyperdrive: answers.hdBinding,
+                    email: answers.emailBinding,
                 },
             };
             const envPath = join(targetDir, "env.d.ts");
@@ -2273,6 +2311,7 @@ function printHelp() {
         `  --geolocation=<bool>           Enable geolocation tracking (default: true)\n` +
         `  --kv=<bool>                    Use KV as secondary storage for Better Auth (default: true)\n` +
         `  --r2=<bool>                    Enable R2 to extend Better Auth with user file storage (default: false)\n` +
+        `  --email=<bool>                 Enable Cloudflare Email Sending for auth emails (default: false)\n` +
         `  --verbose                      Show debug output during execution\n` +
         `  -v                             Show debug output (when used with other args) or version (when alone)\n` +
         `\n` +
@@ -2288,6 +2327,8 @@ function printHelp() {
         `  --kv-namespace-name=<name>     KV namespace name (default: <app-name>-kv)\n` +
         `  --r2-binding=<binding>         R2 binding name (default: R2_BUCKET)\n` +
         `  --r2-bucket-name=<name>        R2 bucket name (default: <app-name>-files)\n` +
+        `  --email-binding=<binding>      Email Sending binding name (default: EMAIL)\n` +
+        `  --email-from=<email>           Default sender address for auth emails\n` +
         `\n` +
         `Cloudflare account arguments:\n` +
         `  --account-id=<id>              Cloudflare account ID (only required if you have multiple accounts)\n` +
@@ -2308,6 +2349,9 @@ function printHelp() {
         `  # Create app without KV or R2\n` +
         `  npx @better-auth-cloudflare/cli --app-name=minimal-app --kv=false --r2=false\n` +
         `\n` +
+        `  # Create app with Cloudflare Email Sending\n` +
+        `  npx @better-auth-cloudflare/cli --app-name=email-app --email=true --email-from=auth@example.com\n` +
+        `\n` +
         `  # Skip Cloudflare setup (useful for CI/CD)\n` +
         `  npx @better-auth-cloudflare/cli --app-name=ci-app --skip-cloudflare-setup=true\n` +
         `\n` +
@@ -2327,7 +2371,7 @@ function printHelp() {
         `  npx @better-auth-cloudflare/cli migrate --migrate-target=dev\n` +
         `\n` +
         `Creates a new Better Auth Cloudflare project from Hono or OpenNext.js templates,\n` +
-        `optionally creating Cloudflare D1, KV, R2, or Hyperdrive resources for you.\n` +
+        `optionally creating Cloudflare D1, KV, R2, Email, or Hyperdrive resources for you.\n` +
         `The migrate command runs auth:update, db:generate, and optionally db:migrate.\n` +
         `\n` +
         `Cloudflare Status: https://www.cloudflarestatus.com/\n` +
