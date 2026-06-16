@@ -49,8 +49,8 @@ function defaultPasswordResetTemplate({ url }: CloudflareEmailTemplateContext): 
     const escapedUrl = escapeHtml(url);
     return {
         subject: "Reset your password",
-        text: `Reset your password by opening this link: ${url}`,
-        html: `<p>Reset your password by opening this link:</p><p><a href="${escapedUrl}">${escapedUrl}</a></p>`,
+        text: `Reset your password by opening this link: ${url}\n\nIf you didn't request this, ignore this email.`,
+        html: `<p>Reset your password by opening this link:</p><p><a href="${escapedUrl}">${escapedUrl}</a></p><p>If you didn't request this, ignore this email.</p>`,
     };
 }
 

@@ -34,7 +34,7 @@ const auth = betterAuth({
 | `advanced`          | Merges your `authOptions.advanced` with IP detection headers when `autoDetectIpAddress` is enabled.                                                         |
 | `session`           | Merges your `authOptions.session`, forcing `storeSessionInDatabase: true` when `geolocationTracking` is enabled — even if you explicitly set it to `false`. |
 | `emailVerification` | Adds a Cloudflare Email `sendVerificationEmail` callback when `email` is configured and no custom callback exists.                                          |
-| `emailAndPassword`  | Adds a Cloudflare Email `sendResetPassword` callback when `email` is configured and no custom callback exists.                                              |
+| `emailAndPassword`  | Adds a Cloudflare Email `sendResetPassword` callback when `email` is configured and `emailAndPassword` is enabled and no custom callback exists.            |
 
 If you need a custom `secondaryStorage` that is not KV, omit the `kv` option and set `secondaryStorage` outside the spread:
 

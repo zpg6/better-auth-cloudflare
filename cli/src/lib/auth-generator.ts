@@ -129,6 +129,9 @@ async function authBuilder() {
             {
                 baseURL: cfCtx.env.BETTER_AUTH_URL,
                 trustedOrigins: (cfCtx.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "").split(",").filter(Boolean),
+                emailAndPassword: {
+                    enabled: true,
+                },
 ${emailAuthOptions}
                 rateLimit: {
                     enabled: true,
