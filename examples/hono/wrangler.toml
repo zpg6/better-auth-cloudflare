@@ -22,6 +22,12 @@ migrations_dir = "drizzle"
 binding = "KV"
 id = "YOUR_KV_NAMESPACE_ID"
 
+[[send_email]]
+name = "EMAIL"
+
+[vars]
+BETTER_AUTH_EMAIL_FROM = "noreply@example.com"
+
 # To protect the database id and kv id, we ignore this
 # file when committing to the repo by running once:
 # git update-index --assume-unchanged wrangler.toml

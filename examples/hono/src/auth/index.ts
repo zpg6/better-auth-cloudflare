@@ -28,10 +28,21 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, 
                       }
                     : undefined,
                 kv: env?.KV,
+                ...(env?.EMAIL
+                    ? {
+                          email: {
+                              binding: env.EMAIL,
+                              from: env.BETTER_AUTH_EMAIL_FROM,
+                          },
+                      }
+                    : {}),
             },
             {
                 emailAndPassword: {
                     enabled: true,
+                },
+                emailVerification: {
+                    sendOnSignUp: true,
                 },
                 plugins: [anonymous()],
                 rateLimit: {
