@@ -91,7 +91,7 @@ describe("createEmailSender", () => {
 });
 
 describe("createEmailOptions", () => {
-    test("adds default verification and reset callbacks when Email is configured", async () => {
+    test("adds a default verification callback without enabling password auth", async () => {
         const binding = new RecordingEmailBinding();
         const options = createEmailOptions(
             {
@@ -106,14 +106,9 @@ describe("createEmailOptions", () => {
             url: "https://app.example.com/verify?token=abc&next=<home>",
             token: "abc",
         });
-        await options.emailAndPassword?.sendResetPassword?.({
-            user,
-            url: "https://app.example.com/reset?token=def",
-            token: "def",
-        });
 
-        expect(options.emailAndPassword?.enabled).toBe(true);
-        expect(binding.sent).toHaveLength(2);
+        expect(options.emailAndPassword).toBeUndefined();
+        expect(binding.sent).toHaveLength(1);
         expect(binding.sent[0]).toMatchObject({
             from: "auth@example.com",
             to: "user@example.com",
@@ -121,11 +116,37 @@ describe("createEmailOptions", () => {
         });
         expect(binding.sent[0]?.text).toContain("https://app.example.com/verify?token=abc&next=<home>");
         expect(binding.sent[0]?.html).toContain("next=&lt;home&gt;");
-        expect(binding.sent[1]).toMatchObject({
+    });
+
+    test("adds a reset callback when email/password auth is already configured", async () => {
+        const binding = new RecordingEmailBinding();
+        const options = createEmailOptions(
+            {
+                binding,
+                from: "auth@example.com",
+            },
+            {
+                emailAndPassword: {
+                    enabled: true,
+                },
+            }
+        );
+
+        await options.emailAndPassword?.sendResetPassword?.({
+            user,
+            url: "https://app.example.com/reset?token=def",
+            token: "def",
+        });
+
+        expect(options.emailAndPassword?.enabled).toBe(true);
+        expect(binding.sent).toHaveLength(1);
+        expect(binding.sent[0]).toMatchObject({
             from: "auth@example.com",
             to: "user@example.com",
             subject: "Reset your password",
         });
+        expect(binding.sent[0]?.text).toContain("Reset your password by opening this link");
+        expect(binding.sent[0]?.html).toContain("Reset your password by opening this link");
     });
 
     test("preserves user callbacks and disabled email/password auth", async () => {

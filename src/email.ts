@@ -70,7 +70,9 @@ export function createEmailOptions<T extends BetterAuthOptions>(
 
     const sender = createEmailSender(email);
     const emailVerification: EmailVerificationOptions = { ...(options.emailVerification ?? {}) };
-    const emailAndPassword: EmailAndPasswordOptions = { enabled: true, ...(options.emailAndPassword ?? {}) };
+    const emailAndPassword: EmailAndPasswordOptions | undefined = options.emailAndPassword
+        ? { ...options.emailAndPassword }
+        : undefined;
 
     if (email.sendVerificationEmail !== false && !emailVerification.sendVerificationEmail) {
         emailVerification.sendVerificationEmail = async ({ user, url, token }, request) => {
@@ -87,7 +89,7 @@ export function createEmailOptions<T extends BetterAuthOptions>(
         };
     }
 
-    if (email.sendResetPassword !== false && !emailAndPassword.sendResetPassword) {
+    if (emailAndPassword && email.sendResetPassword !== false && !emailAndPassword.sendResetPassword) {
         emailAndPassword.sendResetPassword = async ({ user, url, token }, request) => {
             const content = await (email.templates?.passwordReset ?? defaultPasswordResetTemplate)({
                 user,
