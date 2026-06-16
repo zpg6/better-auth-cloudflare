@@ -111,7 +111,7 @@ function generateNextjsAuth(config: AuthConfig): string {
 
     const cloudflareConfig = generateNextjsCloudflareConfig(config);
     const cliDatabaseConfig = generateCliDatabaseConfig(config);
-    const emailAuthOptions = generateEmailAuthOptions(config, true);
+    const emailAuthOptions = generateEmailAuthOptions(config);
 
     return `${imports.join("\n")}
 
@@ -359,17 +359,10 @@ function generateNextjsCloudflareConfig(config: AuthConfig): string {
     return parts.join("");
 }
 
-function generateEmailAuthOptions(config: AuthConfig, includeEmailAndPassword = false): string {
+function generateEmailAuthOptions(config: AuthConfig): string {
     if (!config.resources.email) return "";
 
-    const emailAndPassword = includeEmailAndPassword
-        ? `
-                emailAndPassword: {
-                    enabled: true,
-                },`
-        : "";
-
-    return `${emailAndPassword}
+    return `
                 emailVerification: {
                     sendOnSignUp: true,
                 },`;

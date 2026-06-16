@@ -217,8 +217,6 @@ describe("Auth Generator", () => {
             expect(result).toContain("...(cfCtx.env.AUTH_EMAIL ? {");
             expect(result).toContain("binding: cfCtx.env.AUTH_EMAIL");
             expect(result).toContain("from: cfCtx.env.BETTER_AUTH_EMAIL_FROM");
-            expect(result).toContain("emailAndPassword: {");
-            expect(result).toContain("enabled: true");
             expect(result).toContain("emailVerification: {");
             expect(result).toContain("sendOnSignUp: true");
             expect(result).not.toContain("AUTH_EMAIL: {} as any");
