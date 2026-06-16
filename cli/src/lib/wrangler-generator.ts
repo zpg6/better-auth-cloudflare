@@ -6,13 +6,16 @@ export interface WranglerConfig {
         kv: boolean;
         r2: boolean;
         hyperdrive: boolean;
+        email?: boolean;
     };
     bindings: {
         d1?: string;
         kv?: string;
         r2?: string;
         hyperdrive?: string;
+        email?: string;
     };
+    emailFrom?: string;
     skipCloudflareSetup?: boolean;
     resourceIds?: {
         d1?: string;
@@ -132,6 +135,18 @@ bucket_name = "${bucketName}"`);
 binding = "${binding}"
 id = "${hyperdriveId}"
 localConnectionString = "${localConnectionString}"`);
+    }
+
+    // Email Sending
+    if (config.resources.email) {
+        const binding = config.bindings.email || "EMAIL";
+
+        resources.push(`
+[[send_email]]
+name = "${binding}"
+
+[vars]
+BETTER_AUTH_EMAIL_FROM = "${config.emailFrom || "noreply@example.com"}"`);
     }
 
     return resources.join("\n");

@@ -10,12 +10,14 @@ export interface EnvDConfig {
         kv: boolean;
         r2: boolean;
         hyperdrive: boolean;
+        email?: boolean;
     };
     bindings: {
         d1?: string;
         kv?: string;
         r2?: string;
         hyperdrive?: string;
+        email?: string;
     };
     database: "sqlite" | "postgres" | "mysql";
 }
@@ -48,6 +50,16 @@ export function generateEnvDFile(config: EnvDConfig): string {
     if (config.resources.r2 && config.bindings.r2) {
         typeImports.push("R2Bucket");
         bindings.push(`    ${config.bindings.r2}: R2Bucket;`);
+    }
+
+    // Add Email Sending binding
+    if (config.resources.email && config.bindings.email) {
+        typeImports.push("SendEmail");
+        bindings.push(`    ${config.bindings.email}: SendEmail;`);
+    }
+
+    if (config.resources.email) {
+        bindings.push("    BETTER_AUTH_EMAIL_FROM: string;");
     }
 
     // Always include at least one binding to prevent empty interface
@@ -126,6 +138,7 @@ export function validateEnvDContent(
                     line.includes(": KVNamespace") ||
                     line.includes(": R2Bucket") ||
                     line.includes(": Hyperdrive") ||
+                    line.includes(": SendEmail") ||
                     line.includes(": string")
                 ) {
                     errors.push(`Line ${i + 1} should end with semicolon: ${line}`);
