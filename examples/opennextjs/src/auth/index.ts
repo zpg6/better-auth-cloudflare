@@ -24,10 +24,14 @@ async function authBuilder() {
                 // Make sure "KV" is the binding in your wrangler.toml
                 kv: cfCtx.env.KV,
                 // Cloudflare Email Sending for verification and password reset emails
-                email: {
-                    binding: cfCtx.env.EMAIL,
-                    from: cfCtx.env.BETTER_AUTH_EMAIL_FROM,
-                },
+                ...(cfCtx.env.EMAIL
+                    ? {
+                          email: {
+                              binding: cfCtx.env.EMAIL,
+                              from: cfCtx.env.BETTER_AUTH_EMAIL_FROM,
+                          },
+                      }
+                    : {}),
                 // R2 configuration for file storage (R2_BUCKET binding from wrangler.toml)
                 r2: {
                     bucket: cfCtx.env.R2_BUCKET,
