@@ -64,6 +64,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
     - [3. Configure Better Auth (`src/auth/index.ts`)](#3-configure-better-auth-srcauthindexts)
     - [4. Generate and Manage Auth Schema](#4-generate-and-manage-auth-schema)
     - [5. Configure KV as Secondary Storage (Optional)](#5-configure-kv-as-secondary-storage-optional)
+        - [Important: KV and session revocation](#important-kv-and-session-revocation)
     - [6. Set Up API Routes](#6-set-up-api-routes)
     - [7. Initialize the Client](#7-initialize-the-client)
 - [Usage Examples](#usage-examples)
@@ -400,6 +401,26 @@ For integrating the generated `auth.schema.ts` with your existing Drizzle schema
 If you provide a KV namespace in the `withCloudflare` configuration (as shown in `src/auth/index.ts`), it will be used as [Secondary Storage](https://www.better-auth.com/docs/concepts/database#secondary-storage) by Better Auth. This is typically used for caching or storing session data that doesn't need to reside in your primary database.
 
 Ensure your KV namespace (e.g., `USER_SESSIONS`) is correctly bound in your `wrangler.toml` file.
+
+#### Important: KV and session revocation
+
+Better Auth resolves a session by checking secondary storage **before** the database, and returns immediately on a hit without consulting the database:
+
+```js
+// better-auth: internal-adapter, findSession
+if (secondaryStorage) {
+    const sessionStringified = await secondaryStorage.get(token);
+    if (sessionStringified) {
+        // returns here; the database is never consulted
+    }
+}
+```
+
+Workers KV is [eventually consistent](https://developers.cloudflare.com/kv/concepts/how-kv-works/). Changes may take 60 seconds or more to appear in another location. A stale positive session hit therefore bypasses the mirrored database after logout or another direct token revocation.
+
+Better Auth also maintains each user's active-session list with separate secondary-storage reads and writes. Concurrent session changes can lose a token reference, so bulk revocation, role or ban changes, or user deletion may miss that cached token until its original session expiry. A strongly consistent secondary store removes KV propagation lag for direct token reads and deletes, but it does not make the active-session update atomic.
+
+`session.storeSessionInDatabase: true` does not repair a stale positive hit. If bulk revocation, role or ban changes, or user deletion must take effect immediately everywhere, omit secondary session caching and leave `session.cookieCache` disabled unless Better Auth adds an atomic active-list update.
 
 #### Better Auth 1.7 atomic storage requirements
 

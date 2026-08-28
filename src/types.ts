@@ -77,6 +77,17 @@ export interface WithCloudflareOptions extends CloudflarePluginOptions {
      * `increment` operations. When using KV with Better Auth 1.7, configure
      * `verification.storeInDatabase: true` and route rate limiting to
      * `database`, `memory`, or `customStorage` explicitly.
+     *
+     * Better Auth accepts a positive secondary-storage session without checking
+     * the database. KV changes may take 60 seconds or more to appear in another
+     * location. Better Auth also updates each user's active-session list with
+     * separate reads and writes, so concurrent changes can lose a token
+     * reference until the session expires.
+     *
+     * For strict bulk revocation or immediate user changes, leave this unset
+     * and leave `session.cookieCache` disabled.
+     *
+     * @see https://developers.cloudflare.com/kv/concepts/how-kv-works/
      */
     kv?: KVNamespace;
 
