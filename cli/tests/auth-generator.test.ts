@@ -86,6 +86,24 @@ describe("Auth Generator", () => {
             expect(result).toContain("hooks: {");
         });
 
+        test("generates Email configuration with custom binding", () => {
+            const config: AuthConfig = {
+                template: "hono",
+                database: "sqlite",
+                resources: { d1: true, kv: false, r2: false, hyperdrive: false, email: true },
+                bindings: { d1: "DATABASE", email: "AUTH_EMAIL" },
+            };
+
+            const result = generateAuthFile(config);
+
+            expect(result).toContain("...(env?.AUTH_EMAIL ? {");
+            expect(result).toContain("email: {");
+            expect(result).toContain("binding: env.AUTH_EMAIL");
+            expect(result).toContain("from: env.BETTER_AUTH_EMAIL_FROM");
+            expect(result).toContain("emailVerification: {");
+            expect(result).toContain("sendOnSignUp: true");
+        });
+
         test("generates all resources configuration", () => {
             const config: AuthConfig = {
                 template: "hono",
@@ -184,6 +202,24 @@ describe("Auth Generator", () => {
             expect(result).toContain("r2: {");
             expect(result).toContain("bucket: {} as any, // Mock bucket for schema generation");
             expect(result).toContain("additionalFields: {");
+        });
+
+        test("generates Email configuration only for runtime", () => {
+            const config: AuthConfig = {
+                template: "nextjs",
+                database: "sqlite",
+                resources: { d1: true, kv: false, r2: false, hyperdrive: false, email: true },
+                bindings: { d1: "DATABASE", email: "AUTH_EMAIL" },
+            };
+
+            const result = generateAuthFile(config);
+
+            expect(result).toContain("...(cfCtx.env.AUTH_EMAIL ? {");
+            expect(result).toContain("binding: cfCtx.env.AUTH_EMAIL");
+            expect(result).toContain("from: cfCtx.env.BETTER_AUTH_EMAIL_FROM");
+            expect(result).toContain("emailVerification: {");
+            expect(result).toContain("sendOnSignUp: true");
+            expect(result).not.toContain("AUTH_EMAIL: {} as any");
         });
     });
 

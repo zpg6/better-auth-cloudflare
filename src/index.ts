@@ -4,12 +4,14 @@ import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
 import { schema } from "./schema";
 import { createR2Storage, createR2Endpoints } from "./r2";
+import { createEmailOptions } from "./email";
 import type { D1Database, KVNamespace } from "@cloudflare/workers-types";
 import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types";
 export * from "./client";
 export * from "./schema";
 export * from "./types";
 export * from "./r2";
+export * from "./email";
 
 /**
  * Cloudflare integration for Better Auth
@@ -229,9 +231,11 @@ export const withCloudflare = <T extends BetterAuthOptions>(
     }
 
     const plugins = [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])] as MergedPlugins<T>;
+    const emailOptions = createEmailOptions(cloudFlareOptions.email, options);
 
     return {
         ...options,
+        ...emailOptions,
         database,
         secondaryStorage: cloudFlareOptions.kv ? createKVStorage(cloudFlareOptions.kv) : undefined,
         plugins,

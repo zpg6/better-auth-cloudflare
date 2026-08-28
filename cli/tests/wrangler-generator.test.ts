@@ -191,17 +191,52 @@ describe("Wrangler Generator", () => {
         });
     });
 
+    describe("Email Sending Configuration", () => {
+        test("generates Email Sending configuration with default binding", () => {
+            const config: WranglerConfig = {
+                appName: "test-app",
+                template: "hono",
+                resources: { d1: false, kv: false, r2: false, hyperdrive: false, email: true },
+                bindings: {},
+            };
+
+            const result = generateWranglerToml(config);
+
+            expect(result).toContain("[[send_email]]");
+            expect(result).toContain('name = "EMAIL"');
+            expect(result).toContain("[vars]");
+            expect(result).toContain('BETTER_AUTH_EMAIL_FROM = "noreply@example.com"');
+        });
+
+        test("generates Email Sending configuration with custom binding and sender", () => {
+            const config: WranglerConfig = {
+                appName: "test-app",
+                template: "hono",
+                resources: { d1: false, kv: false, r2: false, hyperdrive: false, email: true },
+                bindings: { email: "AUTH_EMAIL" },
+                emailFrom: "auth@example.com",
+            };
+
+            const result = generateWranglerToml(config);
+
+            expect(result).toContain("[[send_email]]");
+            expect(result).toContain('name = "AUTH_EMAIL"');
+            expect(result).toContain('BETTER_AUTH_EMAIL_FROM = "auth@example.com"');
+        });
+    });
+
     describe("Multiple Resources", () => {
         test("generates all resources configuration", () => {
             const config: WranglerConfig = {
                 appName: "test-app",
                 template: "nextjs",
-                resources: { d1: true, kv: true, r2: true, hyperdrive: true },
+                resources: { d1: true, kv: true, r2: true, hyperdrive: true, email: true },
                 bindings: {
                     d1: "DATABASE",
                     kv: "KV",
                     r2: "R2_BUCKET",
                     hyperdrive: "HYPERDRIVE",
+                    email: "EMAIL",
                 },
             };
 
@@ -211,6 +246,8 @@ describe("Wrangler Generator", () => {
             expect(result).toContain("[[kv_namespaces]]");
             expect(result).toContain("[[r2_buckets]]");
             expect(result).toContain("[[hyperdrive]]");
+            expect(result).toContain("[[send_email]]");
+            expect(result).toContain('name = "EMAIL"');
             expect(result).toContain("[assets]"); // Next.js specific
         });
 

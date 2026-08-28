@@ -1,6 +1,6 @@
 # better-auth-cloudflare
 
-Seamlessly integrate [Better Auth](https://github.com/better-auth/better-auth) with Cloudflare Workers, D1, Hyperdrive, KV, R2, and geolocation services.
+Seamlessly integrate [Better Auth](https://github.com/better-auth/better-auth) with Cloudflare Workers, D1, Hyperdrive, KV, R2, Email, and geolocation services.
 
 [![NPM Version](https://img.shields.io/npm/v/better-auth-cloudflare)](https://www.npmjs.com/package/better-auth-cloudflare)
 [![NPM Downloads](https://img.shields.io/npm/dt/better-auth-cloudflare)](https://www.npmjs.com/package/better-auth-cloudflare)
@@ -19,6 +19,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - 🚀 **Hyperdrive Support**: Connect to Postgres and MySQL databases through Cloudflare Hyperdrive.
 - 🔌 **KV Storage Integration**: Optionally use Cloudflare KV for secondary storage (e.g., session caching).
 - 📁 **R2 File Storage**: Upload, download, and manage user files with Cloudflare R2 object storage and database tracking.
+- ✉️ **Cloudflare Email**: Send Better Auth verification and password reset emails through Cloudflare Email Sending.
 - 📍 **Automatic Geolocation Tracking**: Enrich user sessions with location data derived from Cloudflare.
 - 🌐 **Cloudflare IP Detection**: Utilize Cloudflare's IP detection headers out-of-the-box.
 - 🔍 **Rich Client-Side Context**: Access timezone, city, country, region, and more via the client plugin.
@@ -32,7 +33,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - [x] Hyperdrive (Postgres/MySQL)
 - [x] KV
 - [x] R2
-- [ ] Cloudflare Email
+- [x] Cloudflare Email
 - [ ] Cloudflare Images
 - [ ] Durable Objects
 - [ ] D1 Multi-Tenancy
@@ -103,7 +104,7 @@ npx @better-auth-cloudflare/cli@latest migrate                         # Interac
 npx @better-auth-cloudflare/cli@latest migrate --migrate-target=prod   # Non-interactive
 ```
 
-The CLI creates projects from Hono or Next.js templates and can automatically set up D1, KV, R2, and Hyperdrive resources. See [CLI Documentation](./cli/README.md) for full documentation and all available arguments.
+The CLI creates projects from Hono or Next.js templates and can automatically set up D1, KV, R2, Hyperdrive, and Cloudflare Email bindings. See [CLI Documentation](./cli/README.md) for full documentation and all available arguments.
 
 **Troubleshooting**:
 
@@ -129,8 +130,9 @@ bun add better-auth-cloudflare
 | `geolocationTracking` | boolean | `true`      | Track geolocation data in the session table    |
 | `cf`                  | object  | `{}`        | Cloudflare geolocation context                 |
 | `r2`                  | object  | `undefined` | R2 bucket configuration for file storage       |
+| `email`               | object  | `undefined` | Cloudflare Email Sending configuration         |
 
-For the full `WithCloudflareOptions` interface (including database, KV, and Drizzle adapter options), see the [Configuration Reference](./docs/configuration.md).
+For the full `WithCloudflareOptions` interface (including database, KV, Email, and Drizzle adapter options), see the [Configuration Reference](./docs/configuration.md).
 
 ## Setup
 
@@ -216,21 +218,37 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, 
                       }
                     : undefined,
                 kv: env?.KV,
+                // Optional: Send verification and password reset emails with Cloudflare Email
+                ...(env?.EMAIL
+                    ? {
+                          email: {
+                              binding: env.EMAIL,
+                              from: env.BETTER_AUTH_EMAIL_FROM,
+                          },
+                      }
+                    : {}),
                 // Optional: Enable R2 file storage
-                r2: {
-                    bucket: env.R2_BUCKET,
-                    maxFileSize: 10 * 1024 * 1024, // 10MB
-                    allowedTypes: [".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx"],
-                    additionalFields: {
-                        category: { type: "string", required: false },
-                        isPublic: { type: "boolean", required: false },
-                        description: { type: "string", required: false },
-                    },
-                },
+                ...(env?.R2_BUCKET
+                    ? {
+                          r2: {
+                              bucket: env.R2_BUCKET,
+                              maxFileSize: 10 * 1024 * 1024, // 10MB
+                              allowedTypes: [".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx"],
+                              additionalFields: {
+                                  category: { type: "string", required: false },
+                                  isPublic: { type: "boolean", required: false },
+                                  description: { type: "string", required: false },
+                              },
+                          },
+                      }
+                    : {}),
             },
             {
                 emailAndPassword: {
                     enabled: true,
+                },
+                emailVerification: {
+                    sendOnSignUp: true,
                 },
                 rateLimit: {
                     enabled: true,
@@ -269,6 +287,8 @@ export const auth = createAuth();
 // Export for runtime usage
 export { createAuth };
 ```
+
+> Cloudflare Email Sending requires the `from` address to use an onboarded domain. Configure the sender domain in [Cloudflare Email Service domains](https://developers.cloudflare.com/email-service/configuration/domains/) before deploying real emails.
 
 The `baseURL` is derived per-request in Hono middleware via `new URL(c.req.url).origin`. On Cloudflare Workers, `request.url` reflects the actual URL the client connected to — Cloudflare's edge routes requests to your worker based on DNS and [route configuration](https://developers.cloudflare.com/workers/configuration/routing/routes/), not the HTTP `Host` header alone. Alternatively, you can set the `BETTER_AUTH_URL` environment variable and omit the `baseURL` parameter.
 

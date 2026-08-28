@@ -8,3 +8,4 @@ bun.lock
 *.log
 .pnpm-store
 test-results/
+.opencode/
