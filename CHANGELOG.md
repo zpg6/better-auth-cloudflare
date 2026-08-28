@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.1 (2026-07-23)
+
+- Fix: support `@cloudflare/workers-types` v5 by widening the peer dependency to `>=4` ([#59](https://github.com/zpg6/better-auth-cloudflare/pull/59) by @mmcintosh)
+
 ## v0.3.0 (2026-04-05)
 
 ### Added
