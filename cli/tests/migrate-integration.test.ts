@@ -23,15 +23,6 @@ describe("Migrate Command Integration", () => {
         }
     });
 
-    test("migrate command fails without wrangler.toml", () => {
-        // Ensure no wrangler.toml exists
-        const wranglerPath = join(testDir, "wrangler.toml");
-        expect(existsSync(wranglerPath)).toBe(false);
-
-        // The migrate command should detect missing wrangler.toml
-        // This would be tested by actually running the CLI in real integration tests
-    });
-
     test("migrate command reads wrangler.toml correctly", () => {
         // Create a valid wrangler.toml with D1 database
         const wranglerContent = `

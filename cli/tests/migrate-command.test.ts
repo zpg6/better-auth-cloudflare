@@ -61,16 +61,6 @@ describe("Migrate Command", () => {
         }
     });
 
-    test("migrate command requires wrangler.toml", () => {
-        // This test verifies the logic that checks for wrangler.toml
-        // In actual implementation, this would check existsSync(wranglerPath)
-        const wranglerPath = "wrangler.toml";
-        expect(wranglerPath).toBe("wrangler.toml");
-
-        // The migrate command should fail if no wrangler.toml exists
-        // This would be tested in integration tests with actual file system
-    });
-
     test("migrate command supports different database types", () => {
         const supportedDatabases = ["d1", "hyperdrive-postgres", "hyperdrive-mysql"];
 
@@ -151,8 +141,8 @@ describe("Migrate Command", () => {
         // Test error scenarios
         const errorScenarios = [
             {
-                condition: "no wrangler.toml",
-                expectedError: "No wrangler.toml found",
+                condition: "no Wrangler config",
+                expectedError: "No Wrangler config found",
             },
             {
                 condition: "invalid migrate-target",
@@ -253,7 +243,7 @@ describe("Migrate Command", () => {
         }
     });
 
-    test("migrate command handles different database types from wrangler.toml", () => {
+    test("migrate command handles database types from a parsed Wrangler config", () => {
         const wranglerConfigs = [
             {
                 databases: [{ type: "d1", binding: "DATABASE", name: "test-app-db" }],

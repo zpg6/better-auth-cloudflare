@@ -1,3 +1,8 @@
+import { existsSync, readFileSync, statSync } from "fs";
+import { dirname, join, resolve } from "path";
+import { parse as parseJSONC, printParseErrorCode, type ParseError } from "jsonc-parser";
+import { parse as parseTOML } from "smol-toml";
+
 export type JSONValue = string | number | boolean | null | JSONArray | JSONObject;
 export interface JSONObject {
     [key: string]: JSONValue;
@@ -128,46 +133,147 @@ export function parseWranglerToml(tomlContent: string): {
     databases: DatabaseConfig[];
     hasMultipleDatabases: boolean;
 } {
-    const databases: DatabaseConfig[] = [];
+    return parseWranglerConfigObject(parseTOML(tomlContent));
+}
 
-    // Parse D1 databases
-    const d1Regex = /\[\[d1_databases\]\]\s*\n([^[]*?)(?=\n\[|\n$|$)/g;
-    let d1Match;
-    while ((d1Match = d1Regex.exec(tomlContent)) !== null) {
-        const block = d1Match[1];
-        const bindingRegex = /binding\s*=\s*"([^"]+)"/;
-        const nameRegex = /database_name\s*=\s*"([^"]+)"/;
-        const idRegex = /database_id\s*=\s*"([^"]+)"/;
-        const bindingMatch = bindingRegex.exec(block);
-        const nameMatch = nameRegex.exec(block);
-        const idMatch = idRegex.exec(block);
+export type WranglerConfigFormat = "toml" | "json" | "jsonc";
 
-        if (bindingMatch) {
-            databases.push({
-                type: "d1",
-                binding: bindingMatch[1],
-                name: nameMatch?.[1],
-                id: idMatch?.[1],
-            });
+export interface WranglerConfigResult {
+    path: string;
+    content: string;
+    format: WranglerConfigFormat;
+}
+
+function findFileUpward(referencePath: string, filename: string): string | null {
+    let directory = resolve(referencePath);
+    while (true) {
+        const candidate = join(directory, filename);
+        if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+        const parent = dirname(directory);
+        if (parent === directory) return null;
+        directory = parent;
+    }
+}
+
+const unsupportedBoms = [
+    { bytes: Buffer.from([0x00, 0x00, 0xfe, 0xff]), encoding: "UTF-32 BE" },
+    { bytes: Buffer.from([0xff, 0xfe, 0x00, 0x00]), encoding: "UTF-32 LE" },
+    { bytes: Buffer.from([0xfe, 0xff]), encoding: "UTF-16 BE" },
+    { bytes: Buffer.from([0xff, 0xfe]), encoding: "UTF-16 LE" },
+];
+
+function readWranglerConfigFile(configPath: string): string {
+    const content = readFileSync(configPath);
+    for (const bom of unsupportedBoms) {
+        if (content.subarray(0, bom.bytes.length).equals(bom.bytes)) {
+            throw new Error(`Wrangler config uses ${bom.encoding}. Save it as UTF-8.`);
         }
     }
 
-    // Parse Hyperdrive databases
-    const hyperdriveRegex = /\[\[hyperdrive\]\]\s*\n([^[]*?)(?=\n\[|\n$|$)/g;
-    let hyperdriveMatch;
-    while ((hyperdriveMatch = hyperdriveRegex.exec(tomlContent)) !== null) {
-        const block = hyperdriveMatch[1];
-        const bindingRegex = /binding\s*=\s*"([^"]+)"/;
-        const idRegex = /id\s*=\s*"([^"]+)"/;
-        const bindingMatch = bindingRegex.exec(block);
-        const idMatch = idRegex.exec(block);
+    const utf8Bom = Buffer.from([0xef, 0xbb, 0xbf]);
+    const start = content.subarray(0, utf8Bom.length).equals(utf8Bom) ? utf8Bom.length : 0;
+    return content.subarray(start).toString("utf8");
+}
 
-        if (bindingMatch) {
-            databases.push({
-                type: "hyperdrive",
-                binding: bindingMatch[1],
-                id: idMatch?.[1],
-            });
+export function findWranglerConfig(cwd: string = process.cwd()): WranglerConfigResult | null {
+    const configFiles: Array<{ name: string; format: WranglerConfigFormat }> = [
+        { name: "wrangler.json", format: "json" },
+        { name: "wrangler.jsonc", format: "jsonc" },
+        { name: "wrangler.toml", format: "toml" },
+    ];
+
+    for (const configFile of configFiles) {
+        const configPath = findFileUpward(cwd, configFile.name);
+        if (configPath) {
+            const content = readWranglerConfigFile(configPath);
+            return {
+                path: configPath,
+                content,
+                format: configFile.format,
+            };
+        }
+    }
+
+    return null;
+}
+
+export function parseWranglerConfig(
+    content: string,
+    format: WranglerConfigFormat
+): {
+    databases: DatabaseConfig[];
+    hasMultipleDatabases: boolean;
+} {
+    if (format === "toml") {
+        return parseWranglerToml(content);
+    }
+
+    const errors: ParseError[] = [];
+    const parsed: unknown = parseJSONC(content, errors, {
+        allowTrailingComma: true,
+    });
+    if (errors.length > 0) {
+        const firstError = errors[0];
+        throw new Error(
+            `Invalid ${format.toUpperCase()} Wrangler config: ${printParseErrorCode(firstError.error)} at offset ${firstError.offset}.`
+        );
+    }
+    return parseWranglerConfigObject(parsed);
+}
+
+interface WranglerConfigShape {
+    d1_databases?: unknown;
+    hyperdrive?: unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readOptionalString(value: unknown): string | undefined {
+    return typeof value === "string" ? value : undefined;
+}
+
+function parseWranglerConfigObject(parsed: unknown): {
+    databases: DatabaseConfig[];
+    hasMultipleDatabases: boolean;
+} {
+    if (!isRecord(parsed)) {
+        throw new Error("Wrangler config must contain an object at its root.");
+    }
+
+    const config: WranglerConfigShape = {
+        d1_databases: parsed["d1_databases"],
+        hyperdrive: parsed["hyperdrive"],
+    };
+    const databases: DatabaseConfig[] = [];
+
+    if (Array.isArray(config.d1_databases)) {
+        for (const db of config.d1_databases) {
+            if (!isRecord(db)) continue;
+            const binding = readOptionalString(db["binding"]);
+            if (binding) {
+                databases.push({
+                    type: "d1",
+                    binding,
+                    name: readOptionalString(db["database_name"]),
+                    id: readOptionalString(db["database_id"]),
+                });
+            }
+        }
+    }
+
+    if (Array.isArray(config.hyperdrive)) {
+        for (const hd of config.hyperdrive) {
+            if (!isRecord(hd)) continue;
+            const binding = readOptionalString(hd["binding"]);
+            if (binding) {
+                databases.push({
+                    type: "hyperdrive",
+                    binding,
+                    id: readOptionalString(hd["id"]),
+                });
+            }
         }
     }
 

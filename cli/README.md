@@ -69,11 +69,10 @@ npx @better-auth-cloudflare/cli migrate              # Interactive
 npx @better-auth-cloudflare/cli migrate --migrate-target=dev  # Non-interactive
 ```
 
-The migrate command automatically detects your database configuration from `wrangler.toml`. It supports:
+`migrate` searches the current directory and its parents for `wrangler.json`, then `wrangler.jsonc`, then `wrangler.toml`. It handles:
 
-- **D1 databases**: Offers migration options (dev/remote)
-- **Hyperdrive databases**: Shows informational message
-- **Multiple databases**: Prompts you to choose which D1 database to migrate
+- D1 databases with local and remote migration options
+- Hyperdrive databases with migration guidance
 
 ## Arguments
 
