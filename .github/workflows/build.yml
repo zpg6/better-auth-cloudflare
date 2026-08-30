@@ -17,7 +17,7 @@ jobs:
             - name: Setup Node.js
               uses: actions/setup-node@v4
               with:
-                  node-version: "20"
+                  node-version: "22"
 
             - name: Setup pnpm
               uses: pnpm/action-setup@v4
@@ -26,10 +26,53 @@ jobs:
                   run_install: false
 
             - name: Install dependencies
-              run: pnpm install
+              run: pnpm install --frozen-lockfile
 
             - name: Build
               run: pnpm build
+
+            - name: Unit tests
+              run: pnpm test:unit
+
+            - name: Typecheck
+              run: pnpm typecheck
+
+    compatibility:
+        name: Better Auth ${{ matrix.better_auth }} compatibility
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                better_auth: ["1.5.6", "1.6.30"]
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 10.10.0
+                  run_install: false
+
+            - name: Install locked dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Select Better Auth ${{ matrix.better_auth }}
+              run: >-
+                  pnpm add --save-dev --save-exact
+                  better-auth@${{ matrix.better_auth }}
+                  @better-auth/drizzle-adapter@${{ matrix.better_auth }}
+
+            - name: Build
+              run: pnpm build
+
+            - name: Unit tests
+              run: pnpm test:unit
 
             - name: Typecheck
               run: pnpm typecheck

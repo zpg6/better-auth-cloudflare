@@ -5,6 +5,7 @@ on:
         branches: [main]
         paths:
             - "package.json"
+            - "pnpm-lock.yaml"
             - "src/**"
             - "tsconfig.json"
             - "examples/hono/**"
@@ -13,6 +14,7 @@ on:
         branches: [main]
         paths:
             - "package.json"
+            - "pnpm-lock.yaml"
             - "src/**"
             - "tsconfig.json"
             - "examples/hono/**"
@@ -29,7 +31,7 @@ jobs:
             - name: Setup Node.js
               uses: actions/setup-node@v4
               with:
-                  node-version: "20"
+                  node-version: "22"
 
             - name: Setup pnpm
               uses: pnpm/action-setup@v4
@@ -38,14 +40,14 @@ jobs:
                   run_install: false
 
             - name: Install root dependencies
-              run: pnpm install
+              run: pnpm install --frozen-lockfile
 
             - name: Build root package
               run: pnpm build
 
             - name: Install example dependencies
               working-directory: examples/hono
-              run: pnpm install
+              run: pnpm install --frozen-lockfile
 
             - name: Build Hono example
               working-directory: examples/hono

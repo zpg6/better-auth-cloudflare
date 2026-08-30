@@ -86,7 +86,7 @@ The migrate command automatically detects your database configuration from `wran
 --r2=<bool>                    Enable R2 to extend Better Auth with user file storage (default: false)
 ```
 
-**KV Integration**: Provides secondary storage for Better Auth sessions, rate limiting, and other features. See [Better Auth secondary storage documentation](https://www.better-auth.com/docs/reference/options#secondarystorage).
+**KV Integration**: Provides session caching and legacy Better Auth 1.5/1.6 secondary-storage fallbacks. Better Auth 1.7 requires atomic verification and rate-limit operations that Workers KV cannot provide. See the repository's KV configuration guide before upgrading.
 
 **R2 Integration**: Enables file upload and management capabilities. See [R2 setup guide](../docs/r2.md) for detailed configuration and usage.
 
@@ -191,7 +191,7 @@ Creates a new Better Auth Cloudflare project from Hono or OpenNext.js templates,
 **Error `...Error [ERR_REQUIRE_ESM]: require() of ES Module...`**:
 
 Loading ECMAScript modules using `require()` should be supported by your nodejs.
-Make sure your node version is at least `v23.0.0`, `v22.12.0`, or `v20.19.0`, depending on the major version you use. 
+Make sure your node version is at least `v23.0.0`, `v22.12.0`, or `v20.19.0`, depending on the major version you use.
 Read more [here](https://nodejs.org/api/modules.html#loading-ecmascript-modules-using-require)
 
 ## Related

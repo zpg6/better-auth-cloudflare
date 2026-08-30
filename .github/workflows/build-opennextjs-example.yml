@@ -5,18 +5,20 @@ on:
         branches: [main]
         paths:
             - "package.json"
+            - "pnpm-lock.yaml"
             - "src/**"
             - "tsconfig.json"
             - "examples/opennextjs/**"
-            - ".github/workflows/build-example.yml" # This file
+            - ".github/workflows/build-opennextjs-example.yml" # This file
     pull_request:
         branches: [main]
         paths:
             - "package.json"
+            - "pnpm-lock.yaml"
             - "src/**"
             - "tsconfig.json"
             - "examples/opennextjs/**"
-            - ".github/workflows/build-example.yml" # This file
+            - ".github/workflows/build-opennextjs-example.yml" # This file
     workflow_dispatch:
 
 jobs:
@@ -29,7 +31,7 @@ jobs:
             - name: Setup Node.js
               uses: actions/setup-node@v4
               with:
-                  node-version: "20"
+                  node-version: "22"
 
             - name: Setup pnpm
               uses: pnpm/action-setup@v4
@@ -38,14 +40,14 @@ jobs:
                   run_install: false
 
             - name: Install root dependencies
-              run: pnpm install
+              run: pnpm install --frozen-lockfile
 
             - name: Build root package
               run: pnpm build
 
             - name: Install example dependencies
               working-directory: examples/opennextjs
-              run: pnpm install
+              run: pnpm install --frozen-lockfile
 
             - name: Build Example (OpenNextJS)
               working-directory: examples/opennextjs

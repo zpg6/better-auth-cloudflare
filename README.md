@@ -216,37 +216,31 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, 
                       }
                     : undefined,
                 kv: env?.KV,
+                kvAtomicCompatibility: env?.KV ? true : undefined,
                 // Optional: Enable R2 file storage
-                r2: {
-                    bucket: env.R2_BUCKET,
-                    maxFileSize: 10 * 1024 * 1024, // 10MB
-                    allowedTypes: [".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx"],
-                    additionalFields: {
-                        category: { type: "string", required: false },
-                        isPublic: { type: "boolean", required: false },
-                        description: { type: "string", required: false },
-                    },
-                },
+                r2: env?.R2_BUCKET
+                    ? {
+                          bucket: env.R2_BUCKET,
+                          maxFileSize: 10 * 1024 * 1024, // 10MB
+                          allowedTypes: [".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx"],
+                          additionalFields: {
+                              category: { type: "string", required: false },
+                              isPublic: { type: "boolean", required: false },
+                              description: { type: "string", required: false },
+                          },
+                      }
+                    : undefined,
             },
             {
                 emailAndPassword: {
                     enabled: true,
                 },
+                verification: {
+                    storeInDatabase: true,
+                },
                 rateLimit: {
                     enabled: true,
-                    window: 60, // Minimum KV TTL is 60s
-                    max: 100, // reqs/window
-                    customRules: {
-                        // https://github.com/better-auth/better-auth/issues/5452
-                        "/sign-in/email": {
-                            window: 60,
-                            max: 100,
-                        },
-                        "/sign-in/social": {
-                            window: 60,
-                            max: 100,
-                        },
-                    },
+                    storage: "database",
                 },
             }
         ),
@@ -407,30 +401,30 @@ If you provide a KV namespace in the `withCloudflare` configuration (as shown in
 
 Ensure your KV namespace (e.g., `USER_SESSIONS`) is correctly bound in your `wrangler.toml` file.
 
-#### Important: KV TTL Limitation
+#### Better Auth 1.7 atomic storage requirements
 
-Cloudflare KV has a minimum TTL (Time To Live) requirement of **60 seconds**. If you're using KV for secondary storage with rate limiting enabled, you **must** configure your rate limit windows to be at least 60 seconds to prevent crashes:
+Better Auth 1.7 requires secondary storage to atomically consume verification values and increment rate-limit counters. Workers KV cannot provide either operation. When using KV with Better Auth 1.7, route those operations explicitly:
 
 ```typescript
+verification: {
+    storeInDatabase: true,
+},
 rateLimit: {
-    enabled: true,
-    window: 60, // Minimum KV TTL is 60s
-    max: 100, // reqs/window
-    customRules: {
-        // https://github.com/better-auth/better-auth/issues/5452
-        "/sign-in/email": {
-            window: 60,
-            max: 100,
-        },
-        "/sign-in/social": {
-            window: 60,
-            max: 100,
-        },
-    },
+    storage: "database",
 },
 ```
 
-The library automatically enforces this minimum and will log a warning if a TTL less than 60 seconds is attempted, but it's better to configure your rate limits correctly from the start.
+Also set `kvAtomicCompatibility: true` next to the `kv` binding. It validates this configuration at startup and does not select a storage backend for you.
+
+Database-backed rate limiting typically adds at least one database read and one write to accepted Better Auth requests. Contention, resets, cleanup, and rejected requests can add operations. This affects latency and billing, so the library does not enable it automatically. `rateLimit.customStorage` can provide an atomic `consume` implementation backed by a strongly consistent store such as Redis or Durable Objects. `storage: "memory"` avoids database traffic but is not a distributed rate limit on Workers.
+
+`createKVStorage()` deliberately exposes only KV's non-atomic `get`, `set`, and `delete` operations. Use `withCloudflare()` for Better Auth 1.7 so the package can wire KV session storage while the settings above keep atomic operations elsewhere.
+
+Database-backed rate limiting requires Better Auth's rate-limit table. Generate the 1.7 schema with the same `auth` package version you deploy. For a populated 1.6 database, do not apply a plain generated schema. Follow the [Better Auth 1.7 migration guide](https://better-auth.com/docs/guides/1-7-upgrade-guide), including `auth migrate plan` and a rehearsed migration against a restored backup.
+
+#### Important: KV TTL Limitation
+
+Workers KV has a minimum physical TTL of 60 seconds. `createKVStorage()` clamps shorter TTLs to 60 seconds and logs a warning. Better Auth 1.5 and 1.6 rate limiting keeps its own timestamps, so a shorter logical window can still expire while the KV key remains stored. Do not weaken Better Auth's protected sign-in rules just to match KV's physical TTL.
 
 ### 6. Set Up API Routes
 

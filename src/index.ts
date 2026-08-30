@@ -110,10 +110,17 @@ function extractGeolocationData(input: CloudflareGeolocation): CloudflareGeoloca
 /**
  * Creates secondary storage using Cloudflare KV
  *
+ * Workers KV cannot provide Better Auth 1.7's atomic `getAndDelete` and
+ * `increment` operations, so this adapter intentionally does not advertise
+ * them. Route verification and rate limiting to a database or another
+ * strongly consistent store when using Better Auth 1.7.
+ *
  * @param kv - Cloudflare KV namespace
- * @returns SecondaryStorage implementation
+ * @returns KV-backed get, set, and delete operations
  */
-export const createKVStorage = (kv: KVNamespace): SecondaryStorage => {
+export type CloudflareKVStorage = Pick<SecondaryStorage, "get" | "set" | "delete">;
+
+export const createKVStorage = (kv: KVNamespace): CloudflareKVStorage => {
     return {
         get: async (key: string) => {
             return kv.get(key);
@@ -187,7 +194,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(
         // For now, let's assume if autoDetectIpEnabled is false, the user manages headers explicitly.
     }
 
-    let updatedSession = { ...options.session };
+    const updatedSession = { ...options.session };
     if (geolocationTrackingForSession) {
         updatedSession.storeSessionInDatabase = true;
     } else if (options.session?.storeSessionInDatabase === undefined) {
@@ -208,7 +215,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(
         );
     }
 
-    let database: ReturnType<typeof drizzleAdapter> | D1Database | undefined;
+    let database = options.database;
     if (cloudFlareOptions.d1Native) {
         database = cloudFlareOptions.d1Native;
     } else if (cloudFlareOptions.postgres) {
@@ -228,12 +235,39 @@ export const withCloudflare = <T extends BetterAuthOptions>(
         });
     }
 
+    if (cloudFlareOptions.kv && options.secondaryStorage) {
+        throw new Error("Configure either withCloudflare({ kv }) or authOptions.secondaryStorage, not both.");
+    }
+
+    if (cloudFlareOptions.kvAtomicCompatibility) {
+        if (!cloudFlareOptions.kv) {
+            throw new Error("kvAtomicCompatibility requires a Workers KV namespace.");
+        }
+        if (!database || options.verification?.storeInDatabase !== true) {
+            throw new Error("kvAtomicCompatibility requires a database and verification.storeInDatabase: true.");
+        }
+
+        const rateLimitUsesSupportedStorage =
+            options.rateLimit?.enabled === false ||
+            Boolean(options.rateLimit?.customStorage) ||
+            options.rateLimit?.storage === "database" ||
+            options.rateLimit?.storage === "memory";
+        if (!rateLimitUsesSupportedStorage) {
+            throw new Error(
+                "kvAtomicCompatibility requires rateLimit.storage to be database or memory, rateLimit.customStorage, or disabled rate limiting."
+            );
+        }
+    }
+
     const plugins = [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])] as MergedPlugins<T>;
+    const secondaryStorage = cloudFlareOptions.kv
+        ? (createKVStorage(cloudFlareOptions.kv) as SecondaryStorage)
+        : options.secondaryStorage;
 
     return {
         ...options,
         database,
-        secondaryStorage: cloudFlareOptions.kv ? createKVStorage(cloudFlareOptions.kv) : undefined,
+        secondaryStorage,
         plugins,
         advanced: updatedAdvanced,
         session: updatedSession,

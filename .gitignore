@@ -8,3 +8,10 @@ bun.lock
 *.log
 .pnpm-store
 test-results/
+
+# Each pnpm project installs independently in CI. Keep its lockfile so the
+# library and examples test the same dependency graph locally and in Actions.
+!/pnpm-lock.yaml
+!/examples/hono/pnpm-lock.yaml
+!/examples/opennextjs/pnpm-lock.yaml
+!/cli/bun.lock

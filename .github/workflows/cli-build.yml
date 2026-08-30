@@ -3,9 +3,9 @@ name: CLI Build
 on:
     push:
         branches: [main]
-        paths: ["cli/**"]
+        paths: ["cli/**", ".github/workflows/cli-build.yml"]
     pull_request:
-        paths: ["cli/**"]
+        paths: ["cli/**", ".github/workflows/cli-build.yml"]
 
 jobs:
     build:
@@ -23,11 +23,11 @@ jobs:
             - name: Setup Bun
               uses: oven-sh/setup-bun@v2
               with:
-                  bun-version: latest
+                  bun-version: 1.2.22
 
             - name: Install dependencies
               working-directory: ./cli
-              run: bun install
+              run: bun install --frozen-lockfile
 
             - name: Type check
               working-directory: ./cli

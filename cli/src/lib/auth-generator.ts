@@ -69,8 +69,6 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, 
                 plugins: [anonymous()],
                 rateLimit: {
                     enabled: true,
-                    window: 60,
-                    max: 100,
                 },
             }
         ),
@@ -127,8 +125,6 @@ async function authBuilder() {
                 trustedOrigins: (cfCtx.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "").split(",").filter(Boolean),
                 rateLimit: {
                     enabled: true,
-                    window: 60,
-                    max: 100,
                 },
                 plugins: [openAPI(), anonymous()],
             }
