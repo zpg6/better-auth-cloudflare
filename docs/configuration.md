@@ -141,6 +141,14 @@ This is a cost and latency choice, not a transparent compatibility shim. Databas
 
 Database-backed rate limiting requires Better Auth's rate-limit table. Generate the schema with the same 1.7 `auth` package version you deploy. For a populated 1.6 database, follow the migration process below instead of applying a plain generated schema.
 
+### KV session consistency
+
+Better Auth accepts a positive secondary-storage session without checking the mirrored database. Workers KV changes may take 60 seconds or more to appear in another location, so logout and other direct token revocations can lag.
+
+Better Auth also updates each user's active-session list with separate secondary-storage reads and writes. Concurrent session changes can lose a token reference. Bulk revocation, role or ban changes, or user deletion may then miss that cached token until its original session expiry. A strongly consistent full secondary store removes KV propagation lag for direct token reads and deletes, but it does not make the active-session update atomic.
+
+`session.storeSessionInDatabase: true` does not repair a stale positive hit. Strict bulk revocation and immediate user or authorization changes require omitting secondary session caching and leaving `session.cookieCache` disabled unless Better Auth adds an atomic active-list update.
+
 ### `createKVStorage(kv)`
 
 `createKVStorage()` exposes the `get`, `set`, and `delete` operations Workers KV can actually provide. It intentionally does not claim Better Auth 1.7's full `SecondaryStorage` contract. For Better Auth 1.7, use `withCloudflare()` as shown above. Manual wiring remains available for Better Auth 1.5 and 1.6:
