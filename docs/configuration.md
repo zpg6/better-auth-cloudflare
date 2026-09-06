@@ -85,12 +85,12 @@ The `provider` is inferred from which option you use (`"sqlite"` / `"pg"` / `"my
 
 Inherited by `WithCloudflareOptions`.
 
-| Option                | Type                                          | Default     | Description                                                                                                                   |
-| --------------------- | --------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `autoDetectIpAddress` | `boolean`                                     | `true`      | Adds `cf-connecting-ip` and `x-real-ip` to IP detection headers.                                                              |
-| `geolocationTracking` | `boolean`                                     | `true`      | Enriches sessions with geolocation fields. Overrides `session.storeSessionInDatabase` to `true`.                              |
-| `cf`                  | `CloudflareGeolocation \| Promise<…> \| null` | `undefined` | **Required** unless both options above are disabled. Typically `request.cf` (Hono) or `getCloudflareContext().cf` (OpenNext). |
-| `r2`                  | `R2Config`                                    | `undefined` | R2 bucket configuration. See the [R2 File Storage Guide](./r2.md).                                                            |
+| Option                | Type                                                       | Default     | Description                                                                                                                                                      |
+| --------------------- | ---------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `autoDetectIpAddress` | `boolean`                                                  | `true`      | Adds `cf-connecting-ip` and `x-real-ip` to IP detection headers.                                                                                                 |
+| `geolocationTracking` | `boolean`                                                  | `true`      | Enriches sessions with geolocation fields. Overrides `session.storeSessionInDatabase` to `true`.                                                                 |
+| `cf`                  | `CloudflareGeolocation \| Promise<…> \| (() => …) \| null` | `undefined` | **Required** unless both options above are disabled. Use `request.cf` in Hono, or `() => getCloudflareContext().cf` when one auth instance serves many requests. |
+| `r2`                  | `R2Config`                                                 | `undefined` | R2 bucket configuration. See the [R2 File Storage Guide](./r2.md).                                                                                               |
 
 ### `CloudflareGeolocation`
 
