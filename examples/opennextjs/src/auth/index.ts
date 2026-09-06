@@ -70,8 +70,12 @@ async function authBuilder() {
             {
                 baseURL: cfCtx.env.BETTER_AUTH_URL,
                 trustedOrigins: (cfCtx.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "").split(",").filter(Boolean),
+                verification: {
+                    storeInDatabase: true,
+                },
                 rateLimit: {
                     enabled: true,
+                    storage: "database",
                 },
                 plugins: [openAPI(), anonymous()],
             }
@@ -120,15 +124,19 @@ export const auth = betterAuth({
             // Include only configurations that influence the Drizzle schema,
             // e.g., if certain features add tables or columns.
             // socialProviders: { /* ... */ } // If they add specific tables/columns
+            rateLimit: {
+                enabled: true,
+                storage: "database",
+            },
             plugins: [openAPI(), anonymous()],
         }
     ),
 
     // Used by the Better Auth CLI for schema generation.
-    database: drizzleAdapter(process.env.DATABASE as any, {
-        // Added 'as any' to handle potential undefined process.env.DATABASE
+    database: drizzleAdapter({} as any, {
         provider: "sqlite",
         usePlural: true,
         debugLogs: true,
     }),
+    advanced: { database: { validateSchema: false } },
 });

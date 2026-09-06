@@ -11,13 +11,7 @@ export * from "./schema";
 export * from "./types";
 export * from "./r2";
 
-/**
- * Cloudflare integration for Better Auth
- *
- * @param options - Plugin configuration options
- * @returns Better Auth plugin for Cloudflare
- */
-export const cloudflare = (options?: CloudflarePluginOptions) => {
+const createCloudflarePlugin = (options?: CloudflarePluginOptions, validateStorage = false) => {
     const opts = options ?? {};
 
     // Default geolocationTracking to true if not specified
@@ -55,6 +49,9 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
         },
 
         init(init_ctx) {
+            if (validateStorage) {
+                assertAtomicStorageCompatibility(init_ctx.version, init_ctx.options);
+            }
             if (opts.r2) {
                 r2Storage = createR2Storage(opts.r2, init_ctx.generateId);
             }
@@ -86,6 +83,81 @@ export const cloudflare = (options?: CloudflarePluginOptions) => {
         },
     } satisfies BetterAuthPlugin;
 };
+
+/**
+ * Cloudflare integration for Better Auth
+ *
+ * @param options - Plugin configuration options
+ * @returns Better Auth plugin for Cloudflare
+ */
+export const cloudflare = (options?: CloudflarePluginOptions) => createCloudflarePlugin(options);
+
+type AtomicSecondaryStorage = {
+    getAndDelete?: unknown;
+    increment?: unknown;
+};
+
+type AtomicRateLimitStorage = {
+    consume?: unknown;
+    get?: unknown;
+    set?: unknown;
+};
+
+function parseVersion(version: string): [major: number, minor: number] | null {
+    const match = /^(\d+)\.(\d+)/.exec(version.trim());
+    return match ? [Number(match[1]), Number(match[2])] : null;
+}
+
+function assertAtomicStorageCompatibility(version: string, options: BetterAuthOptions): void {
+    const parsed = parseVersion(version);
+    const rateLimiting = options.rateLimit?.enabled !== false;
+    const customStorage = options.rateLimit?.customStorage as AtomicRateLimitStorage | undefined;
+    const legacyRateLimitStorage =
+        customStorage && typeof customStorage.get === "function" && typeof customStorage.set === "function";
+    if (parsed?.[0] === 1 && parsed[1] < 6 && rateLimiting && customStorage && !legacyRateLimitStorage) {
+        throw new Error(
+            `Better Auth ${version} rate limiting calls customStorage.get and set; consume-only storage needs 1.6 or later.`
+        );
+    }
+    const usesAtomicContract = !parsed || parsed[0] > 1 || (parsed[0] === 1 && parsed[1] >= 7);
+    if (!usesAtomicContract) return;
+
+    const problems: string[] = [];
+    if (rateLimiting && customStorage && typeof customStorage.consume !== "function") {
+        problems.push("rateLimit.customStorage requires an atomic consume function");
+    }
+    if (options.verification?.storeInDatabase === true && !options.database) {
+        problems.push("verification.storeInDatabase requires a database");
+    }
+    if (rateLimiting && !customStorage && options.rateLimit?.storage === "database" && !options.database) {
+        problems.push('rateLimit.storage "database" requires a database');
+    }
+
+    const storage = options.secondaryStorage as (SecondaryStorage & AtomicSecondaryStorage) | undefined;
+    if (storage) {
+        if (options.verification?.storeInDatabase !== true && typeof storage.getAndDelete !== "function") {
+            problems.push("verification requires a database or secondaryStorage.getAndDelete");
+        }
+
+        if (
+            rateLimiting &&
+            !customStorage &&
+            (options.rateLimit?.storage ?? "secondary-storage") === "secondary-storage" &&
+            typeof storage.increment !== "function"
+        ) {
+            problems.push(
+                "secondary-storage rate limiting requires secondaryStorage.increment; rate limiting is on by default in production"
+            );
+        }
+    }
+
+    if (problems.length > 0) {
+        throw new Error(
+            `Better Auth ${version} storage is not atomic: ${problems.join("; ")}. ` +
+                "Route verification and rate limiting to the database or provide atomic storage."
+        );
+    }
+}
 
 /**
  * Safely extracts CloudflareGeolocation data, ignoring undefined values or other fields
@@ -239,27 +311,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(
         throw new Error("Configure either withCloudflare({ kv }) or authOptions.secondaryStorage, not both.");
     }
 
-    if (cloudFlareOptions.kvAtomicCompatibility) {
-        if (!cloudFlareOptions.kv) {
-            throw new Error("kvAtomicCompatibility requires a Workers KV namespace.");
-        }
-        if (!database || options.verification?.storeInDatabase !== true) {
-            throw new Error("kvAtomicCompatibility requires a database and verification.storeInDatabase: true.");
-        }
-
-        const rateLimitUsesSupportedStorage =
-            options.rateLimit?.enabled === false ||
-            Boolean(options.rateLimit?.customStorage) ||
-            options.rateLimit?.storage === "database" ||
-            options.rateLimit?.storage === "memory";
-        if (!rateLimitUsesSupportedStorage) {
-            throw new Error(
-                "kvAtomicCompatibility requires rateLimit.storage to be database or memory, rateLimit.customStorage, or disabled rate limiting."
-            );
-        }
-    }
-
-    const plugins = [cloudflare(cloudFlareOptions), ...(options.plugins ?? [])] as MergedPlugins<T>;
+    const plugins = [createCloudflarePlugin(cloudFlareOptions, true), ...(options.plugins ?? [])] as MergedPlugins<T>;
     const secondaryStorage = cloudFlareOptions.kv
         ? (createKVStorage(cloudFlareOptions.kv) as SecondaryStorage)
         : options.secondaryStorage;

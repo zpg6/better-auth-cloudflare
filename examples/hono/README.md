@@ -198,8 +198,12 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, 
                     enabled: true,
                 },
                 plugins: [anonymous()], // Enable anonymous authentication
+                verification: {
+                    storeInDatabase: true,
+                },
                 rateLimit: {
                     enabled: true,
+                    storage: "database",
                 },
             }
         ),
@@ -212,6 +216,7 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, 
                       usePlural: true,
                       debugLogs: true,
                   }),
+                  advanced: { database: { validateSchema: false } },
               }),
     });
 }
