@@ -420,7 +420,7 @@ Database-backed rate limiting typically adds at least one database read and one 
 
 `createKVStorage()` deliberately exposes only KV's non-atomic `get`, `set`, and `delete` operations. Use `withCloudflare()` for Better Auth 1.7 so the package can wire KV session storage while the settings above keep atomic operations elsewhere.
 
-Database-backed rate limiting requires Better Auth's rate-limit table. Generate the 1.7 schema with the same `auth` package version you deploy. For a populated 1.6 database, do not apply a plain generated schema. Follow the [Better Auth 1.7 migration guide](https://better-auth.com/docs/guides/1-7-upgrade-guide), including `auth migrate plan` and a rehearsed migration against a restored backup.
+Database-backed rate limiting requires Better Auth's rate-limit table; regenerate `auth.schema.ts` with the same `auth` CLI version you deploy. Requires Better Auth 1.7.3 or later; see [Upgrading to Better Auth 1.7](docs/configuration.md#upgrading-to-better-auth-17).
 
 #### Important: KV TTL Limitation
 

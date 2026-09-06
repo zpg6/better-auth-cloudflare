@@ -95,12 +95,17 @@ async function authBuilder() {
                     },
                 },
                 kv: cfCtx.env.KV,
+                kvAtomicCompatibility: true,
             },
             {
                 baseURL: cfCtx.env.BETTER_AUTH_URL,
                 trustedOrigins: (cfCtx.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "").split(",").filter(Boolean),
+                verification: {
+                    storeInDatabase: true,
+                },
                 rateLimit: {
                     enabled: true,
+                    storage: "database",
                 },
                 plugins: [openAPI(), anonymous()],
             }
@@ -152,15 +157,20 @@ export const auth = betterAuth({
             },
         },
         {
+            rateLimit: {
+                enabled: true,
+                storage: "database",
+            },
             plugins: [openAPI(), anonymous()],
         }
     ),
 
-    database: drizzleAdapter(process.env.DATABASE as any, {
+    database: drizzleAdapter({} as any, {
         provider: "sqlite",
         usePlural: true,
         debugLogs: true,
     }),
+    advanced: { database: { validateSchema: false } },
 });
 ```
 

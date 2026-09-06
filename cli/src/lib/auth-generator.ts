@@ -66,9 +66,10 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, 
                 emailAndPassword: {
                     enabled: true,
                 },
-                plugins: [anonymous()],
+                plugins: [anonymous()],${generateVerificationConfig(config)}
                 rateLimit: {
                     enabled: true,
+                    storage: "database",
                 },
             }
         ),
@@ -77,6 +78,7 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, 
             ? {}
             : {
                   database: ${cliDatabaseConfig},
+                  advanced: { database: { validateSchema: false } },
               }),
     });
 }
@@ -122,9 +124,10 @@ async function authBuilder() {
             },
             {
                 baseURL: cfCtx.env.BETTER_AUTH_URL,
-                trustedOrigins: (cfCtx.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "").split(",").filter(Boolean),
+                trustedOrigins: (cfCtx.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "").split(",").filter(Boolean),${generateVerificationConfig(config)}
                 rateLimit: {
                     enabled: true,
+                    storage: "database",
                 },
                 plugins: [openAPI(), anonymous()],
             }
@@ -160,12 +163,17 @@ export const auth = betterAuth({
             cf: {},${generateNextjsSchemaConfig(config)}
         },
         {
+            rateLimit: {
+                enabled: true,
+                storage: "database",
+            },
             plugins: [openAPI(), anonymous()],
         }
     ),
 
     // Used by the Better Auth CLI for schema generation.
     database: ${cliDatabaseConfig},
+    advanced: { database: { validateSchema: false } },
 });
 `;
 }
@@ -195,7 +203,8 @@ function generateHonoCloudflareConfig(config: AuthConfig): string {
     // KV configuration
     if (config.resources.kv) {
         parts.push(`
-                kv: env?.${config.bindings.kv || "KV"},`);
+                kv: env?.${config.bindings.kv || "KV"},
+                kvAtomicCompatibility: env?.${config.bindings.kv || "KV"} ? true : undefined,`);
     }
 
     // R2 configuration
@@ -273,7 +282,8 @@ function generateNextjsCloudflareConfig(config: AuthConfig): string {
     // KV configuration
     if (config.resources.kv) {
         parts.push(`
-                kv: cfCtx.env.${config.bindings.kv || "KV"},`);
+                kv: cfCtx.env.${config.bindings.kv || "KV"},
+                kvAtomicCompatibility: true,`);
     }
 
     // R2 configuration
@@ -324,6 +334,17 @@ function generateNextjsCloudflareConfig(config: AuthConfig): string {
     }
 
     return parts.join("");
+}
+
+function generateVerificationConfig(config: AuthConfig): string {
+    if (!config.resources.kv) {
+        return "";
+    }
+
+    return `
+                verification: {
+                    storeInDatabase: true,
+                },`;
 }
 
 function generateSchemaConfig(config: AuthConfig): string {

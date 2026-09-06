@@ -28,14 +28,19 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, 
                       }
                     : undefined,
                 kv: env?.KV,
+                kvAtomicCompatibility: env?.KV ? true : undefined,
             },
             {
                 emailAndPassword: {
                     enabled: true,
                 },
                 plugins: [anonymous()],
+                verification: {
+                    storeInDatabase: true,
+                },
                 rateLimit: {
                     enabled: true,
+                    storage: "database",
                 },
             }
         ),
@@ -48,6 +53,7 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, 
                       usePlural: true,
                       debugLogs: true,
                   }),
+                  advanced: { database: { validateSchema: false } },
               }),
     });
 }

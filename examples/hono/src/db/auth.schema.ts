@@ -94,20 +94,27 @@ export const verifications = sqliteTable(
     table => [index("verifications_identifier_idx").on(table.identifier)]
 );
 
+export const rateLimits = sqliteTable("rate_limits", {
+    id: text("id").primaryKey(),
+    key: text("key").notNull().unique(),
+    count: integer("count").notNull(),
+    lastRequest: integer("last_request").notNull(),
+});
+
 export const usersRelations = relations(users, ({ many }) => ({
     sessions: many(sessions),
     accounts: many(accounts),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
-    users: one(users, {
+    user: one(users, {
         fields: [sessions.userId],
         references: [users.id],
     }),
 }));
 
 export const accountsRelations = relations(accounts, ({ one }) => ({
-    users: one(users, {
+    user: one(users, {
         fields: [accounts.userId],
         references: [users.id],
     }),
