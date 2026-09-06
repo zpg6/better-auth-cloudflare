@@ -7,6 +7,7 @@ export function validateMigrationChanges(changes) {
     const errors = [];
     let addedMigrations = 0;
     let addedSnapshots = 0;
+    const addedIndexes = new Set();
 
     for (const { status, paths } of changes) {
         for (const path of paths) {
@@ -26,6 +27,7 @@ export function validateMigrationChanges(changes) {
             }
             if (isMigration) addedMigrations += 1;
             if (isSnapshot) addedSnapshots += 1;
+            addedIndexes.add(filename.slice(0, filename.indexOf("_")));
         }
     }
 
@@ -35,6 +37,8 @@ export function validateMigrationChanges(changes) {
         errors.push(
             `Generated migration and snapshot additions must match, found ${addedMigrations} migration(s) and ${addedSnapshots} snapshot(s).`
         );
+    } else if (addedIndexes.size > 1) {
+        errors.push(`The added migration and snapshot must share one index, found ${[...addedIndexes].join(", ")}.`);
     }
     return errors;
 }

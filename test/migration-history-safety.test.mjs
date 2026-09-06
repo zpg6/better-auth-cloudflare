@@ -28,6 +28,14 @@ describe("migration history safety", () => {
         assert.equal(errors.filter(error => error.includes("immutable")).length, 2);
     });
 
+    it("rejects a snapshot whose index differs from the added migration", () => {
+        const errors = validateMigrationChanges([
+            { status: "A", paths: ["examples/hono/drizzle/0002_a.sql"] },
+            { status: "A", paths: ["examples/hono/drizzle/meta/0003_snapshot.json"] },
+        ]);
+        assert.ok(errors.some(error => error.includes("share one index")));
+    });
+
     it("rejects multiple or unmatched generated additions", () => {
         const errors = validateMigrationChanges([
             { status: "A", paths: ["examples/hono/drizzle/0002_a.sql"] },
