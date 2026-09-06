@@ -106,6 +106,14 @@ function validateCliArgs(args: CliArgs): string[] {
         }
     }
 
+    if (args["apply-migrations"] === "prod") {
+        errors.push(
+            "Non-interactive generation cannot apply production migrations. Generate with --apply-migrations=skip, review the SQL, then run migrate --migrate-target=remote --confirm-remote from the new project."
+        );
+    } else if (args["apply-migrations"] && !["dev", "skip"].includes(args["apply-migrations"] as string)) {
+        errors.push("apply-migrations must be 'dev' or 'skip'");
+    }
+
     return errors;
 }
 
@@ -200,6 +208,14 @@ describe("CLI Argument Validation", () => {
         expect(validateCliArgs(validArgs3)).toHaveLength(0);
         expect(validateCliArgs(invalidArgs)).toContain(
             "database must be 'd1', 'hyperdrive-postgres', or 'hyperdrive-mysql'"
+        );
+    });
+
+    test("requires a separate reviewed command for production migrations", () => {
+        expect(validateCliArgs({ "apply-migrations": "dev" })).toHaveLength(0);
+        expect(validateCliArgs({ "apply-migrations": "skip" })).toHaveLength(0);
+        expect(validateCliArgs({ "apply-migrations": "prod" })).toContain(
+            "Non-interactive generation cannot apply production migrations. Generate with --apply-migrations=skip, review the SQL, then run migrate --migrate-target=remote --confirm-remote from the new project."
         );
     });
 

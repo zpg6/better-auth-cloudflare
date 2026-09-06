@@ -80,7 +80,7 @@ function generateGetDbFunction(config: DbConfig): string {
     const { env } = await getCloudflareContext({ async: true });
 
     // Initialize Drizzle with your Hyperdrive binding for PostgreSQL
-    return drizzle(postgres(env.${binding}.connectionString), {
+    return drizzle(postgres(env.${binding}.connectionString, { max: 5, fetch_types: false, prepare: true }), {
         // Ensure "${binding}" matches your Hyperdrive binding name in wrangler.toml
         schema,
         logger: true, // Optional
@@ -92,10 +92,18 @@ function generateGetDbFunction(config: DbConfig): string {
     const { env } = await getCloudflareContext({ async: true });
 
     // Initialize Drizzle with your Hyperdrive binding for MySQL
-    const pool = await mysql.createPool(env.${binding}.connectionString);
-    return drizzle(pool, {
+    const connection = await mysql.createConnection({
+        host: env.${binding}.host,
+        user: env.${binding}.user,
+        password: env.${binding}.password,
+        database: env.${binding}.database,
+        port: env.${binding}.port,
+        disableEval: true,
+    });
+    return drizzle(connection, {
         // Ensure "${binding}" matches your Hyperdrive binding name in wrangler.toml
         schema,
+        mode: "default",
     });
 }`;
     }

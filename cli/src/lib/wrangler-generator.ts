@@ -50,7 +50,7 @@ function generateBasicConfig(config: WranglerConfig): string {
     return `
 name = "${config.appName}"
 main = "${main}"
-compatibility_date = "2025-03-01"
+compatibility_date = "2025-04-01"
 compatibility_flags = ${compatibilityFlags}`;
 }
 

@@ -1,6 +1,7 @@
 export interface AuthConfig {
     template: "hono" | "nextjs";
     database: "sqlite" | "postgres" | "mysql";
+    geolocation?: boolean;
     resources: {
         d1: boolean;
         kv: boolean;
@@ -23,43 +24,80 @@ export function generateAuthFile(config: AuthConfig): string {
     }
 }
 
+export function generateAuthSchemaFile(config: AuthConfig): string {
+    const typeImports = [config.database === "sqlite" ? "D1Database" : "", config.resources.r2 ? "R2Bucket" : ""]
+        .filter(Boolean)
+        .join(", ");
+    const imports = [
+        typeImports ? `import type { ${typeImports} } from "@cloudflare/workers-types";` : "",
+        `import { drizzleAdapter } from "@better-auth/drizzle-adapter";`,
+        `import { betterAuth } from "better-auth";`,
+        config.template === "nextjs"
+            ? `import { anonymous, openAPI } from "better-auth/plugins";`
+            : `import { anonymous } from "better-auth/plugins";`,
+        `import { withCloudflare } from "better-auth-cloudflare";`,
+        config.database === "sqlite" ? `import { drizzle } from "drizzle-orm/d1";` : "",
+    ].filter(Boolean);
+    const database = config.database === "sqlite" ? `drizzle({} as D1Database)` : `{} as any`;
+    const plugins = config.template === "nextjs" ? "[openAPI(), anonymous()]" : "[anonymous()]";
+
+    return `${imports.join("\n")}
+
+const db = ${database};
+
+export const auth = betterAuth({
+    baseURL: "http://localhost",
+    secret: "schema-generation-only-secret-32-characters",
+    ...withCloudflare(
+        {
+            autoDetectIpAddress: true,
+            geolocationTracking: ${config.geolocation !== false},
+            cf: {},${generateSchemaConfig(config)}
+        },
+        {
+${generateStorageConfig(config, "            ")}
+            plugins: ${plugins},
+        }
+    ),
+    database: ${generateCliDatabaseConfig(config)},
+});
+`;
+}
+
 function generateHonoAuth(config: AuthConfig): string {
     const imports = [
-        `import type { D1Database, IncomingRequestCfProperties } from "@cloudflare/workers-types";`,
+        `import type { IncomingRequestCfProperties } from "@cloudflare/workers-types";`,
         `import { betterAuth } from "better-auth";`,
         `import { withCloudflare } from "better-auth-cloudflare";`,
         `import { anonymous } from "better-auth/plugins";`,
-        `import { drizzleAdapter } from "@better-auth/drizzle-adapter";`,
     ];
 
-    // Database-specific imports
     if (config.database === "sqlite") {
         imports.push(`import { drizzle } from "drizzle-orm/d1";`);
     } else if (config.database === "postgres") {
         imports.push(`import { drizzle } from "drizzle-orm/postgres-js";`);
+        imports.push(`import postgres from "postgres";`);
     } else {
         imports.push(`import { drizzle } from "drizzle-orm/mysql2";`);
-        imports.push(`import mysql from "mysql2";`);
+        imports.push(`import { createConnection } from "mysql2/promise";`);
     }
 
     imports.push(`import { schema } from "../db";`, `import type { CloudflareBindings } from "../env";`);
 
     const cloudflareConfig = generateHonoCloudflareConfig(config);
-    const cliDatabaseConfig = generateCliDatabaseConfig(config);
+    const storageConfig = generateStorageConfig(config);
 
     return `${imports.join("\n")}
 
-// Single auth configuration that handles both CLI and runtime scenarios
-function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, baseURL?: string) {
-    // Use actual DB for runtime, empty object for CLI
-    const db = env ? ${generateDbConnection(config)} : ({} as any);
+export async function createAuth(env: CloudflareBindings, cf?: IncomingRequestCfProperties, baseURL?: string) {
+    const db = ${generateDbConnection(config)};
 
     return betterAuth({
         baseURL,
         ...withCloudflare(
             {
                 autoDetectIpAddress: true,
-                geolocationTracking: true,
+                geolocationTracking: ${config.geolocation !== false},
                 cf: cf || {},${cloudflareConfig}
             },
             {
@@ -67,25 +105,11 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, 
                     enabled: true,
                 },
                 plugins: [anonymous()],
-                rateLimit: {
-                    enabled: true,
-                },
+${storageConfig}
             }
         ),
-        // Only add database adapter for CLI schema generation
-        ...(env
-            ? {}
-            : {
-                  database: ${cliDatabaseConfig},
-              }),
     });
 }
-
-// Export for CLI schema generation
-export const auth = createAuth();
-
-// Export for runtime usage
-export { createAuth };
 `;
 }
 
@@ -94,22 +118,28 @@ function generateNextjsAuth(config: AuthConfig): string {
         `import { getCloudflareContext } from "@opennextjs/cloudflare";`,
         `import { betterAuth } from "better-auth";`,
         `import { withCloudflare } from "better-auth-cloudflare";`,
-        `import { drizzleAdapter } from "@better-auth/drizzle-adapter";`,
         `import { anonymous, openAPI } from "better-auth/plugins";`,
     ];
-
-    if (config.database === "sqlite") {
-        imports.push(`import type { D1Database } from "@cloudflare/workers-types";`);
-    }
 
     imports.push(`import { getDb } from "../db";`);
 
     const cloudflareConfig = generateNextjsCloudflareConfig(config);
-    const cliDatabaseConfig = generateCliDatabaseConfig(config);
+    const storageConfig = generateStorageConfig(config);
+    const initializer = config.resources.hyperdrive
+        ? `export async function initAuth() {
+    return authBuilder();
+}`
+        : `let authInstance: Awaited<ReturnType<typeof authBuilder>> | null = null;
+
+export async function initAuth() {
+    if (!authInstance) {
+        authInstance = await authBuilder();
+    }
+    return authInstance;
+}`;
 
     return `${imports.join("\n")}
 
-// Define an asynchronous function to build your auth configuration
 async function authBuilder() {
     const dbInstance = await getDb();
     const cfCtx = getCloudflareContext();
@@ -117,172 +147,57 @@ async function authBuilder() {
         ...withCloudflare(
             {
                 autoDetectIpAddress: true,
-                geolocationTracking: true,
+                geolocationTracking: ${config.geolocation !== false},
                 cf: cfCtx.cf,${cloudflareConfig}
             },
             {
                 baseURL: cfCtx.env.BETTER_AUTH_URL,
                 trustedOrigins: (cfCtx.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "").split(",").filter(Boolean),
-                rateLimit: {
-                    enabled: true,
-                },
+${storageConfig}
                 plugins: [openAPI(), anonymous()],
             }
         ),
     });
 }
 
-// Singleton pattern to ensure a single auth instance
-let authInstance: Awaited<ReturnType<typeof authBuilder>> | null = null;
-
-// Asynchronously initializes and retrieves the shared auth instance
-export async function initAuth() {
-    if (!authInstance) {
-        authInstance = await authBuilder();
-    }
-    return authInstance;
-}
-
-/* ======================================================================= */
-/* Configuration for Schema Generation                                     */
-/* ======================================================================= */
-
-// This simplified configuration is used by the Better Auth CLI for schema generation.
-// It includes only the options that affect the database schema.
-// It's necessary because the main \`authBuilder\` performs operations (like \`getDb()\`)
-// which use \`getCloudflareContext\` (not available in a CLI context only on Cloudflare).
-// For more details, see: https://www.answeroverflow.com/m/1362463260636479488
-export const auth = betterAuth({
-    ...withCloudflare(
-        {
-            autoDetectIpAddress: true,
-            geolocationTracking: true,
-            cf: {},${generateNextjsSchemaConfig(config)}
-        },
-        {
-            plugins: [openAPI(), anonymous()],
-        }
-    ),
-
-    // Used by the Better Auth CLI for schema generation.
-    database: ${cliDatabaseConfig},
-});
+${initializer}
 `;
 }
 
 function generateHonoCloudflareConfig(config: AuthConfig): string {
     const parts: string[] = [];
 
-    // Database configuration
-    if (config.resources.d1) {
-        parts.push(`
-                d1: env
-                    ? {
-                          db,
-                          options: {
-                              usePlural: true,
-                              debugLogs: true,
-                          },
-                      }
-                    : undefined,`);
-    } else if (config.resources.hyperdrive) {
-        parts.push(`
-                ${config.database === "postgres" ? "postgres" : "mysql"}: {
-                    db
-                },`);
-    }
-
-    // KV configuration
-    if (config.resources.kv) {
-        parts.push(`
-                kv: env?.${config.bindings.kv || "KV"},`);
-    }
-
-    // R2 configuration
-    if (config.resources.r2) {
-        parts.push(`
-                // R2 configuration for file storage (${config.bindings.r2 || "R2_BUCKET"} binding from wrangler.toml)
-                ...(env?.${config.bindings.r2 || "R2_BUCKET"} ? {
-                    r2: {
-                        bucket: env.${config.bindings.r2 || "R2_BUCKET"},
-                        maxFileSize: 2 * 1024 * 1024, // 2MB
-                        allowedTypes: [".jpg", ".jpeg", ".png", ".gif"],
-                        additionalFields: {
-                            category: { type: "string", required: false },
-                            isPublic: { type: "boolean", required: false },
-                            description: { type: "string", required: false },
-                        },
-                        hooks: {
-                            upload: {
-                                before: async (file, ctx) => {
-                                    // Only allow authenticated users to upload files
-                                    if (ctx.session === null) {
-                                        return null; // Blocks upload
-                                    }
-
-                                    // Only allow paid users to upload files (for example)
-                                    const isPaidUser = (userId: string) => true; // example
-                                    if (isPaidUser(ctx.session.user.id) === false) {
-                                        return null; // Blocks upload
-                                    }
-
-                                    // Allow upload
-                                },
-                                after: async (file, ctx) => {
-                                    // Track your analytics (for example)
-                                    console.log("File uploaded:", file);
-                                },
-                            },
-                            download: {
-                                before: async (file, ctx) => {
-                                    // Only allow user to access their own files (by default all files are public)
-                                    if (file.isPublic === false && file.userId !== ctx.session?.user.id) {
-                                        return null; // Blocks download
-                                    }
-                                    // Allow download
-                                },
-                            },
-                        },
-                    },
-                } : {}),`);
-    }
-
-    return parts.join("");
-}
-
-function generateNextjsCloudflareConfig(config: AuthConfig): string {
-    const parts: string[] = [];
-
-    // Database configuration
     if (config.resources.d1) {
         parts.push(`
                 d1: {
-                    db: dbInstance,
+                    db,
                     options: {
-                        usePlural: true, // Optional: Use plural table names (e.g., "users" instead of "user")
-                        debugLogs: true, // Optional
+                        usePlural: true,
+                        debugLogs: true,
                     },
                 },`);
     } else if (config.resources.hyperdrive) {
         parts.push(`
                 ${config.database === "postgres" ? "postgres" : "mysql"}: {
-                    db: dbInstance
+                    db,
+                    options: {
+                        usePlural: true,
+                        debugLogs: true,
+                    },
                 },`);
     }
 
-    // KV configuration
     if (config.resources.kv) {
         parts.push(`
-                kv: cfCtx.env.${config.bindings.kv || "KV"},`);
+                kv: env.${config.bindings.kv || "KV"},`);
     }
 
-    // R2 configuration
     if (config.resources.r2) {
         parts.push(`
                 // R2 configuration for file storage (${config.bindings.r2 || "R2_BUCKET"} binding from wrangler.toml)
                 r2: {
-                    bucket: getCloudflareContext().env.${config.bindings.r2 || "R2_BUCKET"},
-                    maxFileSize: 2 * 1024 * 1024, // 2MB
+                    bucket: env.${config.bindings.r2 || "R2_BUCKET"},
+                    maxFileSize: 2 * 1024 * 1024,
                     allowedTypes: [".jpg", ".jpeg", ".png", ".gif"],
                     additionalFields: {
                         category: { type: "string", required: false },
@@ -292,31 +207,86 @@ function generateNextjsCloudflareConfig(config: AuthConfig): string {
                     hooks: {
                         upload: {
                             before: async (file, ctx) => {
-                                // Only allow authenticated users to upload files
                                 if (ctx.session === null) {
-                                    return null; // Blocks upload
+                                    return null;
                                 }
 
-                                // Only allow paid users to upload files (for example)
-                                const isPaidUser = (userId: string) => true; // example
+                                const isPaidUser = (userId: string) => true;
                                 if (isPaidUser(ctx.session.user.id) === false) {
-                                    return null; // Blocks upload
+                                    return null;
                                 }
-
-                                // Allow upload
                             },
-                            after: async (file, ctx) => {
-                                // Track your analytics (for example)
+                            after: async (file) => {
                                 console.log("File uploaded:", file);
                             },
                         },
                         download: {
                             before: async (file, ctx) => {
-                                // Only allow user to access their own files (by default all files are public)
                                 if (file.isPublic === false && file.userId !== ctx.session?.user.id) {
-                                    return null; // Blocks download
+                                    return null;
                                 }
-                                // Allow download
+                            },
+                        },
+                    },
+                },`);
+    }
+
+    return parts.join("");
+}
+
+function generateNextjsCloudflareConfig(config: AuthConfig): string {
+    const parts: string[] = [];
+
+    if (config.resources.d1) {
+        parts.push(`
+                d1: {
+                    db: dbInstance,
+                    options: {
+                        usePlural: true,
+                        debugLogs: true,
+                    },
+                },`);
+    } else if (config.resources.hyperdrive) {
+        parts.push(`
+                ${config.database === "postgres" ? "postgres" : "mysql"}: {
+                    db: dbInstance,
+                    options: {
+                        usePlural: true,
+                        debugLogs: true,
+                    },
+                },`);
+    }
+
+    if (config.resources.kv) {
+        parts.push(`
+                kv: cfCtx.env.${config.bindings.kv || "KV"},`);
+    }
+
+    if (config.resources.r2) {
+        parts.push(`
+                r2: {
+                    bucket: cfCtx.env.${config.bindings.r2 || "R2_BUCKET"},
+                    maxFileSize: 2 * 1024 * 1024,
+                    allowedTypes: [".jpg", ".jpeg", ".png", ".gif"],
+                    additionalFields: {
+                        category: { type: "string", required: false },
+                        isPublic: { type: "boolean", required: false },
+                        description: { type: "string", required: false },
+                    },
+                    hooks: {
+                        upload: {
+                            before: async (_file, ctx) => {
+                                if (ctx.session === null) return null;
+                            },
+                            after: async file => {
+                                console.log("File uploaded:", file);
+                            },
+                        },
+                        download: {
+                            before: async (file, ctx) => {
+                                if (file.isPublic === false && file.userId !== ctx.session?.user.id) {
+                                    return null;
+                                }
                             },
                         },
                     },
@@ -329,12 +299,10 @@ function generateNextjsCloudflareConfig(config: AuthConfig): string {
 function generateSchemaConfig(config: AuthConfig): string {
     const parts: string[] = [];
 
-    // R2 configuration for schema generation
     if (config.resources.r2) {
         parts.push(`
-            // R2 configuration for schema generation
             r2: {
-                bucket: {} as any, // Mock bucket for schema generation
+                bucket: {} as R2Bucket,
                 additionalFields: {
                     category: { type: "string", required: false },
                     isPublic: { type: "boolean", required: false },
@@ -346,22 +314,35 @@ function generateSchemaConfig(config: AuthConfig): string {
     return parts.join("");
 }
 
-const generateHonoSchemaConfig = generateSchemaConfig;
-const generateNextjsSchemaConfig = generateSchemaConfig;
+function generateStorageConfig(config: AuthConfig, indent = "                "): string {
+    const lines = config.resources.kv
+        ? [
+              "verification: {",
+              "    storeInDatabase: true,",
+              "},",
+              "rateLimit: {",
+              "    enabled: true,",
+              '    storage: "database",',
+              "},",
+          ]
+        : ["rateLimit: {", "    enabled: true,", "},"];
+    return lines.map(line => indent + line).join("\n");
+}
 
 function generateDbConnection(config: AuthConfig): string {
     const binding = config.bindings.hyperdrive || "HYPERDRIVE";
     if (config.database === "sqlite") {
         return `drizzle(env.${config.bindings.d1 || "DATABASE"}, { schema, logger: true })`;
     } else if (config.database === "postgres") {
-        return `drizzle(env.${binding}, { schema, logger: true })`;
+        return `drizzle(postgres(env.${binding}.connectionString, { max: 5, fetch_types: false, prepare: true }), { schema, logger: true })`;
     } else {
-        return `drizzle(mysql.createPool({
+        return `drizzle(await createConnection({
         host: env.${binding}.host,
         user: env.${binding}.user,
         password: env.${binding}.password,
         database: env.${binding}.database,
         port: env.${binding}.port,
+        disableEval: true,
     }), { schema, mode: "default", logger: true })`;
     }
 }
@@ -369,11 +350,9 @@ function generateDbConnection(config: AuthConfig): string {
 function generateCliDatabaseConfig(config: AuthConfig): string {
     const provider = config.database === "sqlite" ? "sqlite" : config.database === "postgres" ? "pg" : "mysql";
 
-    const dbType = config.database === "sqlite" ? "D1Database" : "any";
-
-    return `drizzleAdapter({} as ${dbType}, {
-                      provider: "${provider}",
-                      usePlural: true,
-                      debugLogs: true
-                  })`;
+    return `drizzleAdapter(db, {
+        provider: "${provider}",
+        usePlural: true,
+        debugLogs: true,
+    })`;
 }

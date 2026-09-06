@@ -171,21 +171,19 @@ export class FileValidator {
         const errors: string[] = [];
 
         try {
-            const authConfig = readProjectFile(this.projectPath, "src/auth/index.ts");
+            const runtimeConfig = readProjectFile(this.projectPath, "src/auth/index.ts");
+            const schemaConfig = readProjectFile(this.projectPath, "src/auth.config.ts");
 
-            // Check for schema import (can be from ../db or ../db/schema)
-            if (!authConfig.includes("import { schema }") && !authConfig.includes('from "../db"')) {
-                errors.push("Missing schema import in auth config");
+            if (!runtimeConfig.includes("import { schema }") && !runtimeConfig.includes('from "../db"')) {
+                errors.push("Missing database import in runtime auth config");
             }
 
-            // Check for drizzle adapter (can be in runtime or CLI config)
-            if (!authConfig.includes("drizzleAdapter")) {
-                errors.push("Missing drizzle adapter");
+            if (!schemaConfig.includes("drizzleAdapter")) {
+                errors.push("Missing drizzle adapter in schema auth config");
             }
 
-            // Check for better auth setup
-            if (!authConfig.includes("betterAuth")) {
-                errors.push("Missing betterAuth configuration");
+            if (!runtimeConfig.includes("betterAuth") || !schemaConfig.includes("betterAuth")) {
+                errors.push("Missing Better Auth configuration");
             }
         } catch (error) {
             errors.push(`Failed to read auth config: ${error}`);

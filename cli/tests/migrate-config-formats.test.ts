@@ -19,7 +19,7 @@ describe("migrate config formats", () => {
 
         writeExecutable(
             join(binDirectory, "npm"),
-            `const { appendFileSync } = require("fs");
+            `const { appendFileSync, mkdirSync, writeFileSync } = require("fs");
 const args = process.argv.slice(2);
 if (args[0] === "--version") {
     process.stdout.write("10.0.0");
@@ -28,6 +28,10 @@ if (args[0] === "--version") {
 if (args[0] === "view") process.exit(1);
 if (args[0] === "run") {
     appendFileSync(process.env.CLI_COMMAND_LOG, args[1] + "\\t" + process.cwd() + "\\n");
+    if (args[1] === "db:generate" && process.env.CLI_GENERATE_SQL) {
+        mkdirSync("drizzle", { recursive: true });
+        writeFileSync("drizzle/0001_generated.sql", "ALTER TABLE users ADD name text;");
+    }
     process.exit(0);
 }
 process.exit(1);
@@ -36,10 +40,15 @@ process.exit(1);
 
         writeExecutable(
             join(binDirectory, "npx"),
-            `const args = process.argv.slice(2);
+            `const { appendFileSync } = require("fs");
+const args = process.argv.slice(2);
 if (args[0] !== "wrangler") process.exit(1);
 if (args[1] === "d1" && args[2] === "list") {
-    process.stdout.write(JSON.stringify([{ name: "test-db" }]));
+    process.stdout.write(JSON.stringify([{ name: "test-db" }, { name: "other-db" }]));
+    process.exit(0);
+}
+if (args[1] === "d1" && args[2] === "migrations" && args[3] === "apply") {
+    appendFileSync(process.env.CLI_COMMAND_LOG, args.join(" ") + "\\t" + process.cwd() + "\\n");
     process.exit(0);
 }
 if (args[1] === "hyperdrive" && args[2] === "get") process.exit(1);
@@ -119,7 +128,7 @@ process.exit(1);
         expect(readCommands()).toEqual([]);
     });
 
-    test("runs db:migrate:dev for a D1 config", () => {
+    test("runs local D1 migrations for the configured binding", () => {
         writeFileSync(
             join(testDirectory, "wrangler.json"),
             '{ "d1_databases": [{ "binding": "DB", "database_name": "test-db" }] }'
@@ -127,7 +136,52 @@ process.exit(1);
 
         const result = runMigrate(testDirectory, "dev");
         expect(result.status).toBe(0);
-        expect(readCommands()).toEqual(["auth:update", "db:generate", "db:migrate:dev"]);
+        expect(readCommands()).toEqual(["auth:update", "db:generate", "wrangler d1 migrations apply DB --local"]);
+    });
+
+    test("uses the selected D1 binding when multiple databases are configured", () => {
+        writeFileSync(
+            join(testDirectory, "wrangler.json"),
+            JSON.stringify({
+                d1_databases: [
+                    { binding: "AUTH_DB", database_name: "test-db" },
+                    { binding: "AUDIT_DB", database_name: "other-db" },
+                ],
+            })
+        );
+
+        const result = runMigrate(testDirectory, "dev");
+        expect(result.status).toBe(0);
+        expect(readCommands()).toEqual(["auth:update", "db:generate", "wrangler d1 migrations apply AUTH_DB --local"]);
+    });
+
+    test("requires review after generating SQL before a noninteractive remote migration", () => {
+        writeFileSync(
+            join(testDirectory, "wrangler.json"),
+            '{ "d1_databases": [{ "binding": "DB", "database_name": "test-db" }] }'
+        );
+
+        const first = runMigrate(testDirectory, "remote", ["--confirm-remote"], true);
+        expect(first.status).toBe(1);
+        expect(first.stdout).toContain("A migration was generated or changed");
+        expect(readCommands()).toEqual(["auth:update", "db:generate"]);
+
+        writeFileSync(commandLog, "");
+        const second = runMigrate(testDirectory, "remote", ["--confirm-remote"], true);
+        expect(second.status).toBe(0);
+        expect(readCommands()).toEqual(["auth:update", "db:generate", "wrangler d1 migrations apply DB --remote"]);
+    });
+
+    test("rejects a noninteractive remote migration without confirmation", () => {
+        writeFileSync(
+            join(testDirectory, "wrangler.json"),
+            '{ "d1_databases": [{ "binding": "DB", "database_name": "test-db" }] }'
+        );
+
+        const result = runMigrate(testDirectory, "remote");
+        expect(result.status).toBe(1);
+        expect(result.stdout).toContain("Remote migrations require --confirm-remote");
+        expect(readCommands()).toEqual([]);
     });
 
     test("fails when no config exists", () => {
@@ -171,7 +225,7 @@ process.exit(1);
         }
     }
 
-    function runMigrate(cwd: string, target: "dev" | "skip", extraArgs: string[] = []) {
+    function runMigrate(cwd: string, target: "dev" | "remote" | "skip", extraArgs: string[] = [], generateSql = false) {
         return spawnSync(process.execPath, [cliPath, "migrate", `--migrate-target=${target}`, ...extraArgs], {
             cwd,
             encoding: "utf8",
@@ -180,6 +234,7 @@ process.exit(1);
                 ...process.env,
                 PATH: `${binDirectory}${delimiter}${process.env.PATH ?? ""}`,
                 CLI_COMMAND_LOG: commandLog,
+                CLI_GENERATE_SQL: generateSql ? "1" : "",
             },
         });
     }

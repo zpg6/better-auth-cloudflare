@@ -87,24 +87,24 @@ npx @better-auth-cloudflare/cli@latest generate
 **Non-interactive mode** (use arguments):
 
 ```bash
-# Simple D1 app with KV (fully deployed to Cloudflare)
+# Generate a D1 app with KV and test its migrations locally
 npx @better-auth-cloudflare/cli@latest generate \
   --app-name=my-auth-app \
   --template=hono \
   --database=d1 \
   --kv=true \
   --r2=false \
-  --apply-migrations=prod
+  --apply-migrations=dev
 ```
 
 **Migration workflow**:
 
 ```bash
 npx @better-auth-cloudflare/cli@latest migrate                         # Interactive
-npx @better-auth-cloudflare/cli@latest migrate --migrate-target=prod   # Non-interactive
+npx @better-auth-cloudflare/cli@latest migrate --migrate-target=remote --confirm-remote
 ```
 
-The CLI creates projects from Hono or Next.js templates and can automatically set up D1, KV, R2, and Hyperdrive resources. See [CLI Documentation](./cli/README.md) for full documentation and all available arguments.
+The CLI creates projects from Hono or Next.js templates and can set up D1, KV, R2, and Hyperdrive resources. See [CLI Documentation](./cli/README.md) for full documentation and all available arguments.
 
 **Troubleshooting**:
 

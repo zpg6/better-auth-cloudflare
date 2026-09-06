@@ -24,9 +24,9 @@ Generate a Better Auth Cloudflare project with D1, KV, R2, or Hyperdrive. This C
 - Runs `wrangler d1/kv/r2 create` commands and configures `wrangler.toml`
 - Sets up Hyperdrive connections and auth integrations
 
-📦 Runs initial setup: `@better-auth/cli generate`, `drizzle-kit generate`, and optionally applies migrations
+📦 Runs initial setup: `auth generate`, `drizzle-kit generate`, and optionally applies migrations
 
-🚀 Deploys to Cloudflare Workers when resources are set up (automatic in non-interactive mode, prompted in interactive mode)
+🚀 Deploys only after an interactive production migration succeeds; otherwise it prints the migration and deploy commands
 
 **The `migrate` command** streamlines schema updates:
 
@@ -67,7 +67,12 @@ npx @better-auth-cloudflare/cli generate \
 ```bash
 npx @better-auth-cloudflare/cli migrate              # Interactive
 npx @better-auth-cloudflare/cli migrate --migrate-target=dev  # Non-interactive
+npx @better-auth-cloudflare/cli migrate --migrate-target=remote --confirm-remote
 ```
+
+Remote migrations require confirmation that you reviewed the SQL, backed up the database, and rehearsed the migration.
+
+Non-interactive generation does not apply production migrations. Generate the project with the default `skip`, review its SQL, then run the remote `migrate` command from the new project.
 
 `migrate` searches the current directory and its parents for `wrangler.json`, then `wrangler.jsonc`, then `wrangler.toml`. It handles:
 
@@ -85,7 +90,7 @@ npx @better-auth-cloudflare/cli migrate --migrate-target=dev  # Non-interactive
 --r2=<bool>                    Enable R2 to extend Better Auth with user file storage (default: false)
 ```
 
-**KV Integration**: Provides session caching and legacy Better Auth 1.5/1.6 secondary-storage fallbacks. Better Auth 1.7 requires atomic verification and rate-limit operations that Workers KV cannot provide. See the repository's KV configuration guide before upgrading.
+**KV Integration**: Provides session caching. Generated projects route Better Auth 1.7 verification and rate limiting to the configured database because Workers KV cannot provide the required atomic operations.
 
 **R2 Integration**: Enables file upload and management capabilities. See [R2 setup guide](../docs/r2.md) for detailed configuration and usage.
 
@@ -113,13 +118,14 @@ npx @better-auth-cloudflare/cli migrate --migrate-target=dev  # Non-interactive
 ```
 --account-id=<id>              Cloudflare account ID (only required if you have multiple accounts)
 --skip-cloudflare-setup=<bool> Skip Cloudflare resource creation and deployment (default: false)
---apply-migrations=<choice>    Apply D1 migrations: dev | prod | skip (default: skip)
+--apply-migrations=<choice>    Apply migrations during generation: dev | skip (default: skip)
 ```
 
 ### Migrate command arguments
 
 ```
 --migrate-target=<target>      For migrate command: dev | remote | skip (default: skip)
+--confirm-remote               Confirm review, backup, and rehearsal before a remote migration
 ```
 
 ## Examples
@@ -143,11 +149,11 @@ Create app without KV or R2:
 npx @better-auth-cloudflare/cli generate --app-name=minimal-app --kv=false --r2=false
 ```
 
-Create and deploy in one command (default behavior):
+Create a project and apply its migrations locally:
 
 ```bash
-npx @better-auth-cloudflare/cli generate --app-name=my-app
-# Creates resources, runs migrations, and deploys automatically
+npx @better-auth-cloudflare/cli generate --app-name=my-app --apply-migrations=dev
+# Creates resources and applies local migrations without deploying
 ```
 
 Skip Cloudflare setup and deployment (useful for CI/CD):
@@ -183,7 +189,7 @@ npx @better-auth-cloudflare/cli migrate --migrate-target=dev
 
 ---
 
-Creates a new Better Auth Cloudflare project from Hono or OpenNext.js templates, optionally creating Cloudflare D1, KV, R2, or Hyperdrive resources for you. The migrate command runs `auth:update`, `db:generate`, and optionally `db:migrate`.
+Creates a Better Auth Cloudflare project from Hono or OpenNext.js templates and can create Cloudflare D1, KV, R2, or Hyperdrive resources. The migrate command updates the auth schema, generates migrations, and applies D1 migrations to the selected binding. Hyperdrive projects use their generated migration scripts.
 
 ## Troubleshooting
 

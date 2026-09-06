@@ -19,6 +19,13 @@ import {
     updateKvBlockWithId,
     type DatabaseConfig,
 } from "./lib/helpers.js";
+import { d1MigrationArgs, migrationSqlChanged, snapshotMigrationSql } from "./lib/migration-safety.js";
+import {
+    detectPackageManagerHint,
+    normalizeProjectTemplate,
+    type DatabaseKind,
+    type PackageManager,
+} from "./lib/project-normalizer.js";
 
 // Get package version from package.json
 function getPackageVersion(): string {
@@ -76,7 +83,7 @@ function printVersion(): void {
     console.log(`@better-auth-cloudflare/cli v${version}`);
 }
 
-type DbKind = "d1" | "hyperdrive-postgres" | "hyperdrive-mysql";
+type DbKind = DatabaseKind;
 
 interface GenerateAnswers {
     appName: string;
@@ -105,6 +112,48 @@ interface GenerateAnswers {
     applyMigrations?: "dev" | "prod" | "skip";
 }
 
+function generateProjectReadme(answers: GenerateAnswers): string {
+    const database =
+        answers.database === "d1"
+            ? "Cloudflare D1"
+            : answers.database === "hyperdrive-postgres"
+              ? "PostgreSQL through Hyperdrive"
+              : "MySQL through Hyperdrive";
+    const run = answers.packageManager === "npm" ? "npm run" : `${answers.packageManager} run`;
+    const storage = answers.kv
+        ? "KV caches sessions. Verification and rate limiting use the primary database because Better Auth 1.7 requires atomic operations that KV cannot provide."
+        : "Better Auth uses the primary database without secondary KV storage.";
+    const migrationWarning =
+        answers.database === "d1"
+            ? `\nFor a new or empty database, apply migrations with \`${run} db:migrate:dev\` or \`${run} db:migrate:prod\`. Before applying a generated Better Auth 1.7 migration to a populated 1.6 database, follow the [1.7 upgrade guide](https://better-auth.com/docs/guides/1-7-upgrade-guide), back up the database, and rehearse the migration against the backup.\n`
+            : "";
+
+    return `# ${answers.appName}
+
+Generated with [better-auth-cloudflare](https://github.com/zpg6/better-auth-cloudflare).
+
+## Configuration
+
+- Database: ${database}
+- Session cache: ${answers.kv ? "Workers KV" : "disabled"}
+- File storage: ${answers.r2 ? "R2" : "disabled"}
+
+${storage}
+
+## Commands
+
+\`\`\`bash
+${answers.packageManager} install
+${run} dev
+${run} build
+${run} auth:update
+${run} db:generate
+\`\`\`
+${migrationWarning}
+Change \`src/auth.config.ts\`, run \`${run} auth:update\`, then run \`${run} db:generate\`. Do not edit generated auth schema or migration files by hand.
+`;
+}
+
 interface CliArgs {
     [key: string]: string | boolean | undefined;
     verbose?: boolean;
@@ -116,8 +165,6 @@ export interface JSONObject {
     [key: string]: JSONValue;
 }
 export interface JSONArray extends Array<JSONValue> {}
-
-type PackageManager = "bun" | "pnpm" | "yarn" | "npm";
 
 // Global verbose flag state
 let isVerbose = false;
@@ -240,6 +287,14 @@ function commandAvailable(command: string): boolean {
     return (res.code ?? 1) === 0;
 }
 
+function getPackageManagerVersion(packageManager: PackageManager): string {
+    const result = bunSpawnSync(packageManager, ["--version"]);
+    if (result.code !== 0 || !result.stdout.trim()) {
+        fatal(`Could not read the ${packageManager} version.`);
+    }
+    return result.stdout.trim();
+}
+
 function fatal(message: string, details?: string): never {
     if (details && details.trim()) process.stdout.write(details);
     outro(pc.red(message));
@@ -255,21 +310,21 @@ function assertOk(result: { code: number; stdout?: string; stderr?: string }, fa
 }
 
 function detectPackageManager(cwd: string): PackageManager {
-    if (existsSync(join(cwd, "bun.lockb")) && commandAvailable("bun")) return "bun";
-    if (existsSync(join(cwd, "pnpm-lock.yaml")) && commandAvailable("pnpm")) return "pnpm";
-    if (existsSync(join(cwd, "yarn.lock")) && commandAvailable("yarn")) return "yarn";
+    let hint: PackageManager | undefined;
+    try {
+        hint = detectPackageManagerHint(cwd);
+    } catch (error) {
+        fatal(error instanceof Error ? error.message : "Could not detect the package manager.");
+    }
+    if (hint) {
+        if (!commandAvailable(hint)) fatal(`${hint} is required by this project but is not available.`);
+        return hint;
+    }
     if (commandAvailable("npm")) return "npm";
     if (commandAvailable("bun")) return "bun";
     if (commandAvailable("pnpm")) return "pnpm";
     if (commandAvailable("yarn")) return "yarn";
     return "npm";
-}
-
-function detectPackageManagerForAuth(cwd: string): PackageManager {
-    // Always use npm for auth commands to ensure consistency
-    if (commandAvailable("npm")) return "npm";
-    // Fallback to regular detection if npm is not available
-    return detectPackageManager(cwd);
 }
 
 function getAvailablePackageManagers(): PackageManager[] {
@@ -303,6 +358,10 @@ function getPackageManagerDisplayName(pm: PackageManager): string {
 function runScript(pm: PackageManager, script: string, cwd: string) {
     const args = pm === "bun" ? ["run", script] : pm === "yarn" ? [script] : ["run", script];
     return bunSpawnSync(pm, args, cwd);
+}
+
+function scriptCommand(pm: PackageManager, script: string): string {
+    return pm === "yarn" ? `yarn ${script}` : pm === "npm" ? `npm run ${script}` : `${pm} run ${script}`;
 }
 
 function runInstall(pm: PackageManager, cwd: string) {
@@ -721,8 +780,12 @@ function validateCliArgs(args: CliArgs): string[] {
     }
 
     // Validate apply-migrations option
-    if (args["apply-migrations"] && !["dev", "prod", "skip"].includes(args["apply-migrations"] as string)) {
-        errors.push("apply-migrations must be 'dev', 'prod', or 'skip'");
+    if (args["apply-migrations"] === "prod") {
+        errors.push(
+            "Non-interactive generation cannot apply production migrations. Generate with --apply-migrations=skip, review the SQL, then run migrate --migrate-target=remote --confirm-remote from the new project."
+        );
+    } else if (args["apply-migrations"] && !["dev", "skip"].includes(args["apply-migrations"] as string)) {
+        errors.push("apply-migrations must be 'dev' or 'skip'");
     }
 
     return errors;
@@ -769,7 +832,7 @@ function cliArgsToAnswers(args: CliArgs): Partial<GenerateAnswers> {
 
 async function migrate(cliArgs?: CliArgs) {
     const unsupportedArgs = Object.keys(cliArgs ?? {}).filter(
-        argument => argument !== "verbose" && argument !== "migrate-target"
+        argument => argument !== "verbose" && argument !== "migrate-target" && argument !== "confirm-remote"
     );
     if (unsupportedArgs.length > 0) {
         fatal(`Unsupported migrate argument: --${unsupportedArgs[0]}`);
@@ -834,13 +897,20 @@ async function migrate(cliArgs?: CliArgs) {
                 fatal("migrate-target must be 'dev', 'remote', or 'skip'");
             }
         }
+        if (migrateChoice === "remote" && cliArgs?.["confirm-remote"] !== true) {
+            fatal(
+                "Remote migrations require --confirm-remote. Review the generated SQL, back up the database, and rehearse upgrades before applying it."
+            );
+        }
     }
 
-    // Run auth:update - use npm specifically for auth commands
+    const migrationSqlBefore =
+        isNonInteractive && migrateChoice === "remote" ? snapshotMigrationSql(projectDirectory) : undefined;
+
     debugLog("Running auth:update script");
     const authSpinner = createSpinner("Running auth:update...");
     authSpinner.start();
-    const authPm = detectPackageManagerForAuth(projectDirectory);
+    const authPm = detectPackageManager(projectDirectory);
     debugLog(`Using package manager for auth commands: ${authPm}`);
     const authRes = runScript(authPm, "auth:update", projectDirectory);
     if (authRes.code === 0) {
@@ -860,6 +930,12 @@ async function migrate(cliArgs?: CliArgs) {
     } else {
         dbSpinner.fail("Failed to generate database migrations.");
         assertOk(dbRes, "Database migration generation failed.");
+    }
+
+    if (migrationSqlBefore && migrationSqlChanged(migrationSqlBefore, snapshotMigrationSql(projectDirectory))) {
+        fatal(
+            "A migration was generated or changed. Review the SQL and rehearse it against a backup, then rerun this command to apply it."
+        );
     }
 
     // If migration target is skip, exit early
@@ -883,13 +959,13 @@ async function migrate(cliArgs?: CliArgs) {
         if (hyperdriveDatabases.length > 0 && existingHyperdriveDatabases.length === 0) {
             outro(
                 pc.yellow(
-                    `Found ${hyperdriveDatabases.length} Hyperdrive configuration(s) but none exist in your account. Please create your Hyperdrive instance(s) first, then apply migrations using: bun run db:migrate:dev or bun run db:migrate:prod`
+                    `Found ${hyperdriveDatabases.length} Hyperdrive configuration(s) but none exist in your account. Create the Hyperdrive instance first, then run ${scriptCommand(pm, "db:migrate:dev")} or ${scriptCommand(pm, "db:migrate:prod")}.`
                 )
             );
         } else {
             outro(
                 pc.yellow(
-                    `Found ${existingHyperdriveDatabases.length} Hyperdrive database${existingHyperdriveDatabases.length === 1 ? "" : "s"}. Apply migrations to your database using: bun run db:migrate:dev or bun run db:migrate:prod`
+                    `Found ${existingHyperdriveDatabases.length} Hyperdrive database${existingHyperdriveDatabases.length === 1 ? "" : "s"}. Run ${scriptCommand(pm, "db:migrate:dev")} or ${scriptCommand(pm, "db:migrate:prod")} to apply migrations.`
                 )
             );
         }
@@ -953,13 +1029,22 @@ async function migrate(cliArgs?: CliArgs) {
             ],
             initialValue: "skip",
         })) as "dev" | "remote" | "skip";
+        if (
+            migrateChoice === "remote" &&
+            !(await confirm({
+                message: "Have you reviewed the SQL, backed up the database, and rehearsed this migration?",
+                initialValue: false,
+            }))
+        ) {
+            migrateChoice = "skip";
+        }
     }
 
     if (migrateChoice === "dev") {
-        debugLog("Applying migrations locally (dev environment)");
+        debugLog(`Applying migrations locally to ${selectedDatabase.binding}`);
         const migSpinner = createSpinner("Applying migrations locally...");
         migSpinner.start();
-        const migRes = runScript(pm, "db:migrate:dev", projectDirectory);
+        const migRes = bunSpawnSync("npx", d1MigrationArgs(selectedDatabase.binding, "dev"), projectDirectory);
         if (migRes.code === 0) {
             migSpinner.succeed("Migrations applied locally.");
         } else {
@@ -967,10 +1052,10 @@ async function migrate(cliArgs?: CliArgs) {
             assertOk(migRes, "Local migration failed.");
         }
     } else if (migrateChoice === "remote") {
-        debugLog("Applying migrations to remote (production environment)");
+        debugLog(`Applying migrations remotely to ${selectedDatabase.binding}`);
         const migSpinner = createSpinner("Applying migrations to remote...");
         migSpinner.start();
-        const migRes = runScript(pm, "db:migrate:prod", projectDirectory);
+        const migRes = bunSpawnSync("npx", d1MigrationArgs(selectedDatabase.binding, "remote"), projectDirectory);
         if (migRes.code === 0) {
             migSpinner.succeed("Migrations applied to remote.");
         } else {
@@ -1232,48 +1317,13 @@ async function generate(cliArgs?: CliArgs) {
     }
     copying.succeed("Project files copied.");
 
-    // Centralize project constants for future tooling
-
-    // Update package.json name and dependencies and scripts to use chosen bindings
-    const pkgPath = join(targetDir, "package.json");
-    if (existsSync(pkgPath)) {
-        debugLog(`Updating package.json: ${pkgPath}`);
-        try {
-            updateJSON(pkgPath, j => {
-                const deps = ((j.dependencies as JSONObject) || {}) as JSONObject;
-                if (typeof deps["better-auth-cloudflare"] === "string") {
-                    deps["better-auth-cloudflare"] = "latest";
-                }
-                if (answers.database === "hyperdrive-postgres") {
-                    deps["postgres"] = deps["postgres"] || "^3.4.5";
-                }
-                if (answers.database === "hyperdrive-mysql") {
-                    deps["mysql2"] = deps["mysql2"] || "^3.9.7";
-                }
-                const scripts = (j.scripts as JSONObject) || {};
-                for (const key of Object.keys(scripts)) {
-                    const val = String(scripts[key] as string);
-                    if (answers.database === "d1" && answers.d1Binding) {
-                        scripts[key] = val.replace(/wrangler\s+d1\s+migrations\s+apply\s+\w+/g, m =>
-                            m.replace(/apply\s+\w+/, `apply ${answers.d1Binding}`)
-                        ) as unknown as JSONValue;
-                    } else if (answers.database !== "d1") {
-                        // For Hyperdrive, replace D1 migration commands with Drizzle commands
-                        if (val.includes("wrangler d1 migrations apply")) {
-                            scripts[key] = val
-                                .replace(/wrangler d1 migrations apply \w+ --local/, "drizzle-kit migrate")
-                                .replace(
-                                    /wrangler d1 migrations apply \w+ --remote/,
-                                    "drizzle-kit migrate"
-                                ) as unknown as JSONValue;
-                        }
-                    }
-                }
-                return { ...j, name: answers.appName, dependencies: deps, scripts } as JSONObject;
-            });
-        } catch (e) {
-            fatal("Failed to update package.json.");
-        }
+    try {
+        normalizeProjectTemplate(targetDir, {
+            ...answers,
+            packageManagerVersion: getPackageManagerVersion(answers.packageManager),
+        });
+    } catch {
+        fatal("Failed to normalize project template.");
     }
 
     // Create .env file for Hyperdrive projects
@@ -1412,10 +1462,11 @@ export const verification = {} as any;`;
     try {
         // Generate auth files using unified generator
         debugLog("Generating auth configuration files");
-        const { generateAuthFile } = await import("./lib/auth-generator");
+        const { generateAuthFile, generateAuthSchemaFile } = await import("./lib/auth-generator");
 
         const authConfig = {
             template: answers.template as "hono" | "nextjs",
+            geolocation: answers.geolocation,
             database:
                 answers.database === "d1"
                     ? ("sqlite" as const)
@@ -1459,6 +1510,10 @@ export const verification = {} as any;`;
             debugLog(`Writing auth configuration: ${authPath}`);
             const generatedAuth = generateAuthFile(authConfig);
             writeFileSync(authPath, generatedAuth);
+
+            const authSchemaPath = join(targetDir, "src/auth.config.ts");
+            debugLog(`Writing schema-generation auth configuration: ${authSchemaPath}`);
+            writeFileSync(authSchemaPath, generateAuthSchemaFile(authConfig));
 
             const dbIndex = join(targetDir, "src/db/index.ts");
             debugLog(`Writing database index: ${dbIndex}`);
@@ -1553,6 +1608,10 @@ export const verification = {} as any;`;
             const generatedNextAuth = generateAuthFile(authConfig);
             writeFileSync(nextAuth, generatedNextAuth);
 
+            const nextAuthSchema = join(targetDir, "src/auth.config.ts");
+            debugLog(`Writing schema-generation auth configuration: ${nextAuthSchema}`);
+            writeFileSync(nextAuthSchema, generateAuthSchemaFile(authConfig));
+
             // Note: TypeScript validation is skipped during generation to avoid dependency issues
             // Users can run `npm run build` or `npm run typecheck` after installation to validate
 
@@ -1627,16 +1686,9 @@ export const verification = {} as any;`;
         fatal("Failed to update template source files.");
     }
 
-    // Append subtle footer
     try {
         const readmePath = join(targetDir, "README.md");
-        const footer = `\n\n—\nPowered by better-auth-cloudflare`;
-        if (existsSync(readmePath)) {
-            const current = readFileSync(readmePath, "utf8");
-            if (!current.includes("Powered by better-auth-cloudflare")) {
-                writeFileSync(readmePath, current.trimEnd() + footer);
-            }
-        }
+        writeFileSync(readmePath, generateProjectReadme(answers));
     } catch (e) {
         fatal("Failed to update README.");
     }
@@ -1976,7 +2028,7 @@ export const verification = {} as any;`;
     const genAuth = createSpinner("Generating auth schema...");
     genAuth.start();
     {
-        const authPm = detectPackageManagerForAuth(targetDir);
+        const authPm = detectPackageManager(targetDir);
         debugLog(`Using package manager for auth commands: ${authPm}`);
         const authRes = runScript(authPm, "auth:update", targetDir);
         if (authRes.code === 0) {
@@ -2037,6 +2089,8 @@ export const verification = {} as any;`;
         }
     }
 
+    let productionMigrationsApplied = false;
+
     if (answers.database === "d1" && !databaseSetupSkipped) {
         let migrateChoice: "dev" | "prod" | "skip";
 
@@ -2056,6 +2110,14 @@ export const verification = {} as any;`;
             })) as "dev" | "prod" | "skip";
         }
 
+        if (migrateChoice === "prod") {
+            const confirmed = await confirm({
+                message: "Have you reviewed the SQL, backed up the database, and rehearsed this migration?",
+                initialValue: false,
+            });
+            if (!confirmed) migrateChoice = "skip";
+        }
+
         if (migrateChoice === "dev") {
             debugLog("Applying D1 migrations locally");
             const mig = createSpinner("Applying migrations locally...");
@@ -2071,8 +2133,10 @@ export const verification = {} as any;`;
             const mig = createSpinner("Applying migrations remotely...");
             mig.start();
             const res = runScript(pm, "db:migrate:prod", targetDir);
-            if (res.code === 0) mig.succeed("Migrations applied remotely.");
-            else {
+            if (res.code === 0) {
+                mig.succeed("Migrations applied remotely.");
+                productionMigrationsApplied = true;
+            } else {
                 mig.fail("Failed to apply remote migrations.");
                 assertOk(res, "Remote migration failed.");
             }
@@ -2106,6 +2170,14 @@ export const verification = {} as any;`;
             })) as "dev" | "prod" | "skip";
         }
 
+        if (migrateChoice === "prod") {
+            const confirmed = await confirm({
+                message: "Have you reviewed the SQL, backed up the database, and rehearsed this migration?",
+                initialValue: false,
+            });
+            if (!confirmed) migrateChoice = "skip";
+        }
+
         if (migrateChoice === "dev") {
             const mig = createSpinner("Applying migrations to development database...");
             mig.start();
@@ -2119,8 +2191,10 @@ export const verification = {} as any;`;
             const mig = createSpinner("Applying migrations to production database...");
             mig.start();
             const res = runScript(pm, "db:migrate:prod", targetDir);
-            if (res.code === 0) mig.succeed("Migrations applied to production database.");
-            else {
+            if (res.code === 0) {
+                mig.succeed("Migrations applied to production database.");
+                productionMigrationsApplied = true;
+            } else {
                 mig.fail("Failed to apply production migrations.");
                 console.log(pc.gray("Check Cloudflare Status for ongoing issues: https://www.cloudflarestatus.com/"));
                 assertOk(res, "Production migration failed.");
@@ -2134,65 +2208,12 @@ export const verification = {} as any;`;
         );
     }
 
-    // Run database migrations to production if database was created
-    if (setup && !databaseSetupSkipped) {
-        if (answers.database === "d1") {
-            const migrateSpinner = createSpinner("Applying D1 database migrations to production...");
-            migrateSpinner.start();
-
-            const migrateRes = runScript(pm, "db:migrate:prod", targetDir);
-            if (migrateRes.code === 0) {
-                migrateSpinner.succeed("D1 database migrations applied to production.");
-            } else {
-                migrateSpinner.fail("Failed to apply D1 database migrations to production.");
-                // Don't fail the entire process, but warn the user
-                outro(
-                    pc.yellow(
-                        "Warning: D1 database migrations failed. You may need to run 'bun run db:migrate:prod' manually."
-                    )
-                );
-                console.log(pc.gray("Check Cloudflare Status for ongoing issues: https://www.cloudflarestatus.com/"));
-            }
-        } else {
-            const migrateSpinner = createSpinner("Applying database migrations to production...");
-            migrateSpinner.start();
-
-            const migrateRes = runScript(pm, "db:migrate:prod", targetDir);
-            if (migrateRes.code === 0) {
-                migrateSpinner.succeed("Database migrations applied to production.");
-            } else {
-                migrateSpinner.fail("Failed to apply database migrations to production.");
-                // Don't fail the entire process, but warn the user
-                outro(
-                    pc.yellow(
-                        "Warning: Database migrations failed. You may need to run 'bun run db:migrate:prod' manually."
-                    )
-                );
-                console.log(pc.gray("Check Cloudflare Status for ongoing issues: https://www.cloudflarestatus.com/"));
-                console.log(
-                    pc.gray(
-                        "Also check your database connection string and make sure it is correct, and check status with your database provider."
-                    )
-                );
-            }
-        }
-    }
-
     // Deploy to Cloudflare if setup was completed
-    if (setup && !databaseSetupSkipped) {
-        let deployChoice: boolean;
-
-        if (isNonInteractive) {
-            // In non-interactive mode, deploy automatically since they chose to setup Cloudflare
-            deployChoice = true;
-        } else {
-            // In interactive mode, ask user
-            const deployResult = await confirm({
-                message: "Deploy your app to Cloudflare Workers now?",
-                initialValue: true,
-            });
-            deployChoice = deployResult === true;
-        }
+    if (productionMigrationsApplied) {
+        const deployChoice = await confirm({
+            message: "Deploy your app to Cloudflare Workers now?",
+            initialValue: true,
+        });
 
         if (deployChoice) {
             debugLog("Starting deployment to Cloudflare Workers");
@@ -2211,9 +2232,15 @@ export const verification = {} as any;`;
             } else {
                 deploySpinner.fail("Deployment failed.");
                 console.log(pc.gray("Check Cloudflare Status for ongoing issues: https://www.cloudflarestatus.com/"));
-                outro(pc.yellow("You can deploy manually later with: bun run deploy"));
+                outro(pc.yellow(`You can deploy manually later with: ${scriptCommand(pm, "deploy")}`));
             }
         }
+    } else if (setup && !databaseSetupSkipped) {
+        outro(
+            pc.yellow(
+                "Deployment skipped because production migrations were not applied. Review the SQL, run the remote migrate command, then run the deploy script."
+            )
+        );
     }
 
     // Initialize git repository
@@ -2231,8 +2258,7 @@ export const verification = {} as any;`;
 
     // Final instructions
     const pmDev = pm === "yarn" ? "yarn dev" : pm === "npm" ? "npm run dev" : `${pm} run dev`;
-    const runScriptHelp = (name: string) =>
-        pm === "yarn" ? `yarn ${name}` : pm === "npm" ? `npm run ${name}` : `${pm} run ${name}`;
+    const runScriptHelp = (name: string) => scriptCommand(pm, name);
 
     const lines: string[] = [];
     lines.push(`${pc.green("✔")} ${pc.bold("Project created!")}`);
@@ -2248,16 +2274,14 @@ export const verification = {} as any;`;
         lines.push(`  ${runScriptHelp("db:migrate:prod")} ${pc.gray("# Apply migrations to remote (D1)")}`);
     } else {
         lines.push(
-            pc.gray(
-                "Apply migrations to your Postgres/MySQL database using: bun run db:migrate:dev or bun run db:migrate:prod"
-            )
+            pc.gray(`Apply migrations with ${runScriptHelp("db:migrate:dev")} or ${runScriptHelp("db:migrate:prod")}`)
         );
     }
     lines.push(`  ${runScriptHelp("db:studio:dev")} ${pc.gray("# Open Drizzle Studio (local)")}`);
     lines.push(`  ${runScriptHelp("db:studio:prod")} ${pc.gray("# Open Drizzle Studio (remote)")}`);
     lines.push(`  ${runScriptHelp("deploy")} ${pc.gray("# Deploy to Cloudflare Workers")}`);
     lines.push("");
-    lines.push(pc.gray("Refer to the example README for more details."));
+    lines.push(pc.gray("Refer to the README for more details."));
 
     outro(lines.join("\n"));
 }
@@ -2306,10 +2330,11 @@ function printHelp() {
         `Cloudflare account arguments:\n` +
         `  --account-id=<id>              Cloudflare account ID (only required if you have multiple accounts)\n` +
         `  --skip-cloudflare-setup=<bool> Skip Cloudflare resource creation and deployment (default: false)\n` +
-        `  --apply-migrations=<choice>    Apply D1 migrations: dev | prod | skip (default: skip)\n` +
+        `  --apply-migrations=<choice>    Apply migrations during generation: dev | skip (default: skip)\n` +
         `\n` +
         `Migrate command arguments:\n` +
         `  --migrate-target=<target>      For migrate command: dev | remote | skip (default: skip)\n` +
+        `  --confirm-remote               Confirm reviewed SQL, backup, and rehearsal before remote migration\n` +
         `\n` +
         `Examples:\n` +
         `  # Create a Hono app with D1 database\n` +
@@ -2331,7 +2356,7 @@ function printHelp() {
         `  # Apply migrations automatically in non-interactive mode\n` +
         `  npx @better-auth-cloudflare/cli --app-name=auto-app --apply-migrations=dev\n` +
         `\n` +
-        `  # Create and deploy app in one command (default when not skipping setup)\n` +
+        `  # Generate a project without applying production migrations or deploying\n` +
         `  npx @better-auth-cloudflare/cli --app-name=prod-app\n` +
         `\n` +
         `  # Run migration workflow interactively\n` +
@@ -2342,7 +2367,7 @@ function printHelp() {
         `\n` +
         `Creates a new Better Auth Cloudflare project from Hono or OpenNext.js templates,\n` +
         `optionally creating Cloudflare D1, KV, R2, or Hyperdrive resources for you.\n` +
-        `The migrate command runs auth:update, db:generate, and optionally db:migrate.\n` +
+        `The migrate command updates the auth schema, generates migrations, and applies D1 migrations to the selected binding. Hyperdrive projects use their generated migration scripts.\n` +
         `\n` +
         `Cloudflare Status: https://www.cloudflarestatus.com/\n` +
         `Report issues: https://github.com/zpg6/better-auth-cloudflare/issues\n`;
