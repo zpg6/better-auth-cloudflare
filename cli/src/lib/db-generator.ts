@@ -50,7 +50,7 @@ function generateNextjsImports(config: DbConfig): string {
         imports.push('import postgres from "postgres";');
     } else {
         imports.push('import { drizzle } from "drizzle-orm/mysql2";');
-        imports.push('import mysql from "mysql2/promise";');
+        imports.push('import mysql from "mysql2";');
     }
 
     imports.push('import { schema } from "./schema";');
@@ -80,7 +80,7 @@ function generateGetDbFunction(config: DbConfig): string {
     const { env } = await getCloudflareContext({ async: true });
 
     // Initialize Drizzle with your Hyperdrive binding for PostgreSQL
-    return drizzle(postgres(env.${binding}.connectionString), {
+    return drizzle(postgres(env.${binding}.connectionString, { max: 5, fetch_types: false, prepare: true }), {
         // Ensure "${binding}" matches your Hyperdrive binding name in wrangler.toml
         schema,
         logger: true, // Optional
@@ -92,10 +92,11 @@ function generateGetDbFunction(config: DbConfig): string {
     const { env } = await getCloudflareContext({ async: true });
 
     // Initialize Drizzle with your Hyperdrive binding for MySQL
-    const pool = await mysql.createPool(env.${binding}.connectionString);
+    const pool = mysql.createPool({ uri: env.${binding}.connectionString, disableEval: true });
     return drizzle(pool, {
         // Ensure "${binding}" matches your Hyperdrive binding name in wrangler.toml
         schema,
+        mode: "default",
     });
 }`;
     }

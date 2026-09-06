@@ -37,6 +37,7 @@ function generateHonoAuth(config: AuthConfig): string {
         imports.push(`import { drizzle } from "drizzle-orm/d1";`);
     } else if (config.database === "postgres") {
         imports.push(`import { drizzle } from "drizzle-orm/postgres-js";`);
+        imports.push(`import postgres from "postgres";`);
     } else {
         imports.push(`import { drizzle } from "drizzle-orm/mysql2";`);
         imports.push(`import mysql from "mysql2";`);
@@ -53,9 +54,11 @@ function generateHonoAuth(config: AuthConfig): string {
 function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, baseURL?: string) {
     // Use actual DB for runtime, empty object for CLI
     const db = env ? ${generateDbConnection(config)} : ({} as any);
+    if (env && !env.BETTER_AUTH_SECRET) throw new Error("BETTER_AUTH_SECRET is not set.");
 
     return betterAuth({
         baseURL,
+        secret: env?.BETTER_AUTH_SECRET,
         ...withCloudflare(
             {
                 autoDetectIpAddress: true,
@@ -106,6 +109,21 @@ function generateNextjsAuth(config: AuthConfig): string {
 
     const cloudflareConfig = generateNextjsCloudflareConfig(config);
     const cliDatabaseConfig = generateCliDatabaseConfig(config);
+    // Hyperdrive sockets cannot be shared across requests, so only D1 keeps a singleton.
+    const initializer = config.resources.hyperdrive
+        ? `export async function initAuth() {
+    return authBuilder();
+}`
+        : `// Singleton pattern to ensure a single auth instance
+let authInstance: Awaited<ReturnType<typeof authBuilder>> | null = null;
+
+// Asynchronously initializes and retrieves the shared auth instance
+export async function initAuth() {
+    if (!authInstance) {
+        authInstance = await authBuilder();
+    }
+    return authInstance;
+}`;
 
     return `${imports.join("\n")}
 
@@ -132,16 +150,7 @@ async function authBuilder() {
     });
 }
 
-// Singleton pattern to ensure a single auth instance
-let authInstance: Awaited<ReturnType<typeof authBuilder>> | null = null;
-
-// Asynchronously initializes and retrieves the shared auth instance
-export async function initAuth() {
-    if (!authInstance) {
-        authInstance = await authBuilder();
-    }
-    return authInstance;
-}
+${initializer}
 
 /* ======================================================================= */
 /* Configuration for Schema Generation                                     */
@@ -187,9 +196,14 @@ function generateHonoCloudflareConfig(config: AuthConfig): string {
                     : undefined,`);
     } else if (config.resources.hyperdrive) {
         parts.push(`
-                ${config.database === "postgres" ? "postgres" : "mysql"}: {
-                    db
-                },`);
+                ${config.database === "postgres" ? "postgres" : "mysql"}: env
+                    ? {
+                          db,
+                          options: {
+                              usePlural: true,
+                          },
+                      }
+                    : undefined,`);
     }
 
     // KV configuration
@@ -266,7 +280,10 @@ function generateNextjsCloudflareConfig(config: AuthConfig): string {
     } else if (config.resources.hyperdrive) {
         parts.push(`
                 ${config.database === "postgres" ? "postgres" : "mysql"}: {
-                    db: dbInstance
+                    db: dbInstance,
+                    options: {
+                        usePlural: true,
+                    },
                 },`);
     }
 
@@ -354,15 +371,9 @@ function generateDbConnection(config: AuthConfig): string {
     if (config.database === "sqlite") {
         return `drizzle(env.${config.bindings.d1 || "DATABASE"}, { schema, logger: true })`;
     } else if (config.database === "postgres") {
-        return `drizzle(env.${binding}, { schema, logger: true })`;
+        return `drizzle(postgres(env.${binding}.connectionString, { max: 5, fetch_types: false, prepare: true }), { schema, logger: true })`;
     } else {
-        return `drizzle(mysql.createPool({
-        host: env.${binding}.host,
-        user: env.${binding}.user,
-        password: env.${binding}.password,
-        database: env.${binding}.database,
-        port: env.${binding}.port,
-    }), { schema, mode: "default", logger: true })`;
+        return `drizzle(mysql.createPool({ uri: env.${binding}.connectionString, disableEval: true }), { schema, mode: "default", logger: true })`;
     }
 }
 

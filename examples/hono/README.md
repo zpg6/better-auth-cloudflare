@@ -156,6 +156,12 @@ interface CloudflareBindings {
 }
 ```
 
+Set the session secret before deploying; without it Better Auth signs sessions with a default secret:
+
+```bash
+openssl rand -base64 48 | wrangler secret put BETTER_AUTH_SECRET
+```
+
 ### Better Auth Configuration
 
 The auth configuration in `src/auth/index.ts` uses a simplified single-function approach that handles both CLI schema generation and runtime scenarios:
