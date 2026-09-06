@@ -2,7 +2,7 @@
 # https://developers.cloudflare.com/workers/wrangler/configuration/
 
 name = "better-auth-cloudflare"
-main = ".open-next/worker.js"
+main = "custom-worker.ts"
 compatibility_date = "2025-03-01"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
@@ -25,6 +25,14 @@ migrations_dir = "drizzle"
 [[kv_namespaces]]
 binding = "KV"
 id = "YOUR_KV_NAMESPACE_ID"
+
+[[durable_objects.bindings]]
+name = "BETTER_AUTH_STORAGE"
+class_name = "BetterAuthDurableObject"
+
+[exports.BetterAuthDurableObject]
+type = "durable-object"
+storage = "sqlite"
 
 [[r2_buckets]]
 binding = "R2_BUCKET"

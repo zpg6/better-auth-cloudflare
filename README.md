@@ -18,6 +18,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - 🗄️ **Database Integration**: Support for D1 (SQLite), Postgres, and MySQL databases via Drizzle ORM, or native D1 without Drizzle.
 - 🚀 **Hyperdrive Support**: Connect to Postgres and MySQL databases through Cloudflare Hyperdrive.
 - 🔌 **KV Storage Integration**: Optionally use Cloudflare KV for secondary storage (e.g., session caching).
+- 🔒 **Durable Object Storage**: Atomic secondary storage and distributed rate limiting for Better Auth 1.7.
 - 📁 **R2 File Storage**: Upload, download, and manage user files with Cloudflare R2 object storage and database tracking.
 - 📍 **Automatic Geolocation Tracking**: Enrich user sessions with location data derived from Cloudflare.
 - 🌐 **Cloudflare IP Detection**: Utilize Cloudflare's IP detection headers out-of-the-box.
@@ -34,7 +35,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
 - [x] R2
 - [ ] Cloudflare Email
 - [ ] Cloudflare Images
-- [ ] Durable Objects
+- [x] Durable Objects
 - [ ] D1 Multi-Tenancy
 
 **CLI:**
@@ -64,7 +65,7 @@ Demo implementations are available in the [`examples/`](./examples/) directory f
     - [3. Configure Better Auth (`src/auth/index.ts`)](#3-configure-better-auth-srcauthindexts)
     - [4. Generate and Manage Auth Schema](#4-generate-and-manage-auth-schema)
     - [5. Configure KV as Secondary Storage (Optional)](#5-configure-kv-as-secondary-storage-optional)
-        - [Important: KV and session revocation](#important-kv-and-session-revocation)
+        - [KV consistency and Better Auth 1.7](#kv-consistency-and-better-auth-17)
     - [6. Set Up API Routes](#6-set-up-api-routes)
     - [7. Initialize the Client](#7-initialize-the-client)
 - [Usage Examples](#usage-examples)
@@ -124,12 +125,12 @@ bun add better-auth-cloudflare
 
 ## Configuration Options
 
-| Option                | Type    | Default     | Description                                    |
-| --------------------- | ------- | ----------- | ---------------------------------------------- |
-| `autoDetectIpAddress` | boolean | `true`      | Auto-detect IP address from Cloudflare headers |
-| `geolocationTracking` | boolean | `true`      | Track geolocation data in the session table    |
-| `cf`                  | object  | `{}`        | Cloudflare geolocation context                 |
-| `r2`                  | object  | `undefined` | R2 bucket configuration for file storage       |
+| Option                | Type               | Default     | Description                                                                                          |
+| --------------------- | ------------------ | ----------- | ---------------------------------------------------------------------------------------------------- |
+| `autoDetectIpAddress` | boolean            | `true`      | Auto-detect IP address from Cloudflare headers                                                       |
+| `geolocationTracking` | boolean            | `true`      | Track geolocation data in the session table                                                          |
+| `cf`                  | object or resolver | `undefined` | Request geolocation context; required unless IP detection and geolocation tracking are both disabled |
+| `r2`                  | object             | `undefined` | R2 bucket configuration for file storage                                                             |
 
 For the full `WithCloudflareOptions` interface (including database, KV, and Drizzle adapter options), see the [Configuration Reference](./docs/configuration.md).
 
@@ -183,87 +184,9 @@ export async function getDb() {
 
 ### 3. Configure Better Auth (`src/auth/index.ts`)
 
-Set up your Better Auth configuration, wrapping it with `withCloudflare` to enable Cloudflare-specific features. The exact configuration depends on your framework:
+Keep runtime auth and schema generation separate. `src/auth/index.ts` reads Worker bindings and creates the runtime instance. `src/auth.config.ts` exports a static `auth` instance for the Better Auth CLI and must not read Worker bindings.
 
-**For most frameworks (Hono, etc.):**
-
-```typescript
-import type { D1Database, IncomingRequestCfProperties } from "@cloudflare/workers-types";
-import { betterAuth } from "better-auth";
-import { withCloudflare } from "better-auth-cloudflare";
-import { drizzleAdapter } from "@better-auth/drizzle-adapter";
-import { drizzle } from "drizzle-orm/d1";
-import { schema } from "../db";
-
-// Single auth configuration that handles both CLI and runtime scenarios
-function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, baseURL?: string) {
-    // Use actual DB for runtime, empty object for CLI
-    const db = env ? drizzle(env.DATABASE, { schema, logger: true }) : ({} as any);
-
-    return betterAuth({
-        baseURL,
-        ...withCloudflare(
-            {
-                autoDetectIpAddress: true,
-                geolocationTracking: true,
-                cf: cf || {},
-                d1: env
-                    ? {
-                          db,
-                          options: {
-                              usePlural: true,
-                              debugLogs: true,
-                          },
-                      }
-                    : undefined,
-                kv: env?.KV,
-                kvAtomicCompatibility: env?.KV ? true : undefined,
-                // Optional: Enable R2 file storage
-                r2: env?.R2_BUCKET
-                    ? {
-                          bucket: env.R2_BUCKET,
-                          maxFileSize: 10 * 1024 * 1024, // 10MB
-                          allowedTypes: [".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx"],
-                          additionalFields: {
-                              category: { type: "string", required: false },
-                              isPublic: { type: "boolean", required: false },
-                              description: { type: "string", required: false },
-                          },
-                      }
-                    : undefined,
-            },
-            {
-                emailAndPassword: {
-                    enabled: true,
-                },
-                verification: {
-                    storeInDatabase: true,
-                },
-                rateLimit: {
-                    enabled: true,
-                    storage: "database",
-                },
-            }
-        ),
-        // Only add database adapter for CLI schema generation
-        ...(env
-            ? {}
-            : {
-                  database: drizzleAdapter({} as D1Database, {
-                      provider: "sqlite",
-                      usePlural: true,
-                      debugLogs: true,
-                  }),
-              }),
-    });
-}
-
-// Export for CLI schema generation
-export const auth = createAuth();
-
-// Export for runtime usage
-export { createAuth };
-```
+The [Hono runtime config](./examples/hono/src/auth/index.ts) and [static schema config](./examples/hono/src/auth.config.ts) are the complete D1 example. OpenNext uses the same split: [runtime](./examples/opennextjs/src/auth/index.ts) and [schema config](./examples/opennextjs/src/auth.config.ts).
 
 The `baseURL` is derived per-request in Hono middleware via `new URL(c.req.url).origin`. On Cloudflare Workers, `request.url` reflects the actual URL the client connected to — Cloudflare's edge routes requests to your worker based on DNS and [route configuration](https://developers.cloudflare.com/workers/configuration/routing/routes/), not the HTTP `Host` header alone. Alternatively, you can set the `BETTER_AUTH_URL` environment variable and omit the `baseURL` parameter.
 
@@ -274,11 +197,18 @@ See the [OpenNext.js example](./examples/opennextjs/README.md) for a more comple
 
 ```typescript
 import { drizzle } from "drizzle-orm/mysql2";
-import mysql from "mysql2/promise";
+import { createConnection } from "mysql2/promise";
 
 async function getDb() {
     const { env } = await getCloudflareContext({ async: true });
-    const connection = mysql.createPool(env.HYPERDRIVE_URL);
+    const connection = await createConnection({
+        host: env.HYPERDRIVE.host,
+        user: env.HYPERDRIVE.user,
+        password: env.HYPERDRIVE.password,
+        database: env.HYPERDRIVE.database,
+        port: env.HYPERDRIVE.port,
+        disableEval: true,
+    });
     return drizzle(connection, { schema });
 }
 
@@ -305,7 +235,11 @@ import postgres from "postgres";
 
 async function getDb() {
     const { env } = await getCloudflareContext({ async: true });
-    const sql = postgres(env.HYPERDRIVE_URL);
+    const sql = postgres(env.HYPERDRIVE.connectionString, {
+        max: 5,
+        fetch_types: false,
+        prepare: true,
+    });
     return drizzle(sql, { schema });
 }
 
@@ -335,12 +269,13 @@ import { withCloudflare } from "better-auth-cloudflare";
 const auth = betterAuth({
     ...withCloudflare(
         {
-            d1Native: env.DATABASE, // D1Database binding from wrangler.toml
+            d1Native: env.DATABASE,
             kv: env.KV,
-            // other cloudflare options...
+            cf: request.cf,
         },
         {
-            // your auth options...
+            verification: { storeInDatabase: true },
+            rateLimit: { storage: "database" },
         }
     ),
 });
@@ -370,78 +305,25 @@ This works as a drop-in replacement for `betterAuth` from `"better-auth"` but ex
 
 Better Auth uses Drizzle ORM for database interactions, allowing for automatic schema management for your database (D1/SQLite, Postgres, or MySQL).
 
-To generate or update your authentication-related database schema, run the Better Auth CLI:
+Install `auth` as a devDependency at the same version as `better-auth`, then:
 
 ```bash
-npx @better-auth/cli@latest generate
+npx auth generate --config src/auth.config.ts --output src/db/auth.schema.ts -y
 ```
 
-This command inspects your `src/auth/index.ts` (specifically the `auth` export) and creates/updates `src/db/auth.schema.ts` with the necessary Drizzle schema definitions for tables like users, sessions, accounts, etc.
-
-**Recommended Usage:**
-
-Specify your configuration file and output path for more precise control:
-
-```bash
-npx @better-auth/cli@latest generate --config src/auth/index.ts --output src/db/auth.schema.ts -y
-```
-
-This command will:
-
-- Read the `export const auth` configuration from `src/auth/index.ts`.
-- Output the generated Drizzle schema to `src/db/auth.schema.ts`.
-- Automatically confirm prompts (`-y`).
-
-After generation, you can use Drizzle Kit to create and apply migrations to your database. Refer to the [Drizzle ORM documentation](https://orm.drizzle.team/kit/overview) for managing migrations.
+Keep schema generation in a static config that does not read Worker bindings. Runtime auth can stay in `src/auth/index.ts`. Drizzle Kit can then generate and apply the database migration.
 
 For integrating the generated `auth.schema.ts` with your existing Drizzle schema, see [managing schema across multiple files](https://orm.drizzle.team/docs/sql-schema-declaration#schema-in-multiple-files). More details on schema generation are available in the [Better Auth docs](https://www.better-auth.com/docs/adapters/drizzle#schema-generation--migration).
 
 ### 5. Configure KV as Secondary Storage (Optional)
 
-If you provide a KV namespace in the `withCloudflare` configuration (as shown in `src/auth/index.ts`), it will be used as [Secondary Storage](https://www.better-auth.com/docs/concepts/database#secondary-storage) by Better Auth. This is typically used for caching or storing session data that doesn't need to reside in your primary database.
+If you provide a KV namespace in the `withCloudflare` configuration (`kv: env.KV`), it will be used as [Secondary Storage](https://www.better-auth.com/docs/concepts/database#secondary-storage) by Better Auth. This is typically used for caching or storing session data that doesn't need to reside in your primary database.
 
 Ensure your KV namespace (e.g., `USER_SESSIONS`) is correctly bound in your `wrangler.toml` file.
 
-#### Important: KV and session revocation
+#### KV consistency and Better Auth 1.7
 
-Better Auth resolves a session by checking secondary storage **before** the database, and returns immediately on a hit without consulting the database:
-
-```js
-// better-auth: internal-adapter, findSession
-if (secondaryStorage) {
-    const sessionStringified = await secondaryStorage.get(token);
-    if (sessionStringified) {
-        // returns here; the database is never consulted
-    }
-}
-```
-
-Workers KV is [eventually consistent](https://developers.cloudflare.com/kv/concepts/how-kv-works/). Changes may take 60 seconds or more to appear in another location. A stale positive session hit therefore bypasses the mirrored database after logout or another direct token revocation.
-
-Better Auth also maintains each user's active-session list with separate secondary-storage reads and writes. Concurrent session changes can lose a token reference, so bulk revocation, role or ban changes, or user deletion may miss that cached token until its original session expiry. A strongly consistent secondary store removes KV propagation lag for direct token reads and deletes, but it does not make the active-session update atomic.
-
-`session.storeSessionInDatabase: true` does not repair a stale positive hit. If bulk revocation, role or ban changes, or user deletion must take effect immediately everywhere, omit secondary session caching and leave `session.cookieCache` disabled unless Better Auth adds an atomic active-list update.
-
-#### Better Auth 1.7 atomic storage requirements
-
-Better Auth 1.7 requires secondary storage to atomically consume verification values and increment rate-limit counters. Workers KV cannot provide either operation. When using KV with Better Auth 1.7, route those operations explicitly:
-
-```typescript
-verification: {
-    storeInDatabase: true,
-},
-rateLimit: {
-    storage: "database",
-},
-```
-
-Also set `kvAtomicCompatibility: true` next to the `kv` binding. It validates this configuration at startup and does not select a storage backend for you.
-
-Database-backed rate limiting typically adds at least one database read and one write to accepted Better Auth requests. Contention, resets, cleanup, and rejected requests can add operations. This affects latency and billing, so the library does not enable it automatically. `rateLimit.customStorage` can provide an atomic `consume` implementation backed by a strongly consistent store such as Redis or Durable Objects. `storage: "memory"` avoids database traffic but is not a distributed rate limit on Workers.
-
-`createKVStorage()` deliberately exposes only KV's non-atomic `get`, `set`, and `delete` operations. Use `withCloudflare()` for Better Auth 1.7 so the package can wire KV session storage while the settings above keep atomic operations elsewhere.
-
-Database-backed rate limiting requires Better Auth's rate-limit table. Generate the 1.7 schema with the same `auth` package version you deploy. For a populated 1.6 database, do not apply a plain generated schema. Follow the [Better Auth 1.7 migration guide](https://better-auth.com/docs/guides/1-7-upgrade-guide), including `auth migrate plan` and a rehearsed migration against a restored backup.
+Workers KV is eventually consistent and cannot implement Better Auth 1.7's atomic verification and rate-limit operations. Route those operations to a database, Durable Object, or another atomic store. Each choice changes request latency and storage costs. See [configuration](./docs/configuration.md#kv-secondary-storage) and [Durable Object storage](./docs/durable-object-storage.md) before enabling KV session caching.
 
 #### Important: KV TTL Limitation
 

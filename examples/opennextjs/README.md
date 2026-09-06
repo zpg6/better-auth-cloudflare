@@ -1,184 +1,64 @@
-# `better-auth-cloudflare` Example: Next.js on Cloudflare Workers
+# OpenNext example
 
-This example demonstrates how to use [`better-auth-cloudflare`](https://github.com/zpg6/better-auth-cloudflare), our authentication package specifically designed for Cloudflare, with a Next.js application deployed to [Cloudflare Workers](https://workers.cloudflare.com/) using the [OpenNext Cloudflare adapter](https://github.com/opennextjs/opennextjs-cloudflare).
+This Next.js Worker runs Better Auth 1.7 through OpenNext. D1 stores users, accounts, verification values, and session records. KV caches sessions. A Durable Object implements the atomic rolling rate limiter. R2 stores uploaded files.
 
-## About `better-auth-cloudflare`
+## Setup
 
-`better-auth-cloudflare` provides seamless authentication capabilities for applications deployed to Cloudflare's serverless platform. This package handles:
-
-- User authentication and session management
-- Integrating with Cloudflare's D1 database
-- Support for the App Router architecture in Next.js
-- Schema generation with Drizzle ORM
-
-This example project showcases a complete implementation of our authentication solution in a real-world Next.js application.
-
-## Getting Started
-
-First, run the development server:
+Install dependencies:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the authentication features in action.
+Set the D1, KV, and R2 resource IDs in `wrangler.toml`. The file already declares the `BETTER_AUTH_STORAGE` binding and the SQLite-backed `BetterAuthDurableObject` class. `custom-worker.ts` wraps OpenNext's generated handler and exports that class.
 
-## Authentication Scripts
+Set the runtime values and secret:
 
-Our package provides several scripts to help manage authentication:
-
-- `pnpm auth:generate`: Generates the Drizzle schema for Better Auth based on your configuration in `src/auth/index.ts`. The output is saved to `src/db/auth.schema.ts`.
-- `pnpm auth:format`: Formats the generated `auth.schema.ts` file using Prettier.
-- `pnpm auth:update`: A convenience script that runs both `auth:generate` and `auth:format` in sequence.
-
-## Database Management
-
-The example configures `better-auth-cloudflare` to work with Cloudflare's D1 database:
-
-- `pnpm db:generate`: Generates SQL migration files based on changes in your Drizzle schema (defined in `src/db/schema.ts` and the generated `src/db/auth.schema.ts`).
-- `pnpm db:migrate:dev`: Applies pending migrations to your local D1 database.
-- `pnpm db:migrate:prod`: Applies pending migrations to your remote/production D1 database.
-- `pnpm db:studio:dev`: Starts Drizzle Studio, a local GUI for browsing your local D1 database.
-- `pnpm db:studio:prod`: Starts Drizzle Studio for your remote/production D1 database.
-
-## Deployment Scripts
-
-Deploy your Next.js application with Better Auth to Cloudflare:
-
-- `pnpm build:cf`: Builds the application specifically for Cloudflare Workers using OpenNext.
-- `pnpm deploy`: Builds the application for Cloudflare and deploys it.
-- `pnpm preview`: Builds the application for Cloudflare and allows you to preview it locally before deploying.
-
-## Additional Scripts
-
-- `pnpm build`: Creates an optimized production build of your Next.js application.
-- `pnpm clean`: Removes build artifacts, cached files, and `node_modules`.
-- `pnpm clean-deploy`: Cleans the project, reinstalls dependencies, and then deploys.
-- `pnpm format`: Formats all project files using Prettier.
-- `pnpm lint`: Lints the project using Next.js's built-in ESLint configuration.
-
-## Authentication Configuration
-
-OpenNext.js requires a more complex auth configuration due to its async database initialization and singleton requirements. The configuration in `src/auth/index.ts` uses the following pattern:
-
-### Async Database Initialization
-
-```typescript
-import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { betterAuth } from "better-auth";
-import { withCloudflare } from "better-auth-cloudflare";
-import { drizzleAdapter } from "@better-auth/drizzle-adapter";
-import { anonymous, openAPI } from "better-auth/plugins";
-import { getDb } from "../db";
-
-// Define an asynchronous function to build your auth configuration
-async function authBuilder() {
-    const dbInstance = await getDb();
-    const cfCtx = getCloudflareContext();
-    return betterAuth({
-        ...withCloudflare(
-            {
-                autoDetectIpAddress: true,
-                geolocationTracking: true,
-                cf: cfCtx.cf,
-                d1: {
-                    db: dbInstance,
-                    options: {
-                        usePlural: true,
-                        debugLogs: true,
-                    },
-                },
-                kv: cfCtx.env.KV,
-            },
-            {
-                baseURL: cfCtx.env.BETTER_AUTH_URL,
-                trustedOrigins: (cfCtx.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "").split(",").filter(Boolean),
-                rateLimit: {
-                    enabled: true,
-                },
-                plugins: [openAPI(), anonymous()],
-            }
-        ),
-    });
-}
-
-// Singleton pattern to ensure a single auth instance
-let authInstance: Awaited<ReturnType<typeof authBuilder>> | null = null;
-
-// Asynchronously initializes and retrieves the shared auth instance
-export async function initAuth() {
-    if (!authInstance) {
-        authInstance = await authBuilder();
-    }
-    return authInstance;
-}
+```toml
+[vars]
+BETTER_AUTH_URL = "https://your-app.example.com"
+BETTER_AUTH_TRUSTED_ORIGINS = "https://your-app.workers.dev"
 ```
 
-### Environment Variables
-
-For production deployment, set the following via `wrangler.toml` `[vars]` or Cloudflare secrets:
-
-- `BETTER_AUTH_URL` — Your worker's primary base URL (e.g., `https://your-app.com`). Set as a `[vars]` entry.
-- `BETTER_AUTH_TRUSTED_ORIGINS` — Comma-separated list of additional trusted origins (e.g., `https://your-app.workers.dev`). Set as a `[vars]` entry.
-- `BETTER_AUTH_SECRET` — A random 32+ character secret. Set via `wrangler secret put BETTER_AUTH_SECRET`.
-
-### CLI Schema Generation Configuration
-
-For the Better Auth CLI to generate schemas, a separate static configuration is required:
-
-```typescript
-// This simplified configuration is used by the Better Auth CLI for schema generation.
-// It's necessary because the main `authBuilder` performs async operations like `getDb()`
-// which use `getCloudflareContext` (not available in CLI context).
-export const auth = betterAuth({
-    ...withCloudflare(
-        {
-            autoDetectIpAddress: true,
-            geolocationTracking: true,
-            cf: {},
-            r2: {
-                bucket: {} as any, // Mock bucket for schema generation
-                additionalFields: {
-                    category: { type: "string", required: false },
-                    isPublic: { type: "boolean", required: false },
-                    description: { type: "string", required: false },
-                },
-            },
-        },
-        {
-            plugins: [openAPI(), anonymous()],
-        }
-    ),
-
-    database: drizzleAdapter(process.env.DATABASE as any, {
-        provider: "sqlite",
-        usePlural: true,
-        debugLogs: true,
-    }),
-});
+```bash
+wrangler secret put BETTER_AUTH_SECRET
 ```
 
-### Why This Pattern is Needed
+For a new empty D1 database, apply the checked-in migrations:
 
-Unlike simpler frameworks, OpenNext.js requires this dual configuration because:
+```bash
+pnpm db:migrate:prod
+```
 
-1. **Async Database Access**: `getCloudflareContext()` and `getDb()` are async operations not available during CLI execution
-2. **Singleton Pattern**: Ensures single auth instance across serverless functions
-3. **CLI Compatibility**: The static `auth` export allows schema generation to work
+Build and test the Worker locally:
 
-For simpler frameworks like Hono, see the [Hono example](../hono/README.md) for a more streamlined single-configuration approach.
+```bash
+pnpm preview
+```
 
-## Learn More
+Deploy it with:
 
-To learn more about Better Auth and its features, visit the [Better Auth documentation](https://www.better-auth.com/docs). For `better-auth-cloudflare` specifics, see the [package documentation](https://github.com/zpg6/better-auth-cloudflare).
+```bash
+pnpm run deploy
+```
 
-For Next.js resources:
+## Files
 
-- [Next.js Documentation](https://nextjs.org/docs)
-- [Learn Next.js](https://nextjs.org/learn)
+- `src/auth/index.ts` builds the runtime configuration from OpenNext's Cloudflare context.
+- `src/auth.config.ts` is the static Better Auth CLI configuration.
+- `custom-worker.ts` re-exports the Durable Object class alongside OpenNext's handler.
+- `src/db/auth.schema.ts` contains the generated Better Auth schema.
+- `drizzle/` contains D1 migrations.
+
+## Scripts
+
+- `pnpm auth:update` regenerates and formats the Better Auth schema.
+- `pnpm db:generate` generates a Drizzle migration.
+- `pnpm db:check` verifies that the migration chain produces the declared schema.
+- `pnpm db:migrate:dev` applies migrations to local D1.
+- `pnpm db:migrate:prod` applies migrations to remote D1.
+- `pnpm build` builds Next.js.
+- `pnpm build:cf` builds the OpenNext Worker.
+- `pnpm preview` runs the built Worker locally.
+
+Do not edit generated schema or migration files by hand. Change `src/auth.config.ts`, run `pnpm auth:update`, then run `pnpm db:generate`. CI reruns both generators, checks migration history and schema equivalence, and applies the chain to a fresh local D1 database.

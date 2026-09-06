@@ -19,5 +19,12 @@ export default defineBuildConfig({
         "@cloudflare/workers-types",
         "mime",
     ],
-    entries: ["./src/index.ts", "./src/client.ts", "./src/r2.ts", "./src/schema.ts", "./src/types.ts"],
+    entries: [
+        "./src/index.ts",
+        "./src/client.ts",
+        "./src/durable-object.ts",
+        "./src/r2.ts",
+        "./src/schema.ts",
+        "./src/types.ts",
+    ],
 });

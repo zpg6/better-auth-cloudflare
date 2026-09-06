@@ -3,6 +3,8 @@ import { cors } from "hono/cors";
 import { createAuth } from "./auth";
 import type { CloudflareBindings } from "./env";
 
+export { BetterAuthDurableObject } from "better-auth-cloudflare/durable-object";
+
 type Variables = {
     auth: ReturnType<typeof createAuth>;
 };

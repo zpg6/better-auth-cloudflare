@@ -1,13 +1,14 @@
 {
     "name": "better-auth-cloudflare-hono",
+    "type": "module",
     "scripts": {
         "dev": "wrangler dev",
-        "build": "npx tsc --noEmit",
+        "build": "tsc --noEmit",
         "deploy": "wrangler deploy --minify",
         "cf-typegen": "wrangler types --env-interface CloudflareBindings",
-        "auth:generate": "npx --yes auth@1.6.30 generate --config src/auth/index.ts --output src/db/auth.schema.ts -y",
-        "auth:format": "npx --yes prettier --write src/db/auth.schema.ts",
-        "auth:update": "npm run auth:generate && npm run auth:format",
+        "auth:generate": "auth generate --config src/auth.config.ts --output src/db/auth.schema.ts -y",
+        "auth:format": "prettier --write src/db/auth.schema.ts",
+        "auth:update": "pnpm auth:generate && pnpm auth:format",
         "db:generate": "drizzle-kit generate",
         "db:migrate:dev": "wrangler d1 migrations apply DATABASE --local",
         "db:migrate:prod": "wrangler d1 migrations apply DATABASE --remote",
@@ -15,16 +16,18 @@
         "db:studio:prod": "NODE_ENV=production drizzle-kit studio"
     },
     "dependencies": {
-        "@better-auth/drizzle-adapter": "1.6.30",
+        "@better-auth/drizzle-adapter": "1.7.3",
         "@cloudflare/workers-types": "^5.20260830.1",
-        "better-auth": "1.6.30",
+        "better-auth": "1.7.3",
         "better-auth-cloudflare": "file:../../",
-        "drizzle-orm": "^0.45.0",
+        "drizzle-orm": "0.45.2",
         "hono": "4.13.5"
     },
     "devDependencies": {
         "@types/node": "^22.15.30",
+        "auth": "1.7.3",
         "drizzle-kit": "^0.31.1",
+        "prettier": "3.5.3",
         "typescript": "^5.8.3",
         "wrangler": "4.127.1"
     },
