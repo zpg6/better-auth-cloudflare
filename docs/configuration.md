@@ -64,10 +64,9 @@ Only **one** database option may be provided. Passing more than one throws at st
 
 ### KV Option
 
-| Option                  | Type          | Description                                                                                                                              |
-| ----------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `kv`                    | `KVNamespace` | KV namespace for [secondary storage](#kv-secondary-storage). Automatically wired as `secondaryStorage` via `createKVStorage`.            |
-| `kvAtomicCompatibility` | `true`        | Validates that Better Auth 1.7 verification and rate limiting are explicitly routed to supported storage. Does not change those options. |
+| Option | Type          | Description                                                                                                                   |
+| ------ | ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `kv`   | `KVNamespace` | KV namespace for [secondary storage](#kv-secondary-storage). Automatically wired as `secondaryStorage` via `createKVStorage`. |
 
 ### `DrizzleConfig<T>`
 
@@ -123,7 +122,6 @@ withCloudflare(
     {
         d1: { db, options: { usePlural: true } },
         kv: env.KV,
-        kvAtomicCompatibility: true,
         cf: request.cf,
     },
     {
@@ -135,11 +133,11 @@ withCloudflare(
 
 Better Auth 1.7 requires atomic `getAndDelete` and `increment` operations. Workers KV cannot provide them. The configuration above keeps KV session caching but routes verification consumption and rate limiting to the database explicitly.
 
-`kvAtomicCompatibility: true` validates the required routing at startup. It never selects database or memory storage automatically.
+`withCloudflare()` validates the required routing when Better Auth initializes. It never selects database or memory storage automatically.
 
 This is a cost and latency choice, not a transparent compatibility shim. Database rate limiting typically adds at least one database read and one write to accepted Better Auth requests. Contention, resets, cleanup, and rejected requests can add operations. You can instead provide an atomic `rateLimit.customStorage.consume` implementation backed by a strongly consistent service such as Redis or Durable Objects. `storage: "memory"` is suitable for development, but Worker isolates do not share counters.
 
-Database-backed rate limiting requires Better Auth's rate-limit table. Generate the schema with the same 1.7 `auth` package version you deploy. For a populated 1.6 database, follow the migration process below instead of applying a plain generated schema.
+Database-backed rate limiting requires Better Auth's rate-limit table. Generate the schema with the same `auth` package version you deploy and apply it with your migration tooling. Better Auth 1.7.3 validates the Drizzle schema you pass against the tables it expects (`advanced.database.validateSchema`, on by default) and fails writes with `SchemaMismatchError` (logged as `Drizzle schema mismatch`) while they disagree, so regenerate `auth.schema.ts` whenever you change an option that adds a table.
 
 ### KV session consistency
 
@@ -151,7 +149,7 @@ Better Auth also updates each user's active-session list with separate secondary
 
 ### `createKVStorage(kv)`
 
-`createKVStorage()` exposes the `get`, `set`, and `delete` operations Workers KV can actually provide. It intentionally does not claim Better Auth 1.7's full `SecondaryStorage` contract. For Better Auth 1.7, use `withCloudflare()` as shown above. Manual wiring remains available for Better Auth 1.5 and 1.6:
+`createKVStorage()` exposes the `get`, `set`, and `delete` operations Workers KV can provide. It does not claim Better Auth 1.7's full `SecondaryStorage` contract. For Better Auth 1.7, use `withCloudflare()` as shown above. Manual wiring remains available for Better Auth 1.5 and 1.6:
 
 ```typescript
 import { createKVStorage, cloudflare } from "better-auth-cloudflare";
@@ -169,9 +167,11 @@ const auth = betterAuth({
 
 Workers KV enforces a **minimum physical TTL of 60 seconds**. `createKVStorage` clamps shorter TTLs to 60 seconds and logs a warning. Better Auth 1.5 and 1.6 rate limiting keeps its own timestamps, so a shorter logical window can still expire while the KV key remains stored. Do not weaken Better Auth's protected sign-in rules just to match KV's physical TTL. This limitation does not apply when Better Auth 1.7 uses database or custom rate-limit storage.
 
-### Upgrading a populated database to Better Auth 1.7
+### Upgrading to Better Auth 1.7
 
-Better Auth 1.7 also changes account identity fields. Do not apply a plain generated Drizzle schema over a populated 1.6 account table. Pin `better-auth`, `auth`, and every `@better-auth/*` package to the same 1.7 release, set the account identity strategy required by your migration, then run `auth migrate plan` and rehearse `auth migrate apply` against a restored backup. Follow the [Better Auth 1.7 migration guide](https://better-auth.com/docs/guides/1-7-upgrade-guide) before upgrading production data.
+Use Better Auth 1.7.3 or later, and pin `better-auth`, `auth`, and every `@better-auth/*` package to the same release. Releases 1.7.0 through 1.7.2 added a required `issuer` column to the account table and a unique index on `issuer` and `accountId`; 1.7.3 removed both, so the core account schema is unchanged from 1.6 and a populated 1.6 database needs no backfill. Check for duplicate `(providerId, accountId)` rows first; 1.7 rejects account lookups that match more than one row. Regenerate `auth.schema.ts` with the 1.7.3 CLI and apply the diff with your migration tooling: it adds the rate-limit table when `rateLimit.storage` is `"database"` and, with `usePlural`, renames relation keys from `users` to `user`, which affects your own `with:` queries.
+
+If you already applied the 1.7.0–1.7.2 account schema, relax the `issuer` column and drop the index as described in the [upgrade guide](https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-keeps-the-provider-key) before deploying 1.7.3. The rest of the [upgrade guide](https://better-auth.com/docs/guides/1-7-upgrade-guide) still applies.
 
 ---
 

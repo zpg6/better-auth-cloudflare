@@ -76,7 +76,8 @@ export interface WithCloudflareOptions extends CloudflarePluginOptions {
      * Workers KV does not support Better Auth 1.7's atomic `getAndDelete` and
      * `increment` operations. When using KV with Better Auth 1.7, configure
      * `verification.storeInDatabase: true` and route rate limiting to
-     * `database`, `memory`, or `customStorage` explicitly.
+     * `database`, `memory`, or `customStorage` explicitly. `withCloudflare`
+     * validates this when Better Auth initializes.
      *
      * Better Auth accepts a positive secondary-storage session without checking
      * the database. KV changes may take 60 seconds or more to appear in another
@@ -90,16 +91,6 @@ export interface WithCloudflareOptions extends CloudflarePluginOptions {
      * @see https://developers.cloudflare.com/kv/concepts/how-kv-works/
      */
     kv?: KVNamespace;
-
-    /**
-     * Validate that Better Auth 1.7 operations which require atomic storage
-     * are explicitly routed away from Workers KV. This option does not change
-     * verification or rate-limit storage on your behalf.
-     *
-     * Requires `kv`, `verification.storeInDatabase: true`, a database, and
-     * either database, memory, custom, or disabled rate limiting.
-     */
-    kvAtomicCompatibility?: true;
 }
 
 /**

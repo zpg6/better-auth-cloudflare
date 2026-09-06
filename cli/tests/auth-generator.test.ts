@@ -35,6 +35,9 @@ describe("Auth Generator", () => {
             expect(result).not.toContain("kv: env");
             expect(result).not.toContain("r2: {");
             expect(result).not.toContain("postgres: {");
+
+            expect(result).not.toContain("storeInDatabase");
+            expect(result).toContain('storage: "database"');
         });
 
         test("generates Hyperdrive PostgreSQL configuration", () => {
@@ -74,6 +77,8 @@ describe("Auth Generator", () => {
             const result = generateAuthFile(config);
 
             expect(result).toContain("kv: env?.MY_KV");
+            expect(result).toContain("storeInDatabase: true");
+            expect(result).toContain('storage: "database"');
         });
 
         test("generates R2 configuration with custom binding", () => {
@@ -136,6 +141,8 @@ describe("Auth Generator", () => {
 
             // Check CLI export
             expect(result).toContain("export const auth = betterAuth({");
+
+            expect(result).not.toContain("storeInDatabase");
         });
 
         test("generates Hyperdrive PostgreSQL configuration", () => {
@@ -187,6 +194,8 @@ describe("Auth Generator", () => {
             const result = generateAuthFile(config);
 
             expect(result).toContain("kv: cfCtx.env.MY_KV");
+            expect(result).toContain("storeInDatabase: true");
+            expect(result.match(/storage: "database"/g)).toHaveLength(2);
         });
 
         test("generates R2 configuration with schema generation", () => {
