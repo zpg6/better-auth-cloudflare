@@ -651,6 +651,7 @@ export const createR2Endpoints = (
                     try {
                         await ctx.context.adapter.create({
                             model: modelName,
+                            forceAllowId: true,
                             data: {
                                 id: fileMetadata.id,
                                 userId: fileMetadata.userId,
