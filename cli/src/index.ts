@@ -1248,7 +1248,7 @@ async function generate(cliArgs?: CliArgs) {
                     deps["postgres"] = deps["postgres"] || "^3.4.5";
                 }
                 if (answers.database === "hyperdrive-mysql") {
-                    deps["mysql2"] = deps["mysql2"] || "^3.9.7";
+                    deps["mysql2"] = deps["mysql2"] || "^3.14.0";
                 }
                 const scripts = (j.scripts as JSONObject) || {};
                 for (const key of Object.keys(scripts)) {
@@ -1392,6 +1392,7 @@ export const verification = {} as any;`;
             hyperdrive: answers.hdBinding,
         },
         skipCloudflareSetup: answers.skipCloudflareSetup,
+        database: answers.database,
         resourceIds: {
             r2BucketName: answers.r2BucketName,
             ...resourceIds,

@@ -252,7 +252,7 @@ Complete example with all supported binding types. Include only what you need.
 ```toml
 name = "my-auth-app"
 main = "src/index.ts"
-compatibility_date = "2025-03-01"
+compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat"]
 
 [observability]

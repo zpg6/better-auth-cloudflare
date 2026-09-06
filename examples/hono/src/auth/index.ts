@@ -10,9 +10,11 @@ import type { CloudflareBindings } from "../env";
 // Single auth configuration that handles both CLI and runtime scenarios
 function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, baseURL?: string) {
     const db = env ? drizzle(env.DATABASE, { schema, logger: true }) : ({} as any);
+    if (env && !env.BETTER_AUTH_SECRET) throw new Error("BETTER_AUTH_SECRET is not set.");
 
     return betterAuth({
         baseURL,
+        secret: env?.BETTER_AUTH_SECRET,
         ...withCloudflare(
             {
                 autoDetectIpAddress: true,

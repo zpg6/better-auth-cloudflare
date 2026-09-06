@@ -14,6 +14,7 @@ export interface WranglerConfig {
         hyperdrive?: string;
     };
     skipCloudflareSetup?: boolean;
+    database?: "d1" | "hyperdrive-postgres" | "hyperdrive-mysql";
     resourceIds?: {
         d1?: string;
         kv?: string;
@@ -50,7 +51,7 @@ function generateBasicConfig(config: WranglerConfig): string {
     return `
 name = "${config.appName}"
 main = "${main}"
-compatibility_date = "2025-03-01"
+compatibility_date = "2025-04-01"
 compatibility_flags = ${compatibilityFlags}`;
 }
 
@@ -125,7 +126,10 @@ bucket_name = "${bucketName}"`);
 
         // Add proper localConnectionString for Next.js builds
         const localConnectionString =
-            config.resourceIds?.hyperdriveConnectionString || "postgresql://postgres:password@localhost:5432/postgres";
+            config.resourceIds?.hyperdriveConnectionString ||
+            (config.database === "hyperdrive-mysql"
+                ? "mysql://root:password@localhost:3306/mysql"
+                : "postgresql://postgres:password@localhost:5432/postgres");
 
         resources.push(`
 [[hyperdrive]]

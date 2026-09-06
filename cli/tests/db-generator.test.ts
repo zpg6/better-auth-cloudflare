@@ -88,7 +88,9 @@ describe("Database Generator", () => {
             expect(result).toContain('import { drizzle } from "drizzle-orm/postgres-js"');
             expect(result).toContain('import postgres from "postgres"');
             expect(result).toContain("export async function getDb()");
-            expect(result).toContain("postgres(env.HYPERDRIVE.connectionString)");
+            expect(result).toContain(
+                "postgres(env.HYPERDRIVE.connectionString, { max: 5, fetch_types: false, prepare: true })"
+            );
             expect(result).toContain('// Ensure "HYPERDRIVE" matches your Hyperdrive binding name');
         });
 
@@ -101,7 +103,9 @@ describe("Database Generator", () => {
 
             const result = generateDbIndex(config);
 
-            expect(result).toContain("postgres(env.MY_HYPERDRIVE.connectionString)");
+            expect(result).toContain(
+                "postgres(env.MY_HYPERDRIVE.connectionString, { max: 5, fetch_types: false, prepare: true })"
+            );
             expect(result).toContain('// Ensure "MY_HYPERDRIVE" matches your Hyperdrive binding name');
         });
     });
@@ -117,9 +121,9 @@ describe("Database Generator", () => {
             const result = generateDbIndex(config);
 
             expect(result).toContain('import { drizzle } from "drizzle-orm/mysql2"');
-            expect(result).toContain('import mysql from "mysql2/promise"');
+            expect(result).toContain('import mysql from "mysql2"');
             expect(result).toContain("export async function getDb()");
-            expect(result).toContain("mysql.createPool(env.HYPERDRIVE.connectionString)");
+            expect(result).toContain("mysql.createPool({ uri: env.HYPERDRIVE.connectionString, disableEval: true })");
             expect(result).toContain('// Ensure "HYPERDRIVE" matches your Hyperdrive binding name');
         });
 
@@ -132,7 +136,9 @@ describe("Database Generator", () => {
 
             const result = generateDbIndex(config);
 
-            expect(result).toContain("mysql.createPool(env.MY_HYPERDRIVE.connectionString)");
+            expect(result).toContain(
+                "mysql.createPool({ uri: env.MY_HYPERDRIVE.connectionString, disableEval: true })"
+            );
             expect(result).toContain('// Ensure "MY_HYPERDRIVE" matches your Hyperdrive binding name');
         });
     });
@@ -174,7 +180,7 @@ describe("Database Generator", () => {
             const mysqlResult = generateDbIndex(mysqlConfig);
 
             expect(postgresResult).toContain('import postgres from "postgres"');
-            expect(mysqlResult).toContain('import mysql from "mysql2/promise"');
+            expect(mysqlResult).toContain('import mysql from "mysql2"');
         });
     });
 
@@ -206,11 +212,16 @@ describe("Database Generator", () => {
             expect(sqliteResult).toContain("drizzle(env.DATABASE, {");
 
             // PostgreSQL should use postgres connection
-            expect(postgresResult).toContain("drizzle(postgres(env.HYPERDRIVE.connectionString), {");
+            expect(postgresResult).toContain(
+                "drizzle(postgres(env.HYPERDRIVE.connectionString, { max: 5, fetch_types: false, prepare: true }), {"
+            );
 
             // MySQL should use pool creation
-            expect(mysqlResult).toContain("const pool = await mysql.createPool(env.HYPERDRIVE.connectionString)");
+            expect(mysqlResult).toContain(
+                "const pool = mysql.createPool({ uri: env.HYPERDRIVE.connectionString, disableEval: true })"
+            );
             expect(mysqlResult).toContain("return drizzle(pool, {");
+            expect(mysqlResult).toContain('mode: "default"');
         });
     });
 

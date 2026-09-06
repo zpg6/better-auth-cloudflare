@@ -4,6 +4,19 @@ import type { WranglerConfig } from "../src/lib/wrangler-generator";
 
 describe("Wrangler Generator", () => {
     describe("Basic Configuration", () => {
+        test("defaults the MySQL local connection string", () => {
+            const result = generateWranglerToml({
+                appName: "app",
+                template: "hono",
+                resources: { d1: false, kv: false, r2: false, hyperdrive: true },
+                bindings: {},
+                skipCloudflareSetup: true,
+                database: "hyperdrive-mysql",
+            });
+
+            expect(result).toContain('localConnectionString = "mysql://root:password@localhost:3306/mysql"');
+        });
+
         test("generates Hono basic configuration", () => {
             const config: WranglerConfig = {
                 appName: "test-hono-app",
@@ -17,6 +30,7 @@ describe("Wrangler Generator", () => {
             expect(result).toContain('name = "test-hono-app"');
             expect(result).toContain('main = "src/index.ts"');
             expect(result).toContain('compatibility_flags = ["nodejs_compat"]');
+            expect(result).toContain('compatibility_date = "2025-04-01"');
             expect(result).toContain("[observability]");
             expect(result).toContain("[placement]");
             expect(result).not.toContain("[assets]");
