@@ -134,6 +134,8 @@ describe("Auth Generator", () => {
             expect(result).toContain("db: dbInstance");
             expect(result).toContain("usePlural: true");
 
+            expect(result).toContain("cf: () => getCloudflareContext().cf");
+
             // Check async auth builder pattern
             expect(result).toContain("async function authBuilder()");
             expect(result).toContain("let authInstance");

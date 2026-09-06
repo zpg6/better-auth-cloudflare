@@ -105,6 +105,31 @@ describe("withCloudflare storage wiring", () => {
         assert.deepEqual(Object.keys(result.secondaryStorage).sort(), ["delete", "get", "set"]);
     });
 
+    it("resolves geolocation per request when cf is a function", async () => {
+        let cf = { city: "Paris", country: "FR" };
+        const options = withCloudflare({ autoDetectIpAddress: false, geolocationTracking: true, cf: () => cf }, {});
+        const hook = initializeCloudflarePlugin(options, "1.7.3").options.databaseHooks.session.create.before;
+
+        const first = await hook({}, null);
+        cf = { city: "Tokyo", country: "JP" };
+        const second = await hook({}, null);
+
+        assert.equal(first.data.city, "Paris");
+        assert.equal(second.data.city, "Tokyo");
+    });
+
+    it("accepts async resolvers and skips geolocation when they resolve to nothing", async () => {
+        const hookFor = cf =>
+            initializeCloudflarePlugin(
+                withCloudflare({ autoDetectIpAddress: false, geolocationTracking: true, cf }, {}),
+                "1.7.3"
+            ).options.databaseHooks.session.create.before;
+
+        assert.equal((await hookFor(async () => ({ city: "Lima" }))({}, null)).data.city, "Lima");
+        assert.equal(await hookFor(async () => undefined)({}, null), undefined);
+        assert.equal(await hookFor(() => null)({}, null), undefined);
+    });
+
     it("leaves Better Auth 1.5 and 1.6 KV configurations alone", () => {
         const result = withCloudflare({ ...cloudflareOptions, kv: createKV() }, {});
 

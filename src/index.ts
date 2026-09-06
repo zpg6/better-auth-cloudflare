@@ -34,7 +34,7 @@ const createCloudflarePlugin = (options?: CloudflarePluginOptions, validateStora
                         return ctx.json({ error: "Unauthorized" }, { status: 401 });
                     }
 
-                    const cf = await Promise.resolve(opts.cf);
+                    const cf = await resolveCloudflareGeolocation(opts.cf);
                     if (!cf) {
                         return ctx.json({ error: "Cloudflare context is not available" }, { status: 404 });
                     }
@@ -65,7 +65,7 @@ const createCloudflarePlugin = (options?: CloudflarePluginOptions, validateStora
                                     _context: GenericEndpointContext | null
                                 ) => {
                                     if (!geolocationTrackingEnabled) return;
-                                    const cf = await Promise.resolve(opts.cf);
+                                    const cf = await resolveCloudflareGeolocation(opts.cf);
                                     if (!cf) return;
                                     const geoData = extractGeolocationData(cf);
                                     return {
@@ -157,6 +157,10 @@ function assertAtomicStorageCompatibility(version: string, options: BetterAuthOp
                 "Route verification and rate limiting to the database or provide atomic storage."
         );
     }
+}
+
+async function resolveCloudflareGeolocation(source: CloudflarePluginOptions["cf"]) {
+    return typeof source === "function" ? source() : source;
 }
 
 /**

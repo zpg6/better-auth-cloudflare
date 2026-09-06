@@ -6,6 +6,8 @@ import type { drizzle as d1Drizzle } from "drizzle-orm/d1";
 import type { drizzle as mysqlDrizzle } from "drizzle-orm/mysql2";
 import type { drizzle as postgresDrizzle } from "drizzle-orm/postgres-js";
 
+type CloudflareGeolocationSource = CloudflareGeolocation | null | undefined;
+
 export interface CloudflarePluginOptions {
     /**
      * Auto-detect IP address
@@ -20,9 +22,13 @@ export interface CloudflarePluginOptions {
     geolocationTracking?: boolean;
 
     /**
-     * Cloudflare geolocation context
+     * Cloudflare geolocation context, or a function that resolves it per
+     * request when one auth instance serves many requests.
      */
-    cf?: CloudflareGeolocation | Promise<CloudflareGeolocation | null> | null;
+    cf?:
+        | CloudflareGeolocationSource
+        | Promise<CloudflareGeolocationSource>
+        | (() => CloudflareGeolocationSource | Promise<CloudflareGeolocationSource>);
 
     /**
      * R2 configuration for user file tracking

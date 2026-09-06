@@ -86,7 +86,7 @@ async function authBuilder() {
             {
                 autoDetectIpAddress: true,
                 geolocationTracking: true,
-                cf: cfCtx.cf,
+                cf: () => getCloudflareContext().cf,
                 d1: {
                     db: dbInstance,
                     options: {

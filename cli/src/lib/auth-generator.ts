@@ -138,7 +138,7 @@ async function authBuilder() {
             {
                 autoDetectIpAddress: true,
                 geolocationTracking: true,
-                cf: cfCtx.cf,${cloudflareConfig}
+                cf: () => getCloudflareContext().cf,${cloudflareConfig}
             },
             {
                 baseURL: cfCtx.env.BETTER_AUTH_URL,

@@ -124,12 +124,12 @@ bun add better-auth-cloudflare
 
 ## Configuration Options
 
-| Option                | Type    | Default     | Description                                    |
-| --------------------- | ------- | ----------- | ---------------------------------------------- |
-| `autoDetectIpAddress` | boolean | `true`      | Auto-detect IP address from Cloudflare headers |
-| `geolocationTracking` | boolean | `true`      | Track geolocation data in the session table    |
-| `cf`                  | object  | `{}`        | Cloudflare geolocation context                 |
-| `r2`                  | object  | `undefined` | R2 bucket configuration for file storage       |
+| Option                | Type               | Default     | Description                                                                              |
+| --------------------- | ------------------ | ----------- | ---------------------------------------------------------------------------------------- |
+| `autoDetectIpAddress` | boolean            | `true`      | Auto-detect IP address from Cloudflare headers                                           |
+| `geolocationTracking` | boolean            | `true`      | Track geolocation data in the session table                                              |
+| `cf`                  | object or function | `undefined` | Request geolocation context; pass a function when one auth instance serves many requests |
+| `r2`                  | object             | `undefined` | R2 bucket configuration for file storage                                                 |
 
 For the full `WithCloudflareOptions` interface (including database, KV, and Drizzle adapter options), see the [Configuration Reference](./docs/configuration.md).
 
