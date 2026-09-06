@@ -9,3 +9,4 @@ node_modules
 dist
 build
 .wrangler
+examples/*/drizzle

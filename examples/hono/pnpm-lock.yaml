@@ -35,7 +35,7 @@ importers:
         specifier: ^22.15.30
         version: 22.19.17
       drizzle-kit:
-        specifier: ^0.31.1
+        specifier: 0.31.10
         version: 0.31.10
       typescript:
         specifier: ^5.8.3

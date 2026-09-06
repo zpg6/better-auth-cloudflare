@@ -31,10 +31,10 @@ importers:
         version: 1.1.12(@types/react-dom@19.1.3(@types/react@19.1.3))(@types/react@19.1.3)(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
       better-auth:
         specifier: 1.6.30
-        version: 1.6.30(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.4)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5))(next@15.5.24(@opentelemetry/api@1.9.1)(@types/node@20.17.46)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
+        version: 1.6.30(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5))(next@15.5.24(@opentelemetry/api@1.9.1)(@types/node@20.17.46)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
       better-auth-cloudflare:
         specifier: file:../../
-        version: file:../..(@better-auth/drizzle-adapter@1.6.30(@better-auth/core@1.6.30(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(better-call@1.4.0(zod@4.3.6))(jose@6.2.2)(kysely@0.29.5)(nanostores@1.2.0))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5)))(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(better-auth@1.6.30(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.4)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5))(next@15.5.24(@opentelemetry/api@1.9.1)(@types/node@20.17.46)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(kysely@0.29.5)
+        version: file:../..(@better-auth/drizzle-adapter@1.6.30(@better-auth/core@1.6.30(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(better-call@1.4.0(zod@4.3.6))(jose@6.2.2)(kysely@0.29.5)(nanostores@1.2.0))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5)))(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(better-auth@1.6.30(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5))(next@15.5.24(@opentelemetry/api@1.9.1)(@types/node@20.17.46)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(kysely@0.29.5)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -82,8 +82,8 @@ importers:
         specifier: ^10.4.20
         version: 10.4.21(postcss@8.5.23)
       drizzle-kit:
-        specifier: ^0.31.0
-        version: 0.31.4
+        specifier: 0.31.10
+        version: 0.31.10
       postcss:
         specifier: 8.5.23
         version: 8.5.23
@@ -2172,8 +2172,8 @@ packages:
     resolution: {integrity: sha512-m/C+AwOAr9/W1UOIZUo232ejMNnJAJtYQjUbHoNTBNTJSvqzzDh7vnrei3o3r3m9blf6ZoDkvcw0VmozNRFJxg==}
     engines: {node: '>=12'}
 
-  drizzle-kit@0.31.4:
-    resolution: {integrity: sha512-tCPWVZWZqWVx2XUsVpJRnH9Mx0ClVOf5YUHerZ5so1OKSlqww4zy1R5ksEdGRcO3tM3zj0PYN6V48TbQCL1RfA==}
+  drizzle-kit@0.31.10:
+    resolution: {integrity: sha512-7OZcmQUrdGI+DUNNsKBn1aW8qSoKuTH7d0mYgSP8bAzdFzKoovxEFnoGQp2dVs82EOJeYycqRtciopszwUf8bw==}
     hasBin: true
 
   drizzle-orm@0.45.2:
@@ -2323,11 +2323,6 @@ packages:
   es-set-tostringtag@2.1.0:
     resolution: {integrity: sha512-j6vWzfrGVfyXxge+O0x5sh6cvxAog0a/4Rdd2K36zCMV5eJ+/+tOAngRO8cODMNWbVRdVlmGZQL2YS3yR8bIUA==}
     engines: {node: '>= 0.4'}
-
-  esbuild-register@3.6.0:
-    resolution: {integrity: sha512-H2/S7Pm8a9CL1uhp9OvjwrBh5Pvx0H8qVOxNu8Wed9Y7qv56MPtq+GGM8RJpq6glYJn9Wspr8uw7l55uyinNeg==}
-    peerDependencies:
-      esbuild: '>=0.12 <1'
 
   esbuild@0.18.20:
     resolution: {integrity: sha512-ceqxoedUrcayh7Y7ZX6NdbbDzGROiyVBgC4PriJThBKSVPWnnFHZAkfI1lJT8QFkOwH4qOS2SJkS4wvpGl8BpA==}
@@ -3171,6 +3166,11 @@ packages:
 
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
+
+  tsx@4.23.13:
+    resolution: {integrity: sha512-BL5MGkRln6aDYhb0xbQlEAGw743BaZYWdbWtdJOBriYJboKgUUYCadFp2/FpBBZquBC/ezNBn7wMMPx7FDZUDw==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
 
   type-is@2.0.1:
     resolution: {integrity: sha512-OZs6gsjF4vMp32qrCbiVSkrFmXtG/AZhY3t0iAMrMBiAZyV9oALtXO8hsrHbMXF9x6L3grlFuwW2oAz7cav+Gw==}
@@ -5122,11 +5122,11 @@ snapshots:
 
   balanced-match@4.0.4: {}
 
-  better-auth-cloudflare@file:../..(@better-auth/drizzle-adapter@1.6.30(@better-auth/core@1.6.30(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(better-call@1.4.0(zod@4.3.6))(jose@6.2.2)(kysely@0.29.5)(nanostores@1.2.0))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5)))(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(better-auth@1.6.30(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.4)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5))(next@15.5.24(@opentelemetry/api@1.9.1)(@types/node@20.17.46)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(kysely@0.29.5):
+  better-auth-cloudflare@file:../..(@better-auth/drizzle-adapter@1.6.30(@better-auth/core@1.6.30(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(better-call@1.4.0(zod@4.3.6))(jose@6.2.2)(kysely@0.29.5)(nanostores@1.2.0))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5)))(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(better-auth@1.6.30(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5))(next@15.5.24(@opentelemetry/api@1.9.1)(@types/node@20.17.46)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(kysely@0.29.5):
     dependencies:
       '@better-auth/drizzle-adapter': 1.6.30(@better-auth/core@1.6.30(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(better-call@1.4.0(zod@4.3.6))(jose@6.2.2)(kysely@0.29.5)(nanostores@1.2.0))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5))
       '@cloudflare/workers-types': 5.20260830.1
-      better-auth: 1.6.30(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.4)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5))(next@15.5.24(@opentelemetry/api@1.9.1)(@types/node@20.17.46)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
+      better-auth: 1.6.30(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5))(next@15.5.24(@opentelemetry/api@1.9.1)(@types/node@20.17.46)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
       drizzle-orm: 0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5)
       mime: 4.1.0
       zod: 4.3.6
@@ -5160,7 +5160,7 @@ snapshots:
       - sql.js
       - sqlite3
 
-  better-auth@1.6.30(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.4)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5))(next@15.5.24(@opentelemetry/api@1.9.1)(@types/node@20.17.46)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(react-dom@19.1.9(react@19.1.9))(react@19.1.9):
+  better-auth@1.6.30(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5))(next@15.5.24(@opentelemetry/api@1.9.1)(@types/node@20.17.46)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(react-dom@19.1.9(react@19.1.9))(react@19.1.9):
     dependencies:
       '@better-auth/core': 1.6.30(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(better-call@1.4.0(zod@4.3.6))(jose@6.2.2)(kysely@0.29.5)(nanostores@1.2.0)
       '@better-auth/drizzle-adapter': 1.6.30(@better-auth/core@1.6.30(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(better-call@1.4.0(zod@4.3.6))(jose@6.2.2)(kysely@0.29.5)(nanostores@1.2.0))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5))
@@ -5180,7 +5180,7 @@ snapshots:
       nanostores: 1.2.0
       zod: 4.3.6
     optionalDependencies:
-      drizzle-kit: 0.31.4
+      drizzle-kit: 0.31.10
       drizzle-orm: 0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5)
       next: 15.5.24(@opentelemetry/api@1.9.1)(@types/node@20.17.46)(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
       react: 19.1.9
@@ -5368,14 +5368,12 @@ snapshots:
 
   dotenv@16.5.0: {}
 
-  drizzle-kit@0.31.4:
+  drizzle-kit@0.31.10:
     dependencies:
       '@drizzle-team/brocli': 0.10.2
       '@esbuild-kit/esm-loader': 2.6.5
       esbuild: 0.25.4
-      esbuild-register: 3.6.0(esbuild@0.25.4)
-    transitivePeerDependencies:
-      - supports-color
+      tsx: 4.23.13
 
   drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260830.1)(@opentelemetry/api@1.9.1)(kysely@0.29.5):
     optionalDependencies:
@@ -5433,13 +5431,6 @@ snapshots:
       get-intrinsic: 1.3.0
       has-tostringtag: 1.0.2
       hasown: 2.0.2
-
-  esbuild-register@3.6.0(esbuild@0.25.4):
-    dependencies:
-      debug: 4.4.0
-      esbuild: 0.25.4
-    transitivePeerDependencies:
-      - supports-color
 
   esbuild@0.18.20:
     optionalDependencies:
@@ -6392,6 +6383,12 @@ snapshots:
   ts-tqdm@0.8.6: {}
 
   tslib@2.8.1: {}
+
+  tsx@4.23.13:
+    dependencies:
+      esbuild: 0.28.1
+    optionalDependencies:
+      fsevents: 2.3.3
 
   type-is@2.0.1:
     dependencies:

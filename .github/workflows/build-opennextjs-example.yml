@@ -6,7 +6,9 @@ on:
         paths:
             - "package.json"
             - "pnpm-lock.yaml"
+            - ".prettierignore"
             - "src/**"
+            - "scripts/**"
             - "tsconfig.json"
             - "examples/opennextjs/**"
             - ".github/workflows/build-opennextjs-example.yml" # This file
@@ -15,7 +17,9 @@ on:
         paths:
             - "package.json"
             - "pnpm-lock.yaml"
+            - ".prettierignore"
             - "src/**"
+            - "scripts/**"
             - "tsconfig.json"
             - "examples/opennextjs/**"
             - ".github/workflows/build-opennextjs-example.yml" # This file
@@ -27,6 +31,8 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
 
             - name: Setup Node.js
               uses: actions/setup-node@v4
@@ -48,6 +54,25 @@ jobs:
             - name: Install example dependencies
               working-directory: examples/opennextjs
               run: pnpm install --frozen-lockfile
+
+            - name: Verify generated auth schema and migration chain
+              working-directory: examples/opennextjs
+              env:
+                  MIGRATION_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+              run: |
+                  node ../../scripts/verify-migration-history.mjs "$MIGRATION_BASE" .
+                  pnpm auth:update
+                  pnpm db:generate
+                  pnpm exec drizzle-kit check
+                  pnpm db:check
+                  git status --short --untracked-files=all -- src/db/auth.schema.ts drizzle
+                  git diff --exit-code -- src/db/auth.schema.ts drizzle
+                  test -z "$(git ls-files --others --exclude-standard -- src/db/auth.schema.ts drizzle)"
+                  pnpm db:migrate:dev
+
+            - name: Typecheck Example (OpenNextJS)
+              working-directory: examples/opennextjs
+              run: pnpm typecheck
 
             - name: Build Example (OpenNextJS)
               working-directory: examples/opennextjs

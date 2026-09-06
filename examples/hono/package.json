@@ -12,7 +12,8 @@
         "db:migrate:dev": "wrangler d1 migrations apply DATABASE --local",
         "db:migrate:prod": "wrangler d1 migrations apply DATABASE --remote",
         "db:studio:dev": "drizzle-kit studio",
-        "db:studio:prod": "NODE_ENV=production drizzle-kit studio"
+        "db:studio:prod": "NODE_ENV=production drizzle-kit studio",
+        "db:check": "node ../../scripts/verify-sqlite-migrations.mjs"
     },
     "dependencies": {
         "@better-auth/drizzle-adapter": "1.6.30",
@@ -24,7 +25,7 @@
     },
     "devDependencies": {
         "@types/node": "^22.15.30",
-        "drizzle-kit": "^0.31.1",
+        "drizzle-kit": "0.31.10",
         "typescript": "^5.8.3",
         "wrangler": "4.127.1"
     },
