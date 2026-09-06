@@ -121,7 +121,7 @@ function convertFieldAttributesToZodSchema(additionalFields: Record<string, DBFi
 // Zod schemas for validation
 export const createFileMetadataSchema = (additionalFields?: Record<string, DBFieldAttribute>) => {
     if (!additionalFields || Object.keys(additionalFields).length === 0) {
-        return z.record(z.string(), z.any()).optional();
+        return z.object({}).optional();
     }
     return convertFieldAttributesToZodSchema(additionalFields).optional();
 };
@@ -336,6 +336,7 @@ export const createR2Storage = (
 
                 // Create metadata for callbacks
                 const metadata: FileMetadata = {
+                    ...validatedMetadata,
                     id: fileId,
                     userId,
                     filename,
@@ -344,7 +345,6 @@ export const createR2Storage = (
                     size: file.size,
                     r2Key,
                     uploadedAt: new Date(),
-                    ...validatedMetadata,
                 };
 
                 // Call beforeUpload hook
@@ -649,21 +649,9 @@ export const createR2Endpoints = (
 
                     // Store file metadata in database
                     try {
-                        const newFile = await ctx.context.adapter.create({
-                            model: modelName,
-                            data: {
-                                userId: fileMetadata.userId,
-                                filename: fileMetadata.filename,
-                                originalName: fileMetadata.originalName,
-                                contentType: fileMetadata.contentType,
-                                size: fileMetadata.size,
-                                r2Key: fileMetadata.r2Key,
-                                uploadedAt: fileMetadata.uploadedAt,
-                                ...customMetadata,
-                            },
-                        });
+                        await ctx.context.adapter.create({ model: modelName, forceAllowId: true, data: fileMetadata });
 
-                        ctx.context.logger?.info("[R2]: File metadata saved to database:", newFile.id);
+                        ctx.context.logger?.info("[R2]: File metadata saved to database:", fileMetadata.id);
                     } catch (dbError) {
                         ctx.context.logger?.error("[R2]: Failed to save to database:", dbError);
 
@@ -681,7 +669,7 @@ export const createR2Endpoints = (
 
                     return ctx.json({
                         success: true,
-                        data: { ...fileMetadata, id: newFile.id },
+                        data: fileMetadata,
                     });
                 } catch (error) {
                     ctx.context.logger?.error("[R2]: Upload failed:", error);
