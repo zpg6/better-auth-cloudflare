@@ -8,4 +8,5 @@ bun.lockb
 node_modules
 dist
 build
-.wranglerdrizzle
+.wrangler
+drizzle
