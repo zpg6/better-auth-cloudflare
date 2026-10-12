@@ -314,9 +314,13 @@ export const createR2Storage = (
                 // Validate file using Result pattern
                 const fileValidation = validator.validateFile(fileForValidation, ctx);
                 if (!fileValidation.success) {
-                    throw new APIError(fileValidation.code === "FILE_TOO_LARGE" ? "PAYLOAD_TOO_LARGE" : "BAD_REQUEST", {
-                        message: fileValidation.error,
-                    });
+                    const status =
+                        fileValidation.code === "FILE_TOO_LARGE"
+                            ? "PAYLOAD_TOO_LARGE"
+                            : fileValidation.code === "INVALID_FILE_TYPE"
+                              ? "UNSUPPORTED_MEDIA_TYPE"
+                              : "BAD_REQUEST";
+                    throw new APIError(status, { message: fileValidation.error });
                 }
 
                 // Validate metadata if provided

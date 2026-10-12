@@ -68,7 +68,7 @@ describe("error status codes", () => {
 
     const additionalFields = { tag: { type: "string", required: true } };
     for (const [name, r2, headers, status] of [
-        ["bad extension", { allowedTypes: [".png"] }, { "x-filename": "probe.txt" }, 400],
+        ["bad extension", { allowedTypes: [".png"] }, { "x-filename": "probe.txt" }, 415],
         ["missing x-filename", {}, {}, 400],
         ["empty x-filename", {}, { "x-filename": "" }, 400],
         ["bad metadata JSON", {}, { "x-filename": "p.png", "x-file-metadata": "{" }, 400],
