@@ -1,7 +1,6 @@
 import type { AuthContext } from "better-auth";
 import { APIError, createAuthEndpoint, getSessionFromCtx, sessionMiddleware } from "better-auth/api";
 import type { DBFieldAttribute } from "better-auth/db";
-import mime from "mime/lite";
 import { z, type ZodType } from "zod";
 import type { FileMetadata, R2Config } from "./types";
 
@@ -515,20 +514,13 @@ export const createR2Endpoints = (
     getR2Storage: () => ReturnType<typeof createR2Storage> | null,
     r2Config?: R2Config
 ) => {
-    // An empty list disables better-call's media type check; omitting it falls back to the router's JSON-only default.
-    const allowedMediaTypes =
-        r2Config?.allowedTypes
-            ?.map(type => mime.getType(type))
-            .filter((mimeType): mimeType is string => Boolean(mimeType)) ?? [];
-
     return {
         upload: createAuthEndpoint(
             "/files/upload-raw",
             {
                 method: "POST",
-                metadata: {
-                    allowedMediaTypes,
-                },
+                // better-call would decode or stringify the body; the handler reads the raw bytes instead.
+                disableBody: true,
             },
             async ctx => {
                 // Manually get session instead of using middleware
@@ -627,23 +619,11 @@ export const createR2Endpoints = (
                         additionalFields = validationResult.data || {};
                     }
 
-                    // The file is directly in the request body
-                    const file = ctx.body;
-
-                    // Validate that we have a file body
-                    if (!file) {
-                        throw new Error(R2_ERROR_CODES.NO_FILE_PROVIDED);
+                    const body = await ctx.request?.blob();
+                    if (!body) {
+                        throw new APIError("BAD_REQUEST", { message: R2_ERROR_CODES.NO_FILE_PROVIDED });
                     }
-
-                    // Convert body to File if it's not already one
-                    let fileToUpload: File;
-                    if (file instanceof File) {
-                        fileToUpload = file;
-                    } else {
-                        fileToUpload = new File([file], filename, {
-                            type: file.type || ctx.request?.headers.get("content-type") || "application/octet-stream",
-                        });
-                    }
+                    const fileToUpload = new File([body], filename, { type: body.type || "application/octet-stream" });
 
                     const customMetadata: Record<string, any> = additionalFields || {};
 
@@ -769,6 +749,8 @@ export const createR2Endpoints = (
                         "Content-Type": fileRecord.contentType || "application/octet-stream",
                         "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(fileRecord.originalName).replace(/['()*]/g, c => `%${c.charCodeAt(0).toString(16)}`)}`,
                         "Content-Length": fileRecord.size?.toString() || "0",
+                        "X-Content-Type-Options": "nosniff",
+                        "Content-Security-Policy": "sandbox",
                     },
                 });
             }
