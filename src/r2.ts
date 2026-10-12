@@ -1,4 +1,4 @@
-import type { AuthContext } from "better-auth";
+import type { AuthContext, Where } from "better-auth";
 import { createAuthEndpoint, getSessionFromCtx, sessionMiddleware } from "better-auth/api";
 import type { DBFieldAttribute } from "better-auth/db";
 import mime from "mime/lite";
@@ -132,8 +132,8 @@ export const fileIdSchema = z.object({
 
 export const listFilesSchema = z
     .object({
-        limit: z.number().min(1).max(100).optional(),
-        cursor: z.string().optional(), // File ID to start listing from
+        limit: z.coerce.number().int().min(1).max(100).optional(),
+        cursor: z.string().optional(), // Last file ID of the previous page
     })
     .optional();
 
@@ -462,30 +462,6 @@ export const createR2Storage = (
          */
         async getFileInfo(r2Key: string) {
             return await bucket.head(r2Key);
-        },
-
-        /**
-         * Lists files for a user
-         */
-        async listUserFiles(userId: string, ctx: AuthContext) {
-            // Call beforeList hook
-            if (config.hooks?.list?.before) {
-                const result = await config.hooks.list.before(userId, ctx);
-                if (result === null) {
-                    throw new Error("List prevented by beforeList hook");
-                }
-            }
-
-            const files = await bucket.list({
-                prefix: `user-files/${userId}/`,
-            });
-
-            // Call afterList hook
-            if (config.hooks?.list?.after) {
-                await config.hooks.list.after(userId, files, ctx);
-            }
-
-            return files;
         },
     };
 };
@@ -831,6 +807,7 @@ export const createR2Endpoints = (
             {
                 method: "GET",
                 use: [sessionMiddleware],
+                query: listFilesSchema,
             },
             async ctx => {
                 const session = ctx.context.session;
@@ -854,67 +831,41 @@ export const createR2Endpoints = (
                     });
                 }
 
-                // Get query parameters from URL
-                const limit = ctx.query?.limit ? parseInt(ctx.query.limit as string) : 50;
-                const cursor = ctx.query?.cursor as string | undefined;
+                const userId = session.session.userId;
+                if ((await r2Config?.hooks?.list?.before?.(userId, ctx.context)) === null) {
+                    throw ctx.error("FORBIDDEN");
+                }
+
+                const { limit = 50, cursor } = ctx.query ?? {};
+                const where: Where[] = [{ field: "userId", value: userId }];
+                if (cursor) {
+                    const last = await ctx.context.adapter.findOne<FileMetadata>({
+                        model: "userFile",
+                        where: [...where, { field: "id", value: cursor }],
+                    });
+                    if (!last) {
+                        throw ctx.error("BAD_REQUEST", { message: R2_ERROR_CODES.INVALID_REQUEST });
+                    }
+                    where.push({ field: "uploadedAt", operator: "lt", value: last.uploadedAt });
+                }
 
                 try {
-                    // Query the database for user files instead of R2 directly
-                    const modelName = "userFile";
-                    ctx.context.logger?.info(`[R2]: Using model name "${modelName}" for listing files`);
+                    const records = await ctx.context.adapter.findMany<FileMetadata>({
+                        model: "userFile",
+                        where,
+                        limit: limit + 1,
+                        sortBy: { field: "uploadedAt", direction: "desc" },
+                    });
+                    const hasMore = records.length > limit;
+                    const files = records.slice(0, limit).filter(validateFileMetadata);
 
-                    let fileRecords: FileMetadata[] = [];
-                    const actualLimit = Math.min(limit, 100) + 1; // Request one extra to check if there are more
-
-                    try {
-                        const whereConditions = [{ field: "userId", value: session.session.userId }];
-
-                        // For cursor-based pagination, we'll use a simple approach with uploadedAt timestamp
-                        // since Better Auth adapters may not support complex operators
-                        fileRecords = await ctx.context.adapter.findMany({
-                            model: modelName,
-                            where: whereConditions,
-                            limit: actualLimit,
-                            sortBy: { field: "uploadedAt", direction: "desc" }, // Most recent first
-                        });
-
-                        // If cursor provided, filter results client-side for simplicity
-                        if (cursor) {
-                            const cursorIndex = fileRecords.findIndex(file => file.id === cursor);
-                            if (cursorIndex !== -1) {
-                                fileRecords = fileRecords.slice(cursorIndex + 1);
-                            }
-                        }
-                    } catch (dbError) {
-                        ctx.context.logger?.error(`[R2]: Database query failed for model "${modelName}":`, dbError);
-
-                        // Log more details about the error
-                        if (dbError instanceof Error) {
-                            ctx.context.logger?.error(`[R2]: Error message: ${dbError.message}`);
-                            ctx.context.logger?.error(`[R2]: Error stack: ${dbError.stack}`);
-                        }
-
-                        throw dbError;
-                    }
-
-                    // Validate and filter valid file records
-                    const validFileRecords = fileRecords.filter(record => validateFileMetadata(record));
-
-                    // Check if there are more results and prepare response
-                    const hasMore = validFileRecords.length > limit;
-                    const files = hasMore ? validFileRecords.slice(0, -1) : validFileRecords;
-                    const nextCursor = hasMore ? files[files.length - 1].id : null;
-
-                    ctx.context.logger?.info(
-                        `[R2]: Listed ${files.length} files for user "${session.session.userId}" (hasMore: ${hasMore})`
+                    await r2Config?.hooks?.list?.after?.(
+                        userId,
+                        { objects: files.map(file => ({ key: file.r2Key })) },
+                        ctx.context
                     );
 
-                    // Return paginated response
-                    return ctx.json({
-                        files,
-                        nextCursor,
-                        hasMore,
-                    });
+                    return ctx.json({ files, nextCursor: hasMore ? records[limit - 1].id : null, hasMore });
                 } catch (error) {
                     ctx.context.logger?.error("[R2]: Failed to list files:", error);
                     throw ctx.error("INTERNAL_SERVER_ERROR", {
