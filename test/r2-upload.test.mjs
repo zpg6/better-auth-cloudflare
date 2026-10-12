@@ -95,8 +95,42 @@ describe("R2 upload", () => {
         assert.deepEqual(new Uint8Array(await download.arrayBuffer()), png);
     });
 
-    it("accepts any media type when allowedTypes is unset", async () => {
-        const { auth, cookie } = await signedIn({});
+    for (const [type, body] of [
+        ["text/plain", "hello"],
+        ["application/octet-stream", png],
+        ["image/png", png],
+        ["application/pdf", Uint8Array.from([0x25, 0x50, 0x44, 0x46])],
+    ]) {
+        it(`round-trips ${type} when allowedTypes is unset`, async () => {
+            const { auth, cookie } = await signedIn({});
+
+            const upload = await call(
+                auth,
+                "/files/upload-raw",
+                { headers: { "content-type": type, "x-filename": "probe" }, body },
+                cookie
+            );
+            assert.equal(upload.status, 200);
+            const { data } = await upload.json();
+            assert.equal(data.contentType, type);
+
+            const download = await call(
+                auth,
+                "/files/download",
+                { headers: { "content-type": "application/json" }, body: JSON.stringify({ fileId: data.id }) },
+                cookie
+            );
+            assert.equal(download.status, 200);
+            assert.equal(download.headers.get("content-type"), type);
+            assert.deepEqual(
+                new Uint8Array(await download.arrayBuffer()),
+                new Uint8Array(await new Response(body).arrayBuffer())
+            );
+        });
+    }
+
+    it("rejects media types outside allowedTypes", async () => {
+        const { auth, cookie } = await signedIn({ allowedTypes: [".png"] });
 
         const upload = await call(
             auth,
@@ -104,8 +138,6 @@ describe("R2 upload", () => {
             { headers: { "content-type": "text/plain", "x-filename": "notes.txt" }, body: "hello" },
             cookie
         );
-        assert.equal(upload.status, 200);
-        const { data } = await upload.json();
-        assert.equal(data.contentType, "text/plain");
+        assert.equal(upload.status, 415);
     });
 });
