@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- `/cloudflare/geolocation` responds 401 when signed out and 404 when no `cf` context is available, instead of 200 with an `error` body. On the server, `auth.api.getGeolocation()` throws `APIError` ([#77](https://github.com/zpg6/better-auth-cloudflare/pull/77))
+
+### Fixed
+
+- R2 validation errors return 400, 413 or 415 and blocked upload hooks return 403, instead of 500 ([#77](https://github.com/zpg6/better-auth-cloudflare/pull/77))
+- R2 downloads send the filename as RFC 5987 `filename*`, so a crafted name can no longer inject a second filename, and non-ASCII names round-trip instead of becoming `?`. Names with control characters are rejected with 400. Clients older than this release that send a name containing a valid `%XX` sequence have it stored decoded ([#76](https://github.com/zpg6/better-auth-cloudflare/pull/76))
+
 ## v0.4.0 (2026-10-11)
 
 ### Changed
