@@ -102,7 +102,7 @@ describe("R2 upload stores the raw request bytes", () => {
     it("serves an html-typed .txt as a sandboxed attachment", async () => {
         const download = await roundTrip({ allowedTypes: ["txt"] }, "text/html", "x.txt", Uint8Array.of(60, 115, 62));
         assert.equal(download.headers.get("content-type"), "text/html");
-        assert.equal(download.headers.get("content-disposition"), 'attachment; filename="x.txt"');
+        assert.equal(download.headers.get("content-disposition"), "attachment; filename*=UTF-8''x.txt");
     });
 
     it("rejects an extension outside allowedTypes", async () => {

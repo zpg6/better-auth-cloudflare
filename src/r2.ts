@@ -621,7 +621,7 @@ export const createR2Endpoints = (
 
                     const body = await ctx.request?.blob();
                     if (!body) {
-                        throw new Error(R2_ERROR_CODES.NO_FILE_PROVIDED);
+                        throw new APIError("BAD_REQUEST", { message: R2_ERROR_CODES.NO_FILE_PROVIDED });
                     }
                     const fileToUpload = new File([body], filename, { type: body.type || "application/octet-stream" });
 
@@ -671,8 +671,7 @@ export const createR2Endpoints = (
                         throw error;
                     }
                     if (error instanceof Error) {
-                        const rejected = error.message.startsWith(R2_ERROR_CODES.INVALID_FILE_TYPE);
-                        throw ctx.error(rejected ? "UNSUPPORTED_MEDIA_TYPE" : "INTERNAL_SERVER_ERROR", {
+                        throw ctx.error("INTERNAL_SERVER_ERROR", {
                             message: error.message,
                         });
                     }
