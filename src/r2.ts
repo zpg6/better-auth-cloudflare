@@ -1,5 +1,5 @@
 import type { AuthContext } from "better-auth";
-import { createAuthEndpoint, getSessionFromCtx, sessionMiddleware } from "better-auth/api";
+import { APIError, createAuthEndpoint, getSessionFromCtx, sessionMiddleware } from "better-auth/api";
 import type { DBFieldAttribute } from "better-auth/db";
 import mime from "mime/lite";
 import { z, type ZodType } from "zod";
@@ -314,7 +314,13 @@ export const createR2Storage = (
                 // Validate file using Result pattern
                 const fileValidation = validator.validateFile(fileForValidation, ctx);
                 if (!fileValidation.success) {
-                    throw new Error(fileValidation.error);
+                    const status =
+                        fileValidation.code === "FILE_TOO_LARGE"
+                            ? "PAYLOAD_TOO_LARGE"
+                            : fileValidation.code === "INVALID_FILE_TYPE"
+                              ? "UNSUPPORTED_MEDIA_TYPE"
+                              : "BAD_REQUEST";
+                    throw new APIError(status, { message: fileValidation.error });
                 }
 
                 // Validate metadata if provided
@@ -322,7 +328,7 @@ export const createR2Storage = (
                 if (customMetadata) {
                     const metadataValidation = validator.validateMetadata(customMetadata, ctx);
                     if (!metadataValidation.success) {
-                        throw new Error(metadataValidation.error);
+                        throw new APIError("BAD_REQUEST", { message: metadataValidation.error });
                     }
                     validatedMetadata = metadataValidation.data;
                 }
@@ -358,7 +364,7 @@ export const createR2Storage = (
                         ctx
                     );
                     if (result === null) {
-                        throw new Error("Upload prevented by beforeUpload hook");
+                        throw new APIError("FORBIDDEN", { message: "Upload prevented by beforeUpload hook" });
                     }
                 }
 
@@ -423,7 +429,7 @@ export const createR2Storage = (
             if (config.hooks?.download?.before) {
                 const result = await config.hooks.download.before(hookData, ctx);
                 if (result === null) {
-                    throw new Error("Download prevented by beforeDownload hook");
+                    throw new APIError("FORBIDDEN", { message: "Download prevented by beforeDownload hook" });
                 }
             }
 
@@ -446,7 +452,7 @@ export const createR2Storage = (
             if (config.hooks?.delete?.before) {
                 const result = await config.hooks.delete.before(hookData, ctx);
                 if (result === null) {
-                    throw new Error("Delete prevented by beforeDelete hook");
+                    throw new APIError("FORBIDDEN", { message: "Delete prevented by beforeDelete hook" });
                 }
             }
 
@@ -562,7 +568,9 @@ export const createR2Endpoints = (
                         const fileSize = parseInt(contentLength, 10);
                         if (fileSize > maxFileSize) {
                             const maxSizeMB = Math.round(maxFileSize / (1024 * 1024));
-                            throw new Error(`${R2_ERROR_CODES.FILE_TOO_LARGE} (max ${maxSizeMB}MB)`);
+                            throw new APIError("PAYLOAD_TOO_LARGE", {
+                                message: `${R2_ERROR_CODES.FILE_TOO_LARGE} (max ${maxSizeMB}MB)`,
+                            });
                         }
                     }
 
@@ -571,7 +579,7 @@ export const createR2Endpoints = (
                     const rawMetadataHeader = ctx.request?.headers?.get("x-file-metadata");
 
                     if (!rawFilename) {
-                        throw new Error("x-filename header is required");
+                        throw new APIError("BAD_REQUEST", { message: "x-filename header is required" });
                     }
 
                     // Sanitize header values to ensure it only contains ASCII characters
@@ -600,7 +608,7 @@ export const createR2Endpoints = (
                             additionalFields = JSON.parse(metadataHeader);
                         } catch (error) {
                             ctx.context.logger?.warn("[R2]: Failed to parse metadata header:", error);
-                            throw new Error("Invalid JSON in x-file-metadata header");
+                            throw new APIError("BAD_REQUEST", { message: "Invalid JSON in x-file-metadata header" });
                         }
                     }
 
@@ -610,7 +618,9 @@ export const createR2Endpoints = (
                         const validationResult = metadataSchema.safeParse(additionalFields);
 
                         if (!validationResult.success) {
-                            throw new Error(`Invalid additional fields: ${validationResult.error.message}`);
+                            throw new APIError("BAD_REQUEST", {
+                                message: `Invalid additional fields: ${validationResult.error.message}`,
+                            });
                         }
 
                         additionalFields = validationResult.data || {};
@@ -676,6 +686,9 @@ export const createR2Endpoints = (
                 } catch (error) {
                     ctx.context.logger?.error("[R2]: Upload failed:", error);
 
+                    if (error instanceof APIError) {
+                        throw error;
+                    }
                     if (error instanceof Error) {
                         throw ctx.error("INTERNAL_SERVER_ERROR", {
                             message: error.message,
