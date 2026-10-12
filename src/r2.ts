@@ -587,7 +587,9 @@ export const createR2Endpoints = (
                         filename = decodeURIComponent(rawFilename);
                     } catch {} // older clients send the name unencoded
                     if (/[\x00-\x1f\x7f]/.test(filename)) {
-                        throw new Error("x-filename must not contain control characters");
+                        throw new APIError("BAD_REQUEST", {
+                            message: "x-filename must not contain control characters",
+                        });
                     }
 
                     const metadataHeader = rawMetadataHeader

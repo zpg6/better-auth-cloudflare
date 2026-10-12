@@ -100,7 +100,7 @@ describe("R2 download Content-Disposition", () => {
     for (const name of ["evil.html\0.txt", "a\r\nb.txt"]) {
         it(`rejects a filename with control characters: ${JSON.stringify(name)}`, async () => {
             const { res } = await upload(encodeURIComponent(name));
-            assert.ok(res.status >= 400, String(res.status));
+            assert.equal(res.status, 400);
         });
     }
 });
