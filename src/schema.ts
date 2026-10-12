@@ -1,50 +1,20 @@
 import type { BetterAuthPluginDBSchema, DBFieldAttribute } from "better-auth/db";
 import type { CloudflarePluginOptions } from "./types";
 
+const optionalString = { type: "string", required: false, input: false } as const;
+
 /**
  * Database fields for Cloudflare geolocation
  */
 const geolocationFields = {
-    timezone: {
-        type: "string",
-        required: false,
-        input: false,
-    } as DBFieldAttribute,
-    city: {
-        type: "string",
-        required: false,
-        input: false,
-    } as DBFieldAttribute,
-    country: {
-        type: "string",
-        required: false,
-        input: false,
-    } as DBFieldAttribute,
-    region: {
-        type: "string",
-        required: false,
-        input: false,
-    } as DBFieldAttribute,
-    regionCode: {
-        type: "string",
-        required: false,
-        input: false,
-    } as DBFieldAttribute,
-    colo: {
-        type: "string",
-        required: false,
-        input: false,
-    } as DBFieldAttribute,
-    latitude: {
-        type: "string",
-        required: false,
-        input: false,
-    } as DBFieldAttribute,
-    longitude: {
-        type: "string",
-        required: false,
-        input: false,
-    } as DBFieldAttribute,
+    timezone: optionalString,
+    city: optionalString,
+    country: optionalString,
+    region: optionalString,
+    regionCode: optionalString,
+    colo: optionalString,
+    latitude: optionalString,
+    longitude: optionalString,
 };
 
 /**
@@ -114,13 +84,10 @@ function generateFileFields(additionalFields?: Record<string, DBFieldAttribute>)
  * @param options - Plugin configuration
  * @returns Schema with geolocation fields and file tracking
  */
-export const schema = (options: CloudflarePluginOptions) => {
-    const sessionFields =
-        options.geolocationTracking === undefined || options.geolocationTracking === true ? geolocationFields : {};
-
+export const schema = <O extends CloudflarePluginOptions>(options: O) => {
     const authSchema: BetterAuthPluginDBSchema = {
         session: {
-            fields: sessionFields,
+            fields: options.geolocationTracking === false ? {} : geolocationFields,
         },
     };
 
@@ -135,5 +102,9 @@ export const schema = (options: CloudflarePluginOptions) => {
         };
     }
 
-    return authSchema;
+    // Typed per field so `$Infer.Session` carries the geolocation columns.
+    return authSchema as {
+        session: { fields: O["geolocationTracking"] extends false ? {} : typeof geolocationFields };
+        userFile?: BetterAuthPluginDBSchema[string];
+    };
 };

@@ -13,6 +13,7 @@
 - R2 uploads store the exact request bytes. Before, types the body parser didn't handle (csv, zip, mp3, markdown) were stored as the text `[object ReadableStream]`, and binary sent as text was re-encoded. Empty files upload. `allowedTypes` is enforced by file extension only, downloads send `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, and the `mime` dependency is gone ([#78](https://github.com/zpg6/better-auth-cloudflare/pull/78))
 - R2 file listing paginates in the database query, so every file is reachable, including uploads that share a millisecond. `files.list` is a GET, so the client call is `files.list({ query: { limit, cursor } })`. `limit` above 100 is capped at 100. The cursor is an opaque string, and list hooks now run ([#79](https://github.com/zpg6/better-auth-cloudflare/pull/79))
 - R2 upload failures no longer send internal error messages (from R2, the database or hooks) to the client; they return the generic `UPLOAD_FAILED` message and are still logged
+- Public types: `kv`, `r2.bucket` and `d1Native` accept any copy of the Workers types (global with the DOM lib, module import, or `wrangler types`) instead of failing or degrading to `any`, so `@cloudflare/workers-types` is no longer a peer dependency. `$Infer.Session` includes the geolocation fields on server and client, and `auth.api.upload` and the other R2 endpoints are no longer possibly `undefined` when `r2` is configured
 
 ## v0.4.0 (2026-10-11)
 

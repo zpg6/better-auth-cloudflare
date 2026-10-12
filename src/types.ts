@@ -1,10 +1,31 @@
 import type { AuthContext, Session, User } from "better-auth";
 import type { DrizzleAdapterConfig } from "@better-auth/drizzle-adapter";
 import type { DBFieldAttribute } from "better-auth/db";
-import type { D1Database, KVNamespace, R2Bucket } from "@cloudflare/workers-types";
 import type { drizzle as d1Drizzle } from "drizzle-orm/d1";
 import type { drizzle as mysqlDrizzle } from "drizzle-orm/mysql2";
 import type { drizzle as postgresDrizzle } from "drizzle-orm/postgres-js";
+
+// Structural, so the global, module, and `wrangler types` copies of the Workers types all satisfy them.
+export interface D1Database {
+    prepare(query: string): unknown;
+    batch(statements: never[]): Promise<unknown[]>;
+    exec(query: string): Promise<unknown>;
+}
+export interface KVNamespace {
+    get(key: string): Promise<string | null>;
+    put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+    delete(key: string): Promise<void>;
+}
+export interface R2Bucket {
+    put(
+        key: string,
+        value: never,
+        options?: { httpMetadata?: { contentType?: string }; customMetadata?: Record<string, string> }
+    ): Promise<unknown>;
+    get(key: string): Promise<{ body: unknown } | null>;
+    head(key: string): Promise<{ key: string; size: number; uploaded: Date } | null>;
+    delete(key: string): Promise<void>;
+}
 
 type CloudflareGeolocationSource = CloudflareGeolocation | null | undefined;
 
