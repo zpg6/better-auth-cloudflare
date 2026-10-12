@@ -482,18 +482,6 @@ export const createR2Storage = (
 };
 
 /**
- * Validates that the auth context and adapter are properly configured
- */
-const validateAuthContext = (ctx: AuthContext): void => {
-    if (!ctx) {
-        throw new Error("Auth context is not available");
-    }
-    if (!ctx.adapter) {
-        throw new Error("Database adapter is not properly configured");
-    }
-};
-
-/**
  * Creates R2 endpoints for Better Auth plugin
  */
 export const createR2Endpoints = (
@@ -515,16 +503,6 @@ export const createR2Endpoints = (
                     throw ctx.error("UNAUTHORIZED", { message: "Please sign in to upload files" });
                 }
 
-                // Validate auth context before proceeding
-                try {
-                    validateAuthContext(ctx.context);
-                } catch (error) {
-                    ctx.context.logger?.error("[R2]: Auth context validation failed:", error);
-                    throw ctx.error("INTERNAL_SERVER_ERROR", {
-                        message: R2_ERROR_CODES.DB_OPERATION_FAILED,
-                    });
-                }
-
                 try {
                     ctx.context.logger?.info("[R2]: Starting blob file upload");
 
@@ -540,16 +518,12 @@ export const createR2Endpoints = (
                     // Get configured max file size (preemptively checking for DoS attacks)
                     const maxFileSize = r2Config?.maxFileSize || 10485760; // 10MB default
 
-                    // Validate Content-Length header first to prevent DoS attacks
-                    const contentLength = ctx.request?.headers?.get("content-length");
-                    if (contentLength) {
-                        const fileSize = parseInt(contentLength, 10);
-                        if (fileSize > maxFileSize) {
-                            const maxSizeMB = Math.round(maxFileSize / (1024 * 1024));
-                            throw new APIError("PAYLOAD_TOO_LARGE", {
-                                message: `${R2_ERROR_CODES.FILE_TOO_LARGE} (max ${maxSizeMB}MB)`,
-                            });
-                        }
+                    const tooLarge = () =>
+                        new APIError("PAYLOAD_TOO_LARGE", {
+                            message: `${R2_ERROR_CODES.FILE_TOO_LARGE} (max ${Math.round(maxFileSize / (1024 * 1024))}MB)`,
+                        });
+                    if (+(ctx.request?.headers.get("content-length") ?? 0) > maxFileSize) {
+                        throw tooLarge();
                     }
 
                     // Get filename and metadata from headers
@@ -564,7 +538,7 @@ export const createR2Endpoints = (
                     try {
                         filename = decodeURIComponent(rawFilename);
                     } catch {} // older clients send the name unencoded
-                    if (/[\x00-\x1f\x7f]/.test(filename)) {
+                    if (/[\p{Cc}\u202a-\u202e\u2066-\u2069]/u.test(filename)) {
                         throw new APIError("BAD_REQUEST", {
                             message: "x-filename must not contain control characters",
                         });
@@ -591,27 +565,24 @@ export const createR2Endpoints = (
                         }
                     }
 
-                    // Validate metadata against schema if provided
-                    if (r2Config?.additionalFields && Object.keys(additionalFields).length > 0) {
-                        const metadataSchema = createFileMetadataSchema(r2Config.additionalFields);
-                        const validationResult = metadataSchema.safeParse(additionalFields);
-
-                        if (!validationResult.success) {
-                            throw new APIError("BAD_REQUEST", {
-                                message: `Invalid additional fields: ${validationResult.error.message}`,
-                            });
-                        }
-
-                        additionalFields = validationResult.data || {};
-                    }
-
-                    const body = await ctx.request?.blob();
-                    if (!body) {
+                    if (!ctx.request) {
                         throw new APIError("BAD_REQUEST", { message: R2_ERROR_CODES.NO_FILE_PROVIDED });
                     }
-                    const fileToUpload = new File([body], filename, { type: body.type || "application/octet-stream" });
-
-                    const customMetadata: Record<string, any> = additionalFields || {};
+                    // Counted as it streams so a body without Content-Length cannot be buffered past maxFileSize.
+                    const chunks: Uint8Array<ArrayBuffer>[] = [];
+                    const reader = ctx.request.body?.getReader();
+                    for (let size = 0; reader; ) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        if ((size += value.byteLength) > maxFileSize) {
+                            await reader.cancel();
+                            throw tooLarge();
+                        }
+                        chunks.push(value);
+                    }
+                    const fileToUpload = new File(chunks, filename, {
+                        type: ctx.request.headers.get("content-type") || "application/octet-stream",
+                    });
 
                     // Use userFile - adapter handles plural/singular internally
                     const modelName = "userFile";
@@ -622,7 +593,7 @@ export const createR2Endpoints = (
                         filename,
                         session.session.userId,
                         ctx.context,
-                        customMetadata,
+                        additionalFields,
                         modelName
                     );
 
@@ -812,16 +783,6 @@ export const createR2Endpoints = (
             async ctx => {
                 const session = ctx.context.session;
 
-                // Validate auth context before proceeding
-                try {
-                    validateAuthContext(ctx.context);
-                } catch (error) {
-                    ctx.context.logger?.error("[R2]: Auth context validation failed:", error);
-                    throw ctx.error("INTERNAL_SERVER_ERROR", {
-                        message: R2_ERROR_CODES.DB_OPERATION_FAILED,
-                    });
-                }
-
                 const r2Storage = getR2Storage();
 
                 if (!r2Storage) {
@@ -833,27 +794,33 @@ export const createR2Endpoints = (
 
                 const userId = session.session.userId;
                 if ((await r2Config?.hooks?.list?.before?.(userId, ctx.context)) === null) {
-                    throw ctx.error("FORBIDDEN");
+                    throw ctx.error("FORBIDDEN", { message: "List prevented by beforeList hook" });
                 }
 
                 const { limit = 50, cursor } = ctx.query ?? {};
-                const find = (where: Where[], n?: number) =>
+                const find = (where: Where[], n: number, field = "uploadedAt") =>
                     ctx.context.adapter.findMany<FileMetadata>({
                         model: "userFile",
                         where: [{ field: "userId", value: userId }, ...where],
                         limit: n,
-                        sortBy: { field: "uploadedAt", direction: "desc" },
+                        sortBy: { field, direction: "desc" },
                     });
-                // Uploads sharing a millisecond are fetched whole and ordered by id, so a page edge inside one resumes exactly.
-                const sameMs = (at: Date) =>
-                    find([
-                        { field: "uploadedAt", operator: "gte", value: at },
-                        { field: "uploadedAt", operator: "lte", value: at },
-                    ]);
+                // Uploads sharing a millisecond are ordered by id, so a page edge inside one resumes exactly.
+                // gte+lte because the memory adapter compares Date equality by reference.
+                const sameMs = (at: Date, n: number, below?: string) =>
+                    find(
+                        [
+                            { field: "uploadedAt", operator: "gte", value: at },
+                            { field: "uploadedAt", operator: "lte", value: at },
+                            ...(below ? [{ field: "id", operator: "lt", value: below } as const] : []),
+                        ],
+                        n,
+                        "id"
+                    );
 
                 let records: FileMetadata[];
                 try {
-                    records = cursor ? (await sameMs(cursor.at)).filter(file => file.id < cursor.id) : [];
+                    records = cursor ? await sameMs(cursor.at, limit + 1, cursor.id) : [];
                     if (records.length <= limit) {
                         let older = await find(
                             cursor ? [{ field: "uploadedAt", operator: "lt", value: cursor.at }] : [],
@@ -861,10 +828,8 @@ export const createR2Endpoints = (
                         );
                         const [prev, edge] = older.slice(-2);
                         if (edge && records.length + older.length > limit && +prev.uploadedAt === +edge.uploadedAt) {
-                            older = [
-                                ...older.filter(file => +file.uploadedAt !== +edge.uploadedAt),
-                                ...(await sameMs(edge.uploadedAt)),
-                            ];
+                            const rest = older.filter(file => +file.uploadedAt !== +edge.uploadedAt);
+                            older = [...rest, ...(await sameMs(edge.uploadedAt, older.length - rest.length))];
                         }
                         records.push(...older);
                     }

@@ -82,6 +82,22 @@ describe("error status codes", () => {
         });
     }
 
+    it("upload: stops reading a body without Content-Length once it exceeds maxFileSize", async () => {
+        const { auth, cookie } = await signedIn({ maxFileSize: 10 });
+        let pulls = 0;
+        const body = new ReadableStream({
+            pull: c => (++pulls > 100 ? c.close() : c.enqueue(new Uint8Array(4))),
+        });
+        const res = await call(
+            auth,
+            "/files/upload-raw",
+            { headers: { "content-type": "image/png", "x-filename": "p.png" }, body, duplex: "half" },
+            cookie
+        );
+        assert.equal(res.status, 413);
+        assert.ok(pulls < 10, `pulled ${pulls} chunks`);
+    });
+
     it("upload: hook APIError keeps its status", async () => {
         const { auth, cookie } = await signedIn({
             hooks: {

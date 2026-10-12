@@ -79,6 +79,19 @@ describe("R2 list", () => {
         });
     });
 
+    for (const limit of ["5", "100"]) {
+        it(`pages through 150 uploads sharing a millisecond by ${limit}`, async () => {
+            const { auth, cookie } = await seeded(150, undefined, () => Date.UTC(2026, 0, 1));
+            const { ids } = await pages(auth, cookie, limit);
+            assert.deepEqual(
+                ids,
+                Array.from({ length: 150 }, (_, i) => `f${i + 1}`)
+                    .sort()
+                    .reverse()
+            );
+        });
+    }
+
     it("pages through mixed millisecond groups exactly once", async () => {
         const { auth, cookie } = await seeded(13, undefined, i => Date.UTC(2026, 0, i === 1 ? 1 : i < 12 ? 2 : 3));
         assert.deepEqual(await pages(auth, cookie, "3"), {
@@ -133,7 +146,9 @@ describe("R2 list", () => {
         assert.equal((await list(auth, cookie, {})).status, 200);
         assert.equal(seen.length, 1);
         assert.match(seen[0][0], /\/f2$/);
-        assert.equal((await list(auth, cookie, {})).status, 403);
+        const res = await list(auth, cookie, {});
+        assert.equal(res.status, 403);
+        assert.equal((await res.json()).message, "List prevented by beforeList hook");
     });
 
     it("passes an APIError from the after hook through", async () => {
