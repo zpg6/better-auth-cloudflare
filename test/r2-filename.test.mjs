@@ -30,7 +30,7 @@ function call(auth, path, init, cookie) {
     );
 }
 
-async function downloadDisposition(xFilename) {
+async function upload(xFilename) {
     const auth = betterAuth({
         baseURL: origin,
         secret: "r2-filename-test-secret-at-least-32-chars",
@@ -50,14 +50,19 @@ async function downloadDisposition(xFilename) {
     });
     const cookie = signUp.headers.get("set-cookie").split(";")[0];
 
-    const upload = await call(
+    const res = await call(
         auth,
         "/files/upload-raw",
         { headers: { "content-type": "text/plain", "x-filename": xFilename }, body: "hi" },
         cookie
     );
-    assert.equal(upload.status, 200);
-    const { data } = await upload.json();
+    return { auth, cookie, res };
+}
+
+async function downloadDisposition(xFilename) {
+    const { auth, cookie, res } = await upload(xFilename);
+    assert.equal(res.status, 200);
+    const { data } = await res.json();
 
     const download = await call(
         auth,
@@ -90,4 +95,12 @@ describe("R2 download Content-Disposition", () => {
     it("keeps a raw filename from older clients that is not valid percent-encoding", async () => {
         assert.equal(decodedFilename(await downloadDisposition("100%.txt")), "100%.txt");
     });
+
+    // Headers cannot carry raw NUL/CR/LF, so these arrive percent-encoded and decode to control chars.
+    for (const name of ["evil.html\0.txt", "a\r\nb.txt"]) {
+        it(`rejects a filename with control characters: ${JSON.stringify(name)}`, async () => {
+            const { res } = await upload(encodeURIComponent(name));
+            assert.ok(res.status >= 400, String(res.status));
+        });
+    }
 });
