@@ -66,6 +66,22 @@ describe("error status codes", () => {
         assert.equal((await call(auth, "/cloudflare/geolocation", { method: "GET" }, cookie)).status, 404);
     });
 
+    it("R2 routes 404 without r2", async () => {
+        const auth = betterAuth({
+            baseURL: origin,
+            secret: "error-status-test-secret-at-least-32-chars",
+            ...withCloudflare(
+                { autoDetectIpAddress: false, geolocationTracking: false },
+                { database: memoryAdapter({}) }
+            ),
+        });
+        assert.equal("upload" in auth.api, false);
+        for (const path of ["/files/upload-raw", "/files/download", "/files/delete", "/files/get"]) {
+            assert.equal((await call(auth, path, {})).status, 404);
+        }
+        assert.equal((await call(auth, "/files/list", { method: "GET" })).status, 404);
+    });
+
     const additionalFields = { tag: { type: "string", required: true } };
     for (const [name, r2, headers, status] of [
         ["bad extension", { allowedTypes: [".png"] }, { "x-filename": "probe.txt" }, 415],

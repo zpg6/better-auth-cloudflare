@@ -4,15 +4,22 @@ import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { schema } from "./schema";
 import { createR2Storage, createR2Endpoints } from "./r2";
-import type { D1Database, KVNamespace } from "@cloudflare/workers-types";
-import type { CloudflareGeolocation, CloudflarePluginOptions, WithCloudflareOptions } from "./types";
+import type {
+    CloudflareGeolocation,
+    CloudflarePluginOptions,
+    KVNamespace,
+    R2Config,
+    WithCloudflareOptions,
+} from "./types";
 export * from "./client";
 export * from "./schema";
 export * from "./types";
 export * from "./r2";
 
-const createCloudflarePlugin = (options?: CloudflarePluginOptions, validateStorage = false) => {
-    const opts = options ?? {};
+type CloudflareEndpoints<O> = O extends { r2: R2Config } ? ReturnType<typeof createR2Endpoints> : {};
+
+const createCloudflarePlugin = <O extends CloudflarePluginOptions>(options?: O, validateStorage = false) => {
+    const opts = options ?? ({} as O);
 
     // Default geolocationTracking to true if not specified
     const geolocationTrackingEnabled = opts.geolocationTracking === undefined || opts.geolocationTracking;
@@ -41,7 +48,7 @@ const createCloudflarePlugin = (options?: CloudflarePluginOptions, validateStora
                     return ctx.json(context);
                 }
             ),
-            ...(opts.r2 ? createR2Endpoints(() => r2Storage, opts.r2) : {}),
+            ...((opts.r2 ? createR2Endpoints(() => r2Storage, opts.r2) : {}) as CloudflareEndpoints<O>),
         },
 
         init(init_ctx) {
@@ -86,7 +93,7 @@ const createCloudflarePlugin = (options?: CloudflarePluginOptions, validateStora
  * @param options - Plugin configuration options
  * @returns Better Auth plugin for Cloudflare
  */
-export const cloudflare = (options?: CloudflarePluginOptions) => createCloudflarePlugin(options);
+export const cloudflare = <O extends CloudflarePluginOptions>(options?: O) => createCloudflarePlugin(options);
 
 type AtomicSecondaryStorage = {
     getAndDelete?: unknown;
@@ -217,13 +224,13 @@ export const createKVStorage = (kv: KVNamespace): CloudflareKVStorage => {
     };
 };
 
-type CloudflarePlugin = ReturnType<typeof cloudflare>;
+type CloudflarePlugin<C extends CloudflarePluginOptions> = ReturnType<typeof createCloudflarePlugin<C>>;
 
-type MergedPlugins<T extends BetterAuthOptions> =
-    NonNullable<T["plugins"]> extends readonly [...infer P] ? [CloudflarePlugin, ...P] : [CloudflarePlugin];
+type MergedPlugins<T extends BetterAuthOptions, C extends CloudflarePluginOptions> =
+    NonNullable<T["plugins"]> extends readonly [...infer P] ? [CloudflarePlugin<C>, ...P] : [CloudflarePlugin<C>];
 
-type WithCloudflareAuth<T extends BetterAuthOptions> = Omit<T, "plugins"> & {
-    plugins: MergedPlugins<T>;
+type WithCloudflareAuth<T extends BetterAuthOptions, C extends CloudflarePluginOptions> = Omit<T, "plugins"> & {
+    plugins: MergedPlugins<T, C>;
 };
 
 /**
@@ -236,10 +243,10 @@ type WithCloudflareAuth<T extends BetterAuthOptions> = Omit<T, "plugins"> & {
  * @param options - The base BetterAuthOptions to be enhanced.
  * @returns BetterAuthOptions configured for use with Cloudflare.
  */
-export const withCloudflare = <T extends BetterAuthOptions>(
-    cloudFlareOptions: WithCloudflareOptions,
+export const withCloudflare = <T extends BetterAuthOptions, C extends WithCloudflareOptions = WithCloudflareOptions>(
+    cloudFlareOptions: C,
     options: T
-): WithCloudflareAuth<T> => {
+): WithCloudflareAuth<T, C> => {
     const autoDetectIpEnabled =
         cloudFlareOptions.autoDetectIpAddress === undefined || cloudFlareOptions.autoDetectIpAddress === true;
     const geolocationTrackingForSession =
@@ -311,7 +318,8 @@ export const withCloudflare = <T extends BetterAuthOptions>(
         throw new Error("Configure either withCloudflare({ kv }) or authOptions.secondaryStorage, not both.");
     }
 
-    const plugins = [createCloudflarePlugin(cloudFlareOptions, true), ...(options.plugins ?? [])] as MergedPlugins<T>;
+    const plugin = createCloudflarePlugin(cloudFlareOptions, true);
+    const plugins = [plugin, ...(options.plugins ?? [])] as MergedPlugins<T, C>;
     const secondaryStorage = cloudFlareOptions.kv
         ? (createKVStorage(cloudFlareOptions.kv) as SecondaryStorage)
         : options.secondaryStorage;
@@ -323,7 +331,7 @@ export const withCloudflare = <T extends BetterAuthOptions>(
         plugins,
         advanced: updatedAdvanced,
         session: updatedSession,
-    } as WithCloudflareAuth<T>;
+    } as WithCloudflareAuth<T, C>;
 };
 
 export type SessionWithGeolocation = Session & CloudflareGeolocation;

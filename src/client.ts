@@ -1,5 +1,6 @@
 import type { BetterAuthClientPlugin } from "better-auth/client";
 import type { cloudflare } from ".";
+import type { R2Config } from "./types";
 
 /**
  * Sanitizes a string to ensure it only contains ASCII characters
@@ -23,7 +24,7 @@ function sanitizeHeaderValue(value: string): string {
 export const cloudflareClient = () => {
     return {
         id: "cloudflare",
-        $InferServerPlugin: {} as ReturnType<typeof cloudflare>,
+        $InferServerPlugin: {} as ReturnType<typeof cloudflare<{ r2: R2Config }>>,
         getActions: $fetch => {
             return {
                 /**
