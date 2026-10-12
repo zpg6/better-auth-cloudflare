@@ -132,8 +132,18 @@ export const fileIdSchema = z.object({
 
 export const listFilesSchema = z
     .object({
-        limit: z.coerce.number().int().min(1).max(100).optional(),
-        cursor: z.string().optional(), // Last file ID of the previous page
+        limit: z.coerce
+            .number()
+            .int()
+            .min(1)
+            .transform(n => Math.min(n, 100))
+            .optional(),
+        // `${uploadedAt ms}:${id}` of the previous page's last file
+        cursor: z
+            .string()
+            .regex(/^\d{1,15}:./)
+            .transform(c => ({ at: new Date(+c.slice(0, c.indexOf(":"))), id: c.slice(c.indexOf(":") + 1) }))
+            .optional(),
     })
     .optional();
 
@@ -837,41 +847,58 @@ export const createR2Endpoints = (
                 }
 
                 const { limit = 50, cursor } = ctx.query ?? {};
-                const where: Where[] = [{ field: "userId", value: userId }];
-                if (cursor) {
-                    const last = await ctx.context.adapter.findOne<FileMetadata>({
+                const find = (where: Where[], n?: number) =>
+                    ctx.context.adapter.findMany<FileMetadata>({
                         model: "userFile",
-                        where: [...where, { field: "id", value: cursor }],
-                    });
-                    if (!last) {
-                        throw ctx.error("BAD_REQUEST", { message: R2_ERROR_CODES.INVALID_REQUEST });
-                    }
-                    where.push({ field: "uploadedAt", operator: "lt", value: last.uploadedAt });
-                }
-
-                try {
-                    const records = await ctx.context.adapter.findMany<FileMetadata>({
-                        model: "userFile",
-                        where,
-                        limit: limit + 1,
+                        where: [{ field: "userId", value: userId }, ...where],
+                        limit: n,
                         sortBy: { field: "uploadedAt", direction: "desc" },
                     });
-                    const hasMore = records.length > limit;
-                    const files = records.slice(0, limit).filter(validateFileMetadata);
+                // Uploads sharing a millisecond are fetched whole and ordered by id, so a page edge inside one resumes exactly.
+                const sameMs = (at: Date) =>
+                    find([
+                        { field: "uploadedAt", operator: "gte", value: at },
+                        { field: "uploadedAt", operator: "lte", value: at },
+                    ]);
 
-                    await r2Config?.hooks?.list?.after?.(
-                        userId,
-                        { objects: files.map(file => ({ key: file.r2Key })) },
-                        ctx.context
-                    );
-
-                    return ctx.json({ files, nextCursor: hasMore ? records[limit - 1].id : null, hasMore });
+                let records: FileMetadata[];
+                try {
+                    records = cursor ? (await sameMs(cursor.at)).filter(file => file.id < cursor.id) : [];
+                    if (records.length <= limit) {
+                        let older = await find(
+                            cursor ? [{ field: "uploadedAt", operator: "lt", value: cursor.at }] : [],
+                            limit + 1 - records.length
+                        );
+                        const [prev, edge] = older.slice(-2);
+                        if (edge && records.length + older.length > limit && +prev.uploadedAt === +edge.uploadedAt) {
+                            older = [
+                                ...older.filter(file => +file.uploadedAt !== +edge.uploadedAt),
+                                ...(await sameMs(edge.uploadedAt)),
+                            ];
+                        }
+                        records.push(...older);
+                    }
                 } catch (error) {
                     ctx.context.logger?.error("[R2]: Failed to list files:", error);
                     throw ctx.error("INTERNAL_SERVER_ERROR", {
                         message: R2_ERROR_CODES.LIST_FILES_FAILED,
                     });
                 }
+                records.sort((a, b) => +b.uploadedAt - +a.uploadedAt || (a.id < b.id ? 1 : -1));
+                const last = records.length > limit ? records[limit - 1] : undefined;
+                const files = records.slice(0, limit).filter(validateFileMetadata);
+
+                await r2Config?.hooks?.list?.after?.(
+                    userId,
+                    { objects: files.map(file => ({ key: file.r2Key })) },
+                    ctx.context
+                );
+
+                return ctx.json({
+                    files,
+                    nextCursor: last ? `${+last.uploadedAt}:${last.id}` : null,
+                    hasMore: !!last,
+                });
             }
         ),
 
