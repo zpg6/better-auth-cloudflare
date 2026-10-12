@@ -16,7 +16,13 @@ export * from "./schema";
 export * from "./types";
 export * from "./r2";
 
-type CloudflareEndpoints<O> = O extends { r2: R2Config } ? ReturnType<typeof createR2Endpoints> : {};
+type R2Endpoints = ReturnType<typeof createR2Endpoints>;
+// Required when r2 is set, absent when it is not, optional when the options type can't tell.
+type CloudflareEndpoints<O> = O extends { r2: R2Config }
+    ? R2Endpoints
+    : "r2" extends keyof O
+      ? Partial<R2Endpoints>
+      : {};
 
 const createCloudflarePlugin = <O extends CloudflarePluginOptions>(options?: O, validateStorage = false) => {
     const opts = options ?? ({} as O);

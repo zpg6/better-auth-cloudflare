@@ -1,7 +1,15 @@
 import { betterAuth } from "better-auth";
 import { createAuthClient } from "better-auth/client";
 import { magicLink, organization, twoFactor } from "better-auth/plugins";
-import { cloudflareClient, createKVStorage, withCloudflare, type CloudflareSession } from "../../src";
+import {
+    cloudflare,
+    cloudflareClient,
+    createKVStorage,
+    withCloudflare,
+    type CloudflarePluginOptions,
+    type CloudflareSession,
+    type WithCloudflareOptions,
+} from "../../src";
 
 // Global Workers types alongside the DOM lib, as in this repo's tsconfig.
 declare const env: { KV: KVNamespace; R2: R2Bucket; DB: D1Database };
@@ -27,3 +35,19 @@ auth.$Infer.Session.session.country satisfies string | null | undefined;
 
 const client = createAuthClient({ plugins: [cloudflareClient()] });
 client.$Infer.Session.session.country satisfies string | null | undefined;
+
+// Options typed as the public interface can't say whether r2 is set.
+declare const widened: WithCloudflareOptions;
+const authWidened = betterAuth(withCloudflare(widened, { plugins }));
+authWidened.api.upload?.({ headers: new Headers() });
+// @ts-expect-error possibly undefined
+authWidened.api.upload({ headers: new Headers() });
+authWidened.$Infer.Session.session.country satisfies string | null | undefined;
+
+declare const geolocationTracking: boolean;
+betterAuth(withCloudflare({ geolocationTracking, cf: {} }, {})).$Infer.Session.session.country;
+// @ts-expect-error fields are omitted when tracking is off
+betterAuth(withCloudflare({ geolocationTracking: false, cf: {} }, {})).$Infer.Session.session.country;
+
+declare const pluginOptions: CloudflarePluginOptions;
+betterAuth({ plugins: [cloudflare(pluginOptions)] }).api.upload?.({ headers: new Headers() });
