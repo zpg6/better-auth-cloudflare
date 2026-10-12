@@ -1,7 +1,7 @@
 import { type BetterAuthOptions, type BetterAuthPlugin, type GenericEndpointContext, type Session } from "better-auth";
 import { type SecondaryStorage } from "better-auth/db";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
-import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
+import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { schema } from "./schema";
 import { createR2Storage, createR2Endpoints } from "./r2";
 import type { D1Database, KVNamespace } from "@cloudflare/workers-types";
@@ -27,16 +27,12 @@ const createCloudflarePlugin = (options?: CloudflarePluginOptions, validateStora
                 "/cloudflare/geolocation",
                 {
                     method: "GET",
+                    use: [sessionMiddleware],
                 },
                 async ctx => {
-                    const session = await getSessionFromCtx(ctx);
-                    if (!session) {
-                        return ctx.json({ error: "Unauthorized" }, { status: 401 });
-                    }
-
                     const cf = await resolveCloudflareGeolocation(opts.cf);
                     if (!cf) {
-                        return ctx.json({ error: "Cloudflare context is not available" }, { status: 404 });
+                        throw ctx.error("NOT_FOUND", { message: "Cloudflare context is not available" });
                     }
 
                     // Extract and validate Cloudflare geolocation data
