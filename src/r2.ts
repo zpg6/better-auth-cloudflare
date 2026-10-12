@@ -509,9 +509,11 @@ export const createR2Endpoints = (
     getR2Storage: () => ReturnType<typeof createR2Storage> | null,
     r2Config?: R2Config
 ) => {
-    const allowedMediaTypes = r2Config?.allowedTypes
-        ?.map(type => mime.getType(type))
-        .filter((mimeType): mimeType is string => Boolean(mimeType));
+    // An empty list disables better-call's media type check; omitting it falls back to the router's JSON-only default.
+    const allowedMediaTypes =
+        r2Config?.allowedTypes
+            ?.map(type => mime.getType(type))
+            .filter((mimeType): mimeType is string => Boolean(mimeType)) ?? [];
 
     return {
         upload: createAuthEndpoint(
@@ -628,7 +630,7 @@ export const createR2Endpoints = (
                         fileToUpload = file;
                     } else {
                         fileToUpload = new File([file], filename, {
-                            type: file.type || "application/octet-stream",
+                            type: file.type || ctx.request?.headers.get("content-type") || "application/octet-stream",
                         });
                     }
 
