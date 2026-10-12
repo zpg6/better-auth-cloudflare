@@ -95,6 +95,18 @@ describe("error status codes", () => {
         assert.equal((await upload(auth, cookie, { "x-filename": "p.png" })).status, 403);
     });
 
+    it("upload: storage failure -> 500 without the internal message", async () => {
+        const bucket = {
+            async put() {
+                throw new Error("internal r2 detail");
+            },
+        };
+        const { auth, cookie } = await signedIn({ bucket });
+        const res = await upload(auth, cookie, { "x-filename": "p.png" });
+        assert.equal(res.status, 500);
+        assert.doesNotMatch(await res.text(), /internal r2 detail/);
+    });
+
     it("upload: hook returning null -> 403", async () => {
         const { auth, cookie } = await signedIn({ hooks: { upload: { before: () => null } } });
         assert.equal((await upload(auth, cookie, { "x-filename": "p.png" })).status, 403);
