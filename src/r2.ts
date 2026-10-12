@@ -211,8 +211,7 @@ export const createFileValidator = (config: R2Config) => {
         validateFile: (file: File, ctx?: AuthContext): ValidationResult<true> => {
             // Validate file size
             if (file.size > maxFileSize) {
-                const maxSizeMB = Math.round(maxFileSize / (1024 * 1024));
-                const errorMsg = `${R2_ERROR_CODES.FILE_TOO_LARGE} (max ${maxSizeMB}MB)`;
+                const errorMsg = `${R2_ERROR_CODES.FILE_TOO_LARGE} (max ${maxFileSize} bytes)`;
                 ctx?.logger?.error(`[R2]: File size validation failed:`, errorMsg);
                 return error(errorMsg, "FILE_TOO_LARGE");
             }
@@ -520,7 +519,7 @@ export const createR2Endpoints = (
 
                     const tooLarge = () =>
                         new APIError("PAYLOAD_TOO_LARGE", {
-                            message: `${R2_ERROR_CODES.FILE_TOO_LARGE} (max ${Math.round(maxFileSize / (1024 * 1024))}MB)`,
+                            message: `${R2_ERROR_CODES.FILE_TOO_LARGE} (max ${maxFileSize} bytes)`,
                         });
                     if (+(ctx.request?.headers.get("content-length") ?? 0) > maxFileSize) {
                         throw tooLarge();

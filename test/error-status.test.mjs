@@ -98,6 +98,13 @@ describe("error status codes", () => {
         assert.ok(pulls < 10, `pulled ${pulls} chunks`);
     });
 
+    it("upload: 413 names the limit in bytes", async () => {
+        const { auth, cookie } = await signedIn({ maxFileSize: 4 });
+        const res = await upload(auth, cookie, { "x-filename": "p.png" });
+        assert.equal(res.status, 413);
+        assert.match((await res.json()).message, /\(max 4 bytes\)/);
+    });
+
     it("upload: hook APIError keeps its status", async () => {
         const { auth, cookie } = await signedIn({
             hooks: {
