@@ -97,7 +97,7 @@ describe("R2 download Content-Disposition", () => {
     });
 
     // Headers cannot carry raw NUL/CR/LF, so these arrive percent-encoded and decode to control chars.
-    for (const name of ["evil.html\0.txt", "a\r\nb.txt"]) {
+    for (const name of ["evil.html\0.txt", "a\r\nb.txt", "a\u0085b.txt", "inv\u202eexe.txt", "a\u2067b.txt"]) {
         it(`rejects a filename with control characters: ${JSON.stringify(name)}`, async () => {
             const { res } = await upload(encodeURIComponent(name));
             assert.equal(res.status, 400);

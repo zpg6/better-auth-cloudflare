@@ -8,7 +8,34 @@ import { cloudflareClient, withCloudflare } from "../dist/index.mjs";
 
 const origin = "http://localhost";
 
-async function seeded(count, hooks, at = i => Date.UTC(2026, 0, i)) {
+// Simulates a case-insensitive id collation (MySQL utf8mb4_0900_ai_ci, Postgres locale collations).
+const ci = (a, b) => a.localeCompare(b, "en", { sensitivity: "base" }) || (a < b ? -1 : a > b ? 1 : 0);
+const ciAdapter = db => options => {
+    const adapter = memoryAdapter(db)(options);
+    return {
+        ...adapter,
+        async findMany({ where = [], sortBy, limit, ...query }) {
+            if (query.model !== "userFile") return adapter.findMany({ where, sortBy, limit, ...query });
+            const below = where.find(w => w.field === "id")?.value;
+            const rows = await adapter.findMany({
+                ...query,
+                where: where.filter(w => w.field !== "id"),
+                sortBy: sortBy?.field === "id" ? undefined : sortBy,
+                limit: 1000,
+            });
+            const out = below ? rows.filter(r => ci(r.id, below) < 0) : rows;
+            if (sortBy?.field === "id") out.sort((a, b) => ci(b.id, a.id));
+            return out.slice(0, limit);
+        },
+    };
+};
+
+async function seeded(
+    count,
+    hooks,
+    at = i => Date.UTC(2026, 0, i),
+    { id = i => `f${i}`, adapter = memoryAdapter } = {}
+) {
     const db = { user: [], session: [], account: [], verification: [], userFile: [] };
     const auth = betterAuth({
         baseURL: origin,
@@ -16,7 +43,7 @@ async function seeded(count, hooks, at = i => Date.UTC(2026, 0, i)) {
         emailAndPassword: { enabled: true },
         ...withCloudflare(
             { autoDetectIpAddress: false, geolocationTracking: false, r2: { bucket: {}, hooks } },
-            { database: memoryAdapter(db) }
+            { database: adapter(db) }
         ),
     });
     const signUp = await auth.handler(
@@ -29,7 +56,7 @@ async function seeded(count, hooks, at = i => Date.UTC(2026, 0, i)) {
     const { user } = await signUp.json();
     for (let i = 1; i <= count; i++) {
         db.userFile.push({
-            id: `f${i}`,
+            id: id(i),
             userId: user.id,
             filename: `f${i}`,
             originalName: `f${i}`,
@@ -79,10 +106,36 @@ describe("R2 list", () => {
         });
     });
 
+    for (const limit of ["5", "100"]) {
+        it(`pages through 150 uploads sharing a millisecond by ${limit}`, async () => {
+            const { auth, cookie } = await seeded(150, undefined, () => Date.UTC(2026, 0, 1));
+            const { ids } = await pages(auth, cookie, limit);
+            assert.deepEqual(
+                ids,
+                Array.from({ length: 150 }, (_, i) => `f${i + 1}`)
+                    .sort()
+                    .reverse()
+            );
+        });
+    }
+
+    for (const limit of ["2", "3", "5"]) {
+        it(`pages through mixed-case tied ids under a case-insensitive collation by ${limit}`, async () => {
+            const ids = ["aa", "AB", "ac", "Ad", "ae", "AF", "ag", "Ah", "ai", "AJ", "ak"];
+            // Two millisecond groups, so a page of 5 ends exactly at the boundary.
+            const { auth, cookie } = await seeded(ids.length, undefined, i => Date.UTC(2026, 0, i > 6 ? 2 : 1), {
+                id: i => ids[i - 1],
+                adapter: ciAdapter,
+            });
+            assert.deepEqual((await pages(auth, cookie, limit)).ids, [...ids].reverse());
+        });
+    }
+
     it("pages through mixed millisecond groups exactly once", async () => {
+        // f12 and f13 share a millisecond inside the first page, so they keep the adapter's order.
         const { auth, cookie } = await seeded(13, undefined, i => Date.UTC(2026, 0, i === 1 ? 1 : i < 12 ? 2 : 3));
         assert.deepEqual(await pages(auth, cookie, "3"), {
-            ids: ["f13", "f12", "f9", "f8", "f7", "f6", "f5", "f4", "f3", "f2", "f11", "f10", "f1"],
+            ids: ["f12", "f13", "f9", "f8", "f7", "f6", "f5", "f4", "f3", "f2", "f11", "f10", "f1"],
             more: [true, true, true, true, false],
         });
     });
@@ -133,7 +186,9 @@ describe("R2 list", () => {
         assert.equal((await list(auth, cookie, {})).status, 200);
         assert.equal(seen.length, 1);
         assert.match(seen[0][0], /\/f2$/);
-        assert.equal((await list(auth, cookie, {})).status, 403);
+        const res = await list(auth, cookie, {});
+        assert.equal(res.status, 403);
+        assert.equal((await res.json()).message, "List prevented by beforeList hook");
     });
 
     it("passes an APIError from the after hook through", async () => {
