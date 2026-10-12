@@ -31,7 +31,7 @@ export const cloudflareClient = () => {
                  */
                 uploadFile: async (file: File, metadata?: Record<string, any>) => {
                     const headers: Record<string, string> = {
-                        "x-filename": sanitizeHeaderValue(file.name),
+                        "x-filename": encodeURIComponent(file.name),
                     };
 
                     if (metadata && Object.keys(metadata).length > 0) {

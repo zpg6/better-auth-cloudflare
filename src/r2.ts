@@ -582,14 +582,15 @@ export const createR2Endpoints = (
                         throw new APIError("BAD_REQUEST", { message: "x-filename header is required" });
                     }
 
-                    // Sanitize header values to ensure it only contains ASCII characters
-                    const filename = rawFilename
-                        .split("")
-                        .map(char => {
-                            const code = char.charCodeAt(0);
-                            return code <= 127 ? char : "?";
-                        })
-                        .join("");
+                    let filename = rawFilename;
+                    try {
+                        filename = decodeURIComponent(rawFilename);
+                    } catch {} // older clients send the name unencoded
+                    if (/[\x00-\x1f\x7f]/.test(filename)) {
+                        throw new APIError("BAD_REQUEST", {
+                            message: "x-filename must not contain control characters",
+                        });
+                    }
 
                     const metadataHeader = rawMetadataHeader
                         ? rawMetadataHeader
@@ -766,7 +767,7 @@ export const createR2Endpoints = (
                 return new Response(fileData, {
                     headers: {
                         "Content-Type": fileRecord.contentType || "application/octet-stream",
-                        "Content-Disposition": `attachment; filename="${fileRecord.originalName}"`,
+                        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(fileRecord.originalName).replace(/['()*]/g, c => `%${c.charCodeAt(0).toString(16)}`)}`,
                         "Content-Length": fileRecord.size?.toString() || "0",
                     },
                 });
