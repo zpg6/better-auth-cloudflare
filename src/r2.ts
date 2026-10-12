@@ -822,14 +822,16 @@ export const createR2Endpoints = (
                 try {
                     records = cursor ? await sameMs(cursor.at, limit + 1, cursor.id) : [];
                     if (records.length <= limit) {
+                        const need = limit + 1 - records.length;
                         let older = await find(
                             cursor ? [{ field: "uploadedAt", operator: "lt", value: cursor.at }] : [],
-                            limit + 1 - records.length
+                            need
                         );
-                        const [prev, edge] = older.slice(-2);
-                        if (edge && records.length + older.length > limit && +prev.uploadedAt === +edge.uploadedAt) {
-                            const rest = older.filter(file => +file.uploadedAt !== +edge.uploadedAt);
-                            older = [...rest, ...(await sameMs(edge.uploadedAt, older.length - rest.length))];
+                        // The page's last row becomes the cursor, so its millisecond group must be in database id order.
+                        const end = older.length === need ? older[need - 2] : undefined;
+                        const rest = end ? older.filter(file => +file.uploadedAt !== +end.uploadedAt) : older;
+                        if (end && older.length - rest.length > 1) {
+                            older = [...rest, ...(await sameMs(end.uploadedAt, older.length - rest.length))];
                         }
                         records.push(...older);
                     }
@@ -839,7 +841,8 @@ export const createR2Endpoints = (
                         message: R2_ERROR_CODES.LIST_FILES_FAILED,
                     });
                 }
-                records.sort((a, b) => +b.uploadedAt - +a.uploadedAt || (a.id < b.id ? 1 : -1));
+                // Stable, and never compares ids: tied rows keep the database's collation order that cursors rely on.
+                records.sort((a, b) => +b.uploadedAt - +a.uploadedAt);
                 const last = records.length > limit ? records[limit - 1] : undefined;
                 const files = records.slice(0, limit).filter(validateFileMetadata);
 
