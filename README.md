@@ -222,7 +222,7 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, 
                     ? {
                           bucket: env.R2_BUCKET,
                           maxFileSize: 10 * 1024 * 1024, // 10MB
-                          allowedTypes: [".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx"],
+                          allowedTypes: [".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx"], // filename extensions
                           additionalFields: {
                               category: { type: "string", required: false },
                               isPublic: { type: "boolean", required: false },

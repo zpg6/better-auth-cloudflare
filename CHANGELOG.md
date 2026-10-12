@@ -1,19 +1,28 @@
 # Changelog
 
-## Unreleased
+## v0.4.1 (2026-10-12)
+
+R2 file storage fixes, plus public type fixes. 0.4.0 was published minutes before these, so a few R2 behavior changes ship in this patch; see **Changed**.
 
 ### Changed
 
 - `/cloudflare/geolocation` responds 401 when signed out and 404 when no `cf` context is available, instead of 200 with an `error` body. On the server, `auth.api.getGeolocation()` throws `APIError` ([#77](https://github.com/zpg6/better-auth-cloudflare/pull/77))
+- `createR2Storage()` no longer returns `listUserFiles`; list files through `/files/list` (`authClient.files.list`) ([#79](https://github.com/zpg6/better-auth-cloudflare/pull/79))
+- List cursors are opaque strings. A cursor from 0.4.0 (a file id) returns 400, so restart from the first page. `listFilesSchema` parses `cursor` and requires an integer `limit` of at least 1 ([#79](https://github.com/zpg6/better-auth-cloudflare/pull/79))
+- R2 `before` hooks (`upload`, `download`, `delete`, `list`) that return `null` respond 403 instead of 500 ([#77](https://github.com/zpg6/better-auth-cloudflare/pull/77), [#79](https://github.com/zpg6/better-auth-cloudflare/pull/79))
+- With `allowedTypes` set, an allowed extension is accepted with any `Content-Type`. Before, the type also had to match the extension's MIME type ([#78](https://github.com/zpg6/better-auth-cloudflare/pull/78))
+- The client percent-encodes `x-filename`. Deploy the server before the client: a 0.4.0 server would store the encoded name, e.g. `%E2%82%AC.txt` ([#76](https://github.com/zpg6/better-auth-cloudflare/pull/76))
 
 ### Fixed
 
+- R2 uploads with `allowedTypes` unset accept any file type instead of returning 415 for everything but JSON ([#75](https://github.com/zpg6/better-auth-cloudflare/pull/75))
 - R2 validation errors return 400, 413 or 415 and blocked upload hooks return 403, instead of 500 ([#77](https://github.com/zpg6/better-auth-cloudflare/pull/77))
 - R2 downloads send the filename as RFC 5987 `filename*`, so a crafted name can no longer inject a second filename, and non-ASCII names round-trip instead of becoming `?`. Names with control characters are rejected with 400. Clients older than this release that send a name containing a valid `%XX` sequence have it stored decoded ([#76](https://github.com/zpg6/better-auth-cloudflare/pull/76))
 - R2 uploads store the exact request bytes. Before, types the body parser didn't handle (csv, zip, mp3, markdown) were stored as the text `[object ReadableStream]`, and binary sent as text was re-encoded. Empty files upload. `allowedTypes` is enforced by file extension only, downloads send `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, and the `mime` dependency is gone ([#78](https://github.com/zpg6/better-auth-cloudflare/pull/78))
 - R2 file listing paginates in the database query, so every file is reachable, including uploads that share a millisecond. `files.list` is a GET, so the client call is `files.list({ query: { limit, cursor } })`. `limit` above 100 is capped at 100. The cursor is an opaque string, and list hooks now run ([#79](https://github.com/zpg6/better-auth-cloudflare/pull/79))
-- R2 upload failures no longer send internal error messages (from R2, the database or hooks) to the client; they return the generic `UPLOAD_FAILED` message and are still logged
-- Public types: `kv`, `r2.bucket` and `d1Native` accept any copy of the Workers types (global with the DOM lib, module import, or `wrangler types`) instead of failing or degrading to `any`, so `@cloudflare/workers-types` is no longer a peer dependency. `$Infer.Session` includes the geolocation fields on server and client, and `auth.api.upload` and the other R2 endpoints are no longer possibly `undefined` when `r2` is configured
+- R2 upload failures no longer send internal error messages (from R2, the database or hooks) to the client; they return the generic `UPLOAD_FAILED` message and are still logged ([#80](https://github.com/zpg6/better-auth-cloudflare/pull/80))
+- R2 uploads without `Content-Length` are counted while they stream and stop with 413 at `maxFileSize` instead of being buffered whole. Filenames with C1 controls or bidi override characters are rejected with 400. Listing stays exact when more than 100 uploads share a timestamp and under case-insensitive database collations. The size error states the limit in bytes ([#81](https://github.com/zpg6/better-auth-cloudflare/pull/81))
+- Public types: `kv`, `r2.bucket` and `d1Native` accept any copy of the Workers types (global with the DOM lib, module import, or `wrangler types`) instead of failing or degrading to `any`, so `@cloudflare/workers-types` is no longer a peer dependency. `$Infer.Session` includes the geolocation fields on server and client, and `auth.api.upload` and the other R2 endpoints are no longer possibly `undefined` when `r2` is configured ([#82](https://github.com/zpg6/better-auth-cloudflare/pull/82))
 
 ## v0.4.0 (2026-10-11)
 
