@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.4.0 (2026-10-11)
+
+### Changed
+
+- **BREAKING**: On Better Auth 1.7+, `withCloudflare({ kv })` now fails on the first request unless verification and rate limiting are routed away from KV. 0.3.1 failed silently instead: verification consumes threw, so magic links and OTPs returned 500 and 2FA users were locked out ([#72](https://github.com/zpg6/better-auth-cloudflare/issues/72)). Fix with `verification: { storeInDatabase: true }` and `rateLimit: { storage: "database" }` (or `memory`, `customStorage`, or `enabled: false`) ([#63](https://github.com/zpg6/better-auth-cloudflare/pull/63), [#69](https://github.com/zpg6/better-auth-cloudflare/pull/69))
+- `createKVStorage()` now returns `CloudflareKVStorage` (`get`, `set`, `delete`) instead of `SecondaryStorage`
+- Better Auth 1.7 validates Drizzle schemas (`advanced.database.validateSchema`, on by default) and fails writes with `SchemaMismatchError` until the schema matches, e.g. field maps that point at column names instead of Drizzle property keys. Regenerate `auth.schema.ts` after upgrading
+
+### Added
+
+- `cf` accepts a function, resolved per request, so one auth instance can serve many requests ([#70](https://github.com/zpg6/better-auth-cloudflare/pull/70))
+
+### Fixed
+
+- R2 uploads return the generated file id, and client metadata can no longer override system fields ([#44](https://github.com/zpg6/better-auth-cloudflare/pull/44) by @MagnumGoYB)
+- Docs: KV secondary storage delays session revocation ([#62](https://github.com/zpg6/better-auth-cloudflare/pull/62) by @sns45)
+
+### CLI v0.1.20
+
+- Read `wrangler.jsonc` and `wrangler.json` as well as `wrangler.toml` ([#54](https://github.com/zpg6/better-auth-cloudflare/pull/54) by @mrhut10)
+- Generated projects route verification and rate limiting for Better Auth 1.7 ([#69](https://github.com/zpg6/better-auth-cloudflare/pull/69))
+- Fix generated Hyperdrive projects ([#68](https://github.com/zpg6/better-auth-cloudflare/pull/68))
+
 ## v0.3.1 (2026-07-23)
 
 - Fix: support `@cloudflare/workers-types` v5 by widening the peer dependency to `>=4` ([#59](https://github.com/zpg6/better-auth-cloudflare/pull/59) by @mmcintosh)

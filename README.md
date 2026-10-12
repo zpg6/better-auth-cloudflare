@@ -436,6 +436,8 @@ rateLimit: {
 
 `withCloudflare()` validates this routing when Better Auth initializes and does not select a storage backend for you.
 
+Pass `plugins` inside `withCloudflare()`'s second argument. A `plugins` key written next to `...withCloudflare(...)` replaces the Cloudflare plugin, which turns off this check, IP detection, and geolocation.
+
 Database-backed rate limiting typically adds at least one database read and one write to accepted Better Auth requests. Contention, resets, cleanup, and rejected requests can add operations. This affects latency and billing, so the library does not enable it automatically. `rateLimit.customStorage` can provide an atomic `consume` implementation backed by a strongly consistent store such as Redis or Durable Objects. `storage: "memory"` avoids database traffic but is not a distributed rate limit on Workers.
 
 `createKVStorage()` deliberately exposes only KV's non-atomic `get`, `set`, and `delete` operations. Use `withCloudflare()` for Better Auth 1.7 so the package can wire KV session storage while the settings above keep atomic operations elsewhere.
