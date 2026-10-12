@@ -34,31 +34,31 @@ function call(auth, path, init, cookie) {
     );
 }
 
+async function signedIn(r2) {
+    const auth = betterAuth({
+        baseURL: origin,
+        secret: "r2-upload-test-secret-at-least-32-chars",
+        emailAndPassword: { enabled: true },
+        ...withCloudflare(
+            { autoDetectIpAddress: false, geolocationTracking: false, r2: { bucket: createBucket(), ...r2 } },
+            { database: memoryAdapter({ user: [], session: [], account: [], verification: [], userFile: [] }) }
+        ),
+    });
+
+    const signUp = await call(auth, "/sign-up/email", {
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "Ada", email: "ada@example.com", password: "correct-horse-battery" }),
+    });
+    assert.equal(signUp.status, 200);
+    const setCookie = signUp.headers.get("set-cookie");
+    assert.ok(setCookie);
+    const { user } = await signUp.json();
+    return { auth, cookie: setCookie.split(";")[0], user };
+}
+
 describe("R2 upload", () => {
     it("returns the id the file is stored under", async () => {
-        const auth = betterAuth({
-            baseURL: origin,
-            secret: "r2-upload-test-secret-at-least-32-chars",
-            emailAndPassword: { enabled: true },
-            ...withCloudflare(
-                {
-                    autoDetectIpAddress: false,
-                    geolocationTracking: false,
-                    r2: { bucket: createBucket(), allowedTypes: [".png"] },
-                },
-                { database: memoryAdapter({ user: [], session: [], account: [], verification: [], userFile: [] }) }
-            ),
-        });
-
-        const signUp = await call(auth, "/sign-up/email", {
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ name: "Ada", email: "ada@example.com", password: "correct-horse-battery" }),
-        });
-        assert.equal(signUp.status, 200);
-        const setCookie = signUp.headers.get("set-cookie");
-        assert.ok(setCookie);
-        const cookie = setCookie.split(";")[0];
-        const { user } = await signUp.json();
+        const { auth, cookie, user } = await signedIn({ allowedTypes: [".png"] });
 
         const upload = await call(
             auth,
@@ -93,5 +93,19 @@ describe("R2 upload", () => {
         assert.equal(download.status, 200);
         assert.equal(download.headers.get("content-type"), "image/png");
         assert.deepEqual(new Uint8Array(await download.arrayBuffer()), png);
+    });
+
+    it("accepts any media type when allowedTypes is unset", async () => {
+        const { auth, cookie } = await signedIn({});
+
+        const upload = await call(
+            auth,
+            "/files/upload-raw",
+            { headers: { "content-type": "text/plain", "x-filename": "notes.txt" }, body: "hello" },
+            cookie
+        );
+        assert.equal(upload.status, 200);
+        const { data } = await upload.json();
+        assert.equal(data.contentType, "text/plain");
     });
 });
