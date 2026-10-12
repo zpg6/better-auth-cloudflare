@@ -505,7 +505,7 @@ const displayLocationInfo = async () => {
         const result = await authClient.cloudflare.geolocation();
         if (result.error) {
             console.error("Error fetching geolocation:", result.error);
-        } else if (result.data && !("error" in result.data)) {
+        } else if (result.data) {
             console.log("📍 Geolocation data:", {
                 timezone: result.data.timezone,
                 city: result.data.city,
