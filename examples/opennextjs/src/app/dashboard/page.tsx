@@ -17,7 +17,9 @@ export default async function DashboardPage() {
         redirect("/"); // Redirect to home if no session
     }
 
-    const cloudflareGeolocationData = await authInstance.api.getGeolocation({ headers: await headers() });
+    const cloudflareGeolocationData = await authInstance.api
+        .getGeolocation({ headers: await headers() })
+        .catch(() => null);
 
     const openAPISpec = await authInstance.api.generateOpenAPISchema();
 
@@ -83,15 +85,15 @@ export default async function DashboardPage() {
                                     </p>
                                 </CardHeader>
                                 <CardContent>
-                                    {cloudflareGeolocationData && "error" in cloudflareGeolocationData && (
+                                    {!cloudflareGeolocationData && (
                                         <div className="flex items-center gap-2 p-4 bg-red-50 rounded-lg">
                                             <div className="text-red-500">⚠️</div>
                                             <p className="text-red-700">
-                                                <strong>Error:</strong> {cloudflareGeolocationData.error}
+                                                <strong>Error:</strong> Geolocation data unavailable
                                             </p>
                                         </div>
                                     )}
-                                    {cloudflareGeolocationData && !("error" in cloudflareGeolocationData) && (
+                                    {cloudflareGeolocationData && (
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                             <div className="flex items-center gap-3 p-2">
                                                 <Clock className="h-5 w-5 text-gray-600" />
