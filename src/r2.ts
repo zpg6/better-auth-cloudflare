@@ -656,12 +656,6 @@ export const createR2Endpoints = (
                     if (error instanceof APIError) {
                         throw error;
                     }
-                    if (error instanceof Error) {
-                        throw ctx.error("INTERNAL_SERVER_ERROR", {
-                            message: error.message,
-                        });
-                    }
-
                     throw ctx.error("INTERNAL_SERVER_ERROR", {
                         message: R2_ERROR_CODES.UPLOAD_FAILED,
                     });
