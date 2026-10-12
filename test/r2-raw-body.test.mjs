@@ -73,6 +73,9 @@ async function roundTrip(r2, type, filename, bytes) {
     );
     assert.equal(download.status, 200);
     assert.deepEqual(new Uint8Array(await download.arrayBuffer()), bytes);
+    assert.equal(download.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(download.headers.get("content-security-policy"), "sandbox");
+    return download;
 }
 
 describe("R2 upload stores the raw request bytes", () => {
@@ -95,6 +98,12 @@ describe("R2 upload stores the raw request bytes", () => {
             "report.docx",
             Uint8Array.of(1, 2, 3)
         ));
+
+    it("serves an html-typed .txt as a sandboxed attachment", async () => {
+        const download = await roundTrip({ allowedTypes: ["txt"] }, "text/html", "x.txt", Uint8Array.of(60, 115, 62));
+        assert.equal(download.headers.get("content-type"), "text/html");
+        assert.equal(download.headers.get("content-disposition"), 'attachment; filename="x.txt"');
+    });
 
     it("rejects an extension outside allowedTypes", async () => {
         const { auth, cookie } = await signedIn({ allowedTypes: ["pdf", "docx"] });

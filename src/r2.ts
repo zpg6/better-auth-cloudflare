@@ -736,6 +736,8 @@ export const createR2Endpoints = (
                         "Content-Type": fileRecord.contentType || "application/octet-stream",
                         "Content-Disposition": `attachment; filename="${fileRecord.originalName}"`,
                         "Content-Length": fileRecord.size?.toString() || "0",
+                        "X-Content-Type-Options": "nosniff",
+                        "Content-Security-Policy": "sandbox",
                     },
                 });
             }
