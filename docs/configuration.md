@@ -26,13 +26,15 @@ const auth = betterAuth({
 
 `withCloudflare` returns a merged config object:
 
-| Key                | Behavior                                                                                                                                                    |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `database`         | Set from `d1` / `d1Native` / `postgres` / `mysql` when provided. Otherwise preserves `authOptions.database`.                                                |
-| `secondaryStorage` | Set to `createKVStorage(kv)` when `kv` is provided. Otherwise preserves `authOptions.secondaryStorage`. Supplying both `kv` and a custom store throws.      |
-| `plugins`          | The `cloudflare()` plugin is prepended to your `authOptions.plugins` array.                                                                                 |
-| `advanced`         | Merges your `authOptions.advanced` with IP detection headers when `autoDetectIpAddress` is enabled.                                                         |
-| `session`          | Merges your `authOptions.session`, forcing `storeSessionInDatabase: true` when `geolocationTracking` is enabled — even if you explicitly set it to `false`. |
+| Key                 | Behavior                                                                                                                                                    |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `database`          | Set from `d1` / `d1Native` / `postgres` / `mysql` when provided. Otherwise preserves `authOptions.database`.                                                |
+| `secondaryStorage`  | Set to `createKVStorage(kv)` when `kv` is provided. Otherwise preserves `authOptions.secondaryStorage`. Supplying both `kv` and a custom store throws.      |
+| `plugins`           | The `cloudflare()` plugin is prepended to your `authOptions.plugins` array.                                                                                 |
+| `advanced`          | Merges your `authOptions.advanced` with IP detection headers when `autoDetectIpAddress` is enabled.                                                         |
+| `session`           | Merges your `authOptions.session`, forcing `storeSessionInDatabase: true` when `geolocationTracking` is enabled — even if you explicitly set it to `false`. |
+| `emailVerification` | Adds a Cloudflare Email `sendVerificationEmail` callback when `email` is configured and no custom callback exists.                                          |
+| `emailAndPassword`  | Adds a Cloudflare Email `sendResetPassword` callback when `email` is configured and `emailAndPassword` is enabled and no custom callback exists.            |
 
 If you need a custom `secondaryStorage` that is not KV, omit the `kv` option and pass it through `authOptions`:
 
@@ -49,7 +51,7 @@ const auth = betterAuth({
 
 ## `WithCloudflareOptions`
 
-Extends [`CloudflarePluginOptions`](#cloudflarepluginoptions) with database and KV configuration.
+Extends [`CloudflarePluginOptions`](#cloudflarepluginoptions) with database, KV, and Email configuration.
 
 ### Database Options
 
@@ -67,6 +69,12 @@ Only **one** database option may be provided. Passing more than one throws at st
 | Option | Type          | Description                                                                                                                   |
 | ------ | ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `kv`   | `KVNamespace` | KV namespace for [secondary storage](#kv-secondary-storage). Automatically wired as `secondaryStorage` via `createKVStorage`. |
+
+### Email Option
+
+| Option  | Type                    | Description                                                                                              |
+| ------- | ----------------------- | -------------------------------------------------------------------------------------------------------- |
+| `email` | `CloudflareEmailConfig` | Cloudflare Email Sending binding and defaults for Better Auth verification and password reset callbacks. |
 
 ### `DrizzleConfig<T>`
 
@@ -175,6 +183,66 @@ If you already applied the 1.7.0–1.7.2 account schema, relax the `issuer` colu
 
 ---
 
+## Cloudflare Email Sending
+
+Passing `email` to `withCloudflare` enables default Better Auth transactional email callbacks backed by Cloudflare Email Sending.
+
+```typescript
+withCloudflare(
+    {
+        d1: { db, options: { usePlural: true } },
+        kv: env.KV,
+        cf: request.cf,
+        email: {
+            binding: env.EMAIL,
+            from: env.BETTER_AUTH_EMAIL_FROM,
+        },
+    },
+    {
+        emailAndPassword: { enabled: true },
+        emailVerification: { sendOnSignUp: true },
+    }
+);
+```
+
+`withCloudflare` only fills missing callbacks. If `authOptions.emailVerification.sendVerificationEmail` or `authOptions.emailAndPassword.sendResetPassword` already exists, your callback is preserved.
+
+### `CloudflareEmailConfig`
+
+| Field                     | Type                      | Default     | Description                                                                                                                                                 |
+| ------------------------- | ------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `binding`                 | `SendEmail`               | Required    | Cloudflare Email Sending binding from `wrangler.toml`.                                                                                                      |
+| `from`                    | `string \| EmailAddress`  | Required    | Default sender address. The domain must be onboarded in [Cloudflare Email Service](https://developers.cloudflare.com/email-service/configuration/domains/). |
+| `replyTo`                 | `string \| EmailAddress`  | `undefined` | Optional default Reply-To address.                                                                                                                          |
+| `sendVerificationEmail`   | `boolean`                 | `true`      | Set to `false` to avoid auto-wiring Better Auth email verification.                                                                                         |
+| `sendResetPassword`       | `boolean`                 | `true`      | Set to `false` to avoid auto-wiring Better Auth password reset emails.                                                                                      |
+| `templates.verification`  | `CloudflareEmailTemplate` | Built-in    | Optional custom verification email subject/body template.                                                                                                   |
+| `templates.passwordReset` | `CloudflareEmailTemplate` | Built-in    | Optional custom password reset subject/body template.                                                                                                       |
+
+### `createEmailSender(config)`
+
+Creates a reusable sender around the Cloudflare binding:
+
+```typescript
+import { createEmailSender } from "better-auth-cloudflare";
+
+const sendEmail = createEmailSender({
+    binding: env.EMAIL,
+    from: "auth@example.com",
+});
+
+await sendEmail({
+    to: "user@example.com",
+    subject: "Welcome",
+    text: "Welcome to the app.",
+    html: "<p>Welcome to the app.</p>",
+});
+```
+
+At least one of `text` or `html` is required. Cloudflare Email Service requires the `from` domain to be [configured for Email Sending](https://developers.cloudflare.com/email-service/configuration/domains/).
+
+---
+
 ## Database Examples
 
 ### D1 with Drizzle
@@ -278,6 +346,10 @@ id = "<your-kv-namespace-id>"
 binding = "R2_BUCKET"
 bucket_name = "my-files"
 
+# Email Sending (optional) — Configure the domain in Cloudflare Email Service first
+[[send_email]]
+name = "EMAIL"
+
 # Hyperdrive (optional) — Create with: wrangler hyperdrive create my-hd --connection-string="..."
 # [[hyperdrive]]
 # binding = "HYPERDRIVE"
@@ -285,6 +357,7 @@ bucket_name = "my-files"
 
 [vars]
 BETTER_AUTH_URL = "https://your-app.example.com"
+BETTER_AUTH_EMAIL_FROM = "auth@example.com"
 BETTER_AUTH_TRUSTED_ORIGINS = "https://your-app.example.com"
 ```
 
@@ -293,19 +366,21 @@ BETTER_AUTH_TRUSTED_ORIGINS = "https://your-app.example.com"
 Each `binding` becomes a property on `env`. Declare those properties in `env.d.ts` so TypeScript checks binding access:
 
 ```typescript
-import type { D1Database, Hyperdrive, KVNamespace, R2Bucket } from "@cloudflare/workers-types";
+import type { D1Database, Hyperdrive, KVNamespace, R2Bucket, SendEmail } from "@cloudflare/workers-types";
 
 interface CloudflareBindings {
     DATABASE: D1Database;
     KV: KVNamespace;
     R2_BUCKET: R2Bucket;
+    EMAIL: SendEmail;
     HYPERDRIVE: Hyperdrive; // Only if using Hyperdrive
     BETTER_AUTH_URL: string;
+    BETTER_AUTH_EMAIL_FROM: string;
     BETTER_AUTH_TRUSTED_ORIGINS: string;
 }
 ```
 
-If you change `binding = "KV"` to `binding = "AUTH_KV"` in your Wrangler config, update `env.d.ts` and the auth config. During project generation, use `--kv-binding`, `--d1-binding`, or `--r2-binding` to set these names.
+These names are configurable — if you change `binding = "KV"` to `binding = "AUTH_KV"` in `wrangler.toml`, update `env.d.ts` and your auth config to match. The [CLI](../cli/README.md) supports `--kv-binding`, `--d1-binding`, `--r2-binding`, and `--email-binding` flags for this.
 
 ---
 
@@ -318,11 +393,13 @@ The main entry point (`better-auth-cloudflare`) re-exports all types and functio
 | `withCloudflare`            | function | Wraps `BetterAuthOptions` with Cloudflare integrations (database, KV, plugin).   |
 | `cloudflare`                | function | Standalone Better Auth plugin for geolocation, IP detection, and R2.             |
 | `createKVStorage`           | function | Creates a `SecondaryStorage` backed by Cloudflare KV.                            |
+| `createEmailSender`         | function | Creates a transactional email sender backed by Cloudflare Email Sending.         |
 | `createR2Config`            | function | Helper for creating a fully type-inferred `R2Config`.                            |
 | `CloudflareGeolocation`     | type     | The 8 geolocation fields extracted from `request.cf`.                            |
 | `CloudflareSession`         | type     | `Session` extended with geolocation fields.                                      |
 | `CloudflareSessionResponse` | type     | `{ session: CloudflareSession; user: User }` — shape of `/api/auth/get-session`. |
 | `CloudflarePluginOptions`   | type     | Options for the standalone `cloudflare()` plugin.                                |
 | `WithCloudflareOptions`     | type     | Options for the `withCloudflare` wrapper.                                        |
+| `CloudflareEmailConfig`     | type     | Cloudflare Email Sending binding, sender defaults, and Better Auth templates.    |
 | `R2Config`                  | type     | R2 bucket configuration. See the [R2 File Storage Guide](./r2.md).               |
 | `FileMetadata`              | type     | Core file record shape stored in the database.                                   |

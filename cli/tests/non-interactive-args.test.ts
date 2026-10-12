@@ -82,7 +82,7 @@ function validateCliArgs(args: CliArgs): string[] {
     }
 
     // Validate binding names
-    const bindingFields = ["d1-binding", "hd-binding", "kv-binding", "r2-binding"];
+    const bindingFields = ["d1-binding", "hd-binding", "kv-binding", "r2-binding", "email-binding"];
     for (const field of bindingFields) {
         if (args[field] !== undefined && typeof args[field] === "string") {
             const error = validateBindingName(String(args[field]));
@@ -128,12 +128,13 @@ describe("CLI Argument Parsing", () => {
     });
 
     test("parses boolean values correctly", () => {
-        const argv = ["node", "cli", "--geolocation=true", "--kv=false", "--r2"];
+        const argv = ["node", "cli", "--geolocation=true", "--kv=false", "--r2", "--email=true"];
         const args = parseCliArgs(argv);
 
         expect(args.geolocation).toBe(true);
         expect(args.kv).toBe(false);
         expect(args.r2).toBe(true); // flag defaults to true
+        expect(args.email).toBe(true);
     });
 
     test("handles values with equals signs", () => {
@@ -204,7 +205,7 @@ describe("CLI Argument Validation", () => {
     });
 
     test("validates binding names", () => {
-        const validArgs = { "d1-binding": "MY_DATABASE_123" };
+        const validArgs = { "d1-binding": "MY_DATABASE_123", "email-binding": "AUTH_EMAIL" };
         const invalidArgs1 = { "kv-binding": "my-binding" }; // lowercase
         const invalidArgs2 = { "r2-binding": "MY-BINDING-WITH-HYPHENS" }; // hyphens
         const invalidArgs3 = { "hd-binding": "" }; // empty
@@ -318,6 +319,9 @@ describe("Real-world CLI Usage Scenarios", () => {
             "--r2=true",
             "--r2-binding=FILE_STORAGE",
             "--r2-bucket-name=app-uploads",
+            "--email=true",
+            "--email-binding=AUTH_EMAIL",
+            "--email-from=auth@example.com",
         ];
         const args = parseCliArgs(argv);
         const errors = validateCliArgs(args);
@@ -336,6 +340,9 @@ describe("Real-world CLI Usage Scenarios", () => {
         expect(args.r2).toBe(true);
         expect(args["r2-binding"]).toBe("FILE_STORAGE");
         expect(args["r2-bucket-name"]).toBe("app-uploads");
+        expect(args.email).toBe(true);
+        expect(args["email-binding"]).toBe("AUTH_EMAIL");
+        expect(args["email-from"]).toBe("auth@example.com");
     });
 });
 

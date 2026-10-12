@@ -29,3 +29,9 @@ id = "YOUR_KV_NAMESPACE_ID"
 [[r2_buckets]]
 binding = "R2_BUCKET"
 bucket_name = "your-r2-bucket-name"
+
+[[send_email]]
+name = "EMAIL"
+
+[vars]
+BETTER_AUTH_EMAIL_FROM = "noreply@example.com"

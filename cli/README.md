@@ -6,7 +6,7 @@
 
 > Part of the [Better Auth Cloudflare](https://github.com/zpg6/better-auth-cloudflare) ecosystem - A complete authentication solution for Cloudflare Workers with Better Auth, featuring ready-to-use templates and integrations.
 
-Generate a Better Auth Cloudflare project with D1, KV, R2, or Hyperdrive. This CLI tool provides scaffolding for both Hono and Next.js (OpenNext.js) applications with automatic Cloudflare resource setup.
+Generate a Better Auth Cloudflare project with D1, KV, R2, Hyperdrive, or Cloudflare Email. This CLI tool provides scaffolding for both Hono and Next.js (OpenNext.js) applications with automatic Cloudflare resource setup.
 
 **Note**: The `generate` command configures one primary database (D1, Postgres via Hyperdrive, or MySQL via Hyperdrive). You can add additional database connections manually after project creation.
 
@@ -23,6 +23,7 @@ Generate a Better Auth Cloudflare project with D1, KV, R2, or Hyperdrive. This C
 
 - Runs `wrangler d1/kv/r2 create` commands and configures `wrangler.toml`
 - Sets up Hyperdrive connections and auth integrations
+- Adds Cloudflare Email Sending bindings for Better Auth verification and password reset emails
 
 📦 Runs initial setup: `@better-auth/cli generate`, `drizzle-kit generate`, and optionally applies migrations
 
@@ -83,11 +84,14 @@ npx @better-auth-cloudflare/cli migrate --migrate-target=dev  # Non-interactive
 --geolocation=<bool>           Enable geolocation tracking (default: true)
 --kv=<bool>                    Use KV as secondary storage for Better Auth (default: true)
 --r2=<bool>                    Enable R2 to extend Better Auth with user file storage (default: false)
+--email=<bool>                 Enable Cloudflare Email Sending integration (default: false)
 ```
 
 **KV Integration**: KV holds the session cache. Better Auth 1.7 needs atomic verification and rate-limit storage that KV cannot provide, so generated projects set `verification.storeInDatabase` and `rateLimit.storage: "database"`; `withCloudflare()` validates the routing when Better Auth initializes. See the [KV configuration guide](../docs/configuration.md#kv-secondary-storage).
 
 **R2 Integration**: Enables file upload and management capabilities. See [R2 setup guide](../docs/r2.md) for detailed configuration and usage.
+
+**Email Integration**: Adds a Cloudflare Email Sending binding and wires Better Auth verification and password reset callbacks. The sender address must use a domain configured in [Cloudflare Email Service](https://developers.cloudflare.com/email-service/configuration/domains/).
 
 ### Database-specific arguments
 
@@ -106,6 +110,8 @@ npx @better-auth-cloudflare/cli migrate --migrate-target=dev  # Non-interactive
 --kv-namespace-name=<name>     KV namespace name (default: <app-name>-kv)
 --r2-binding=<binding>         R2 binding name (default: R2_BUCKET)
 --r2-bucket-name=<name>        R2 bucket name (default: <app-name>-files)
+--email-binding=<binding>      Cloudflare Email Sending binding name (default: EMAIL)
+--email-from=<address>         Default sender address (default: noreply@example.com)
 ```
 
 ### Cloudflare account arguments
@@ -141,6 +147,13 @@ Create app without KV or R2:
 
 ```bash
 npx @better-auth-cloudflare/cli generate --app-name=minimal-app --kv=false --r2=false
+```
+
+Create a Hono app with Cloudflare Email Sending:
+
+```bash
+npx @better-auth-cloudflare/cli generate --app-name=email-app --template=hono \
+  --email=true --email-from=auth@example.com
 ```
 
 Create and deploy in one command (default behavior):
@@ -183,7 +196,7 @@ npx @better-auth-cloudflare/cli migrate --migrate-target=dev
 
 ---
 
-Creates a new Better Auth Cloudflare project from Hono or OpenNext.js templates, optionally creating Cloudflare D1, KV, R2, or Hyperdrive resources for you. The migrate command runs `auth:update`, `db:generate`, and optionally `db:migrate`.
+Creates a new Better Auth Cloudflare project from Hono or OpenNext.js templates, optionally creating Cloudflare D1, KV, R2, Hyperdrive, or Email bindings for you. The migrate command runs `auth:update`, `db:generate`, and optionally `db:migrate`.
 
 ## Troubleshooting
 

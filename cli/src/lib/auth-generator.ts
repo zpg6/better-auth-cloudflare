@@ -6,12 +6,14 @@ export interface AuthConfig {
         kv: boolean;
         r2: boolean;
         hyperdrive: boolean;
+        email?: boolean;
     };
     bindings: {
         d1?: string;
         kv?: string;
         r2?: string;
         hyperdrive?: string;
+        email?: string;
     };
 }
 
@@ -47,6 +49,7 @@ function generateHonoAuth(config: AuthConfig): string {
 
     const cloudflareConfig = generateHonoCloudflareConfig(config);
     const cliDatabaseConfig = generateCliDatabaseConfig(config);
+    const emailAuthOptions = generateEmailAuthOptions(config);
 
     return `${imports.join("\n")}
 
@@ -68,7 +71,7 @@ function createAuth(env?: CloudflareBindings, cf?: IncomingRequestCfProperties, 
             {
                 emailAndPassword: {
                     enabled: true,
-                },
+                },${emailAuthOptions}
                 plugins: [anonymous()],${generateVerificationConfig(config)}
                 rateLimit: {
                     enabled: true,
@@ -111,6 +114,7 @@ function generateNextjsAuth(config: AuthConfig): string {
 
     const cloudflareConfig = generateNextjsCloudflareConfig(config);
     const cliDatabaseConfig = generateCliDatabaseConfig(config);
+    const emailAuthOptions = generateEmailAuthOptions(config);
     // Hyperdrive sockets cannot be shared across requests, so only D1 keeps a singleton.
     const initializer = config.resources.hyperdrive
         ? `export async function initAuth() {
@@ -142,7 +146,12 @@ async function authBuilder() {
             },
             {
                 baseURL: cfCtx.env.BETTER_AUTH_URL,
-                trustedOrigins: (cfCtx.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "").split(",").filter(Boolean),${generateVerificationConfig(config)}
+                trustedOrigins: (cfCtx.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "").split(",").filter(Boolean),
+                emailAndPassword: {
+                    enabled: true,
+                },
+${emailAuthOptions}
+${generateVerificationConfig(config)}
                 rateLimit: {
                     enabled: true,
                     storage: "database",
@@ -269,6 +278,18 @@ function generateHonoCloudflareConfig(config: AuthConfig): string {
                 } : {}),`);
     }
 
+    // Email configuration
+    if (config.resources.email) {
+        const binding = config.bindings.email || "EMAIL";
+        parts.push(`
+                ...(env?.${binding} ? {
+                    email: {
+                        binding: env.${binding},
+                        from: env.BETTER_AUTH_EMAIL_FROM,
+                    },
+                } : {}),`);
+    }
+
     return parts.join("");
 }
 
@@ -348,7 +369,28 @@ function generateNextjsCloudflareConfig(config: AuthConfig): string {
                 },`);
     }
 
+    // Email configuration
+    if (config.resources.email) {
+        const binding = config.bindings.email || "EMAIL";
+        parts.push(`
+                ...(cfCtx.env.${binding} ? {
+                    email: {
+                        binding: cfCtx.env.${binding},
+                        from: cfCtx.env.BETTER_AUTH_EMAIL_FROM,
+                    },
+                } : {}),`);
+    }
+
     return parts.join("");
+}
+
+function generateEmailAuthOptions(config: AuthConfig): string {
+    if (!config.resources.email) return "";
+
+    return `
+                emailVerification: {
+                    sendOnSignUp: true,
+                },`;
 }
 
 function generateVerificationConfig(config: AuthConfig): string {

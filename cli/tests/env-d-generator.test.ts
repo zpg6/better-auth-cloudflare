@@ -147,6 +147,52 @@ describe("env.d.ts Generator", () => {
         expect(result).not.toContain("R2Bucket");
     });
 
+    test("generates env.d.ts with Email Sending", () => {
+        const config: EnvDConfig = {
+            template: "hono",
+            database: "sqlite",
+            resources: {
+                d1: false,
+                kv: false,
+                r2: false,
+                hyperdrive: false,
+                email: true,
+            },
+            bindings: {
+                email: "AUTH_EMAIL",
+            },
+        };
+
+        const result = generateEnvDFile(config);
+
+        expect(result).toContain('import type { SendEmail } from "@cloudflare/workers-types"');
+        expect(result).toContain("AUTH_EMAIL: SendEmail;");
+        expect(result).toContain("BETTER_AUTH_EMAIL_FROM: string;");
+    });
+
+    test("generates Next.js env.d.ts with Email Sending", () => {
+        const config: EnvDConfig = {
+            template: "nextjs",
+            database: "sqlite",
+            resources: {
+                d1: false,
+                kv: false,
+                r2: false,
+                hyperdrive: false,
+                email: true,
+            },
+            bindings: {
+                email: "EMAIL",
+            },
+        };
+
+        const result = generateEnvDFile(config);
+
+        expect(result).toContain("interface CloudflareEnv");
+        expect(result).toContain("EMAIL: SendEmail;");
+        expect(result).toContain("BETTER_AUTH_EMAIL_FROM: string;");
+    });
+
     test("generates env.d.ts with custom Hyperdrive binding name", () => {
         const config: EnvDConfig = {
             template: "hono",

@@ -8,6 +8,7 @@ bun.lock
 *.log
 .pnpm-store
 test-results/
+.opencode/
 
 # Each pnpm project installs independently in CI. Keep its lockfile so the
 # library and examples test the same dependency graph locally and in Actions.
